@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Extractor Contactos de WhatsApp – Texto a XLSX (v1.1.8)</title>
+
+  <!-- Favicon (opcional en carpeta assets) -->
+  <link rel="icon" type="image/png" href="assets/EC.png?v=1">
+  <link rel="apple-touch-icon" href="assets/EC.png?v=1">
+  <meta name="theme-color" content="#0ea5e9">
+
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+
+<!-- MODAL: Guía -->
+<div id="modalOverlay" class="modal-overlay" aria-hidden="true"></div>
+<div id="howtoModal" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3 id="modal-title">Cómo usar (misma lógica, v1.1.8)</h3>
+      <button class="modal-close" type="button" aria-label="Cerrar" data-close-howto>×</button>
+    </div>
+    <div class="modal-body" id="modal-desc">
+      <ol>
+        <li>Pega texto o arrastra <code>.txt</code>/<code>.csv</code>/<code>.html</code>/<code>.zip</code></li>
+        <li>Si es ZIP, buscará <code>records.html</code>; detecta <em>Account Identifier</em> y limpia <code>+57</code> / <code>57</code> / <code>0057</code></li>
+        <li>Escribe el <strong>Objetivo</strong> (opcional; se autocompleta si se detecta) y <strong>Caso</strong> (opcional)</li>
+        <li>Presiona <strong>Procesar texto</strong></li>
+        <li>Usa <strong>filtro</strong>, <strong>ordenamiento</strong> y revisa <strong>duplicados</strong> resaltados</li>
+        <li><strong>Agregar al lote</strong> para unir reportes. <strong>Descargar (Actual/Unificado)</strong> crea XLSX + CSV/JSON</li>
+        <li>En <strong>Comparar exportes</strong>, selecciona dos XLSX y obtén Solo_A / Solo_B / Intersección</li>
+      </ol>
+      <p class="note"><strong>Nota:</strong> No toma fechas/años (1900–2099), <u>omite</u> “Internal Ticket Number” / “Número de ticket interno” y <u>solo considera números con 8+ dígitos</u>. También excluye el <em>Account Identifier</em> de la lista.</p>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" type="button" data-close-howto>Entiendo</button>
+    </div>
+  </div>
+</div>
+
+<body>
+  <div class="wrap">
+    <header class="hero">
+      <h1>Extractor Contactos de WhatsApp Premium</h1>
+      <p class="sub">Limpia, une y exporta contactos ➜ XLSX <span class="muted">(+ CSV/JSON opcional)</span></p>
+    </header>
+
+    <!-- Barra superior -->
+    <section class="card span-12 topbar">
+      <div class="row">
+        <label class="field small-field">
+          <span>Modo</span>
+          <label class="switch">
+            <input type="checkbox" id="themeToggle">
+            <span class="slider"></span>
+            <span class="lbl">Claro</span>
+          </label>
+        </label>
+
+        <label class="field small-field">
+          <span>Anonimizar vista previa</span>
+          <label class="switch">
+            <input type="checkbox" id="anonToggle">
+            <span class="slider"></span>
+            <span class="lbl">Activar</span>
+          </label>
+        </label>
+
+        <label class="field small-field">
+          <span>Autosave</span>
+          <label class="switch">
+            <input type="checkbox" id="autosaveToggle" checked>
+            <span class="slider"></span>
+            <span class="lbl">Activar</span>
+          </label>
+        </label>
+
+        <div class="row actions one-line">
+          <button id="openGuide" class="btn ghost">Guía ( ? )</button>
+          <!-- El botón "Bloquear" lo inyecta el JS al cargar -->
+        </div>
+      </div>
+    </section>
+
+    <main class="grid">
+      <!-- Panel entrada -->
+      <section class="card span-7" id="dropZone">
+        <h2>Entrada</h2>
+        <p>Pega el texto o arrastra <strong>.txt/.csv/.html</strong> o un <strong>.zip</strong> con <code>records.html</code>. <strong>No</strong> se suben archivos, todo es local.</p>
+
+        <textarea id="inputText" placeholder="Pega aquí el texto o suelta un archivo..."></textarea>
+
+        <div class="row">
+          <label class="field">
+            <span>Objetivo (Account Identifier)</span>
+            <input type="text" id="accountId" placeholder="Ej: 3001234567"/>
+          </label>
+          <label class="field">
+            <span>Caso / Expediente (opcional)</span>
+            <input type="text" id="caseId" placeholder="Ej: 3020912 - Medellín"/>
+          </label>
+        </div>
+
+        <div class="row actions one-line">
+          <button id="uploadBtn" class="btn ghost">Subir archivo(s)</button>
+          <input type="file" id="filePicker" accept=".zip,.txt,.csv,.html" multiple style="display:none" />
+          <button id="processBtn" class="btn">Procesar texto</button>
+          <button id="addToBatchBtn" class="btn">Agregar al lote</button>
+          <button id="clearBtn" class="btn ghost">Limpiar</button>
+        </div>
+      </section>
+
+      <!-- Vista previa -->
+      <section class="card span-5">
+        <div class="preview-head">
+          <h2>Vista previa</h2>
+          <div class="row small-row">
+            <input id="previewFilter" class="mini-input" placeholder="Filtrar..."/>
+            <select id="sortSelect" class="mini-input">
+              <option value="original">Orden original</option>
+              <option value="asc">Ascendente</option>
+              <option value="len">Por longitud</option>
+            </select>
+            <label class="switch">
+              <input type="checkbox" id="showAll">
+              <span class="slider"></span>
+              <span class="lbl">Mostrar todo</span>
+            </label>
+          </div>
+        </div>
+
+        <div class="stats">
+          <div class="chip">Leídos: <span id="stat-read">0</span></div>
+          <div class="chip">Únicos: <span id="stat-unique">0</span></div>
+          <div class="chip dim">Duplicados: <span id="stat-dup">0</span></div>
+        </div>
+
+        <div id="contactsList" class="preview"></div>
+        <div class="mini-dash" id="prefixDash"></div>
+
+        <div class="row actions one-line">
+          <label class="switch small">
+            <input type="checkbox" id="fmtXlsx" checked>
+            <span class="slider"></span><span class="lbl">XLSX</span>
+          </label>
+          <label class="switch small">
+            <input type="checkbox" id="fmtCsv">
+            <span class="slider"></span><span class="lbl">CSV</span>
+          </label>
+          <label class="switch small">
+            <input type="checkbox" id="fmtJson">
+            <span class="slider"></span><span class="lbl">JSON</span>
+          </label>
+          <button id="downloadBtn" class="btn" disabled>Descargar (Actual)</button>
+        </div>
+      </section>
+
+      <!-- Lote -->
+      <section class="card span-12">
+        <h2>Reportes cargados (Lote)</h2>
+        <div id="batchList" class="batch"></div>
+        <div class="row actions one-line">
+          <button id="exportMergedBtn" class="btn" disabled>Descargar (Unificado)</button>
+          <button id="clearBatchBtn" class="btn ghost">Vaciar lote</button>
+        </div>
+      </section>
+
+      <!-- Comparador -->
+      <section class="card span-12">
+        <h2>Comparar exportes (XLSX)</h2>
+        <div class="row">
+          <label class="field">
+            <span>Archivo A (XLSX)</span>
+            <input type="file" id="cmpFileA" accept=".xlsx"/>
+          </label>
+          <label class="field">
+            <span>Archivo B (XLSX)</span>
+            <input type="file" id="cmpFileB" accept=".xlsx"/>
+          </label>
+        </div>
+        <div class="row actions one-line">
+          <button id="compareBtn" class="btn" disabled>Comparar</button>
+          <button id="exportDiffBtn" class="btn" disabled>Exportar Diff</button>
+        </div>
+        <div class="stats" id="cmpStats"></div>
+        <div class="preview small" id="cmpPreview"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="sig">DESARROLLADO POR <strong>DEVINSON MENA</strong></div>
+
+      <div class="links">
+        <span>Versión 1.1.8</span>
+        <span class="dot">•</span>
+        <a href="mailto:devinson.mena@correo.policia.gov.co" rel="noopener">Contacto</a>
+        <span class="dot">•</span>
+        <a href="https://github.com/stikmena23-alt/extractor-wa" target="_blank" rel="noopener">Repositorio</a>
+        <span class="dot">•</span>
+        <a href="#" aria-disabled="true" tabindex="-1" class="muted">Guía rápida</a>
+      </div>
+
+      <div class="legal">
+        Uso exclusivo para <strong>análisis</strong>. Los datos y resultados generados son
+        <strong>responsabilidad del usuario</strong>.
+      </div>
+
+      <div class="copy">© 2025 Devinson Mena</div>
+    </footer>
+  </div>
+
+  <!-- Librerías -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
