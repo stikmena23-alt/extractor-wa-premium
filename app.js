@@ -47,6 +47,7 @@ const connStatEl     = document.getElementById("connStatVal");
 const lastSeenEl     = document.getElementById("lastSeenVal");
 const lastSeenAgoEl  = document.getElementById("lastSeenAgoVal");
 const lastIpEl       = document.getElementById("lastIpVal");
+const lastPortEl     = document.getElementById("lastPortVal");
 const ispEl          = document.getElementById("ispVal");
 const ipVersionEl    = document.getElementById("ipVersionVal");
 const ipTypeEl       = document.getElementById("ipTypeVal");
@@ -60,6 +61,9 @@ const secChipsEl     = document.getElementById("secChips");
 const resCard        = document.getElementById("resCard");
 const resTableBody   = document.getElementById("resTableBody");
 const copyResTableBtn= document.getElementById("copyResTableBtn");
+
+// Coincidencias
+const matchesGraph   = document.getElementById("matchesGraph");
 
 // Subir archivos
 const uploadBtn = document.getElementById("uploadBtn");
@@ -88,6 +92,7 @@ let currentServiceInfo = {
   lastSeenISO: "",  // ISO real de "Last seen" en UTC
   lastSeenAgo: "-",
   lastIP: "-",
+  lastPort: "-",
   isp: "-",
   ipVersion: "-",
   ipType: "-",
@@ -156,6 +161,20 @@ function countOccurrences(text){
   }
   const dupCount = Object.values(map).filter(c => c > 1).length;
   return { read: readCount, duplicates: dupCount, countsMap: map };
+}
+
+function parseIpPort(val){
+  const s = (val && String(val).trim()) || "";
+  if (!s) return { ip: "-", port: "-" };
+  const ipv6 = s.match(/^\[([^\]]+)\]:(\d+)$/);
+  if (ipv6) return { ip: ipv6[1], port: ipv6[2] };
+  const lastColon = s.lastIndexOf(':');
+  const firstColon = s.indexOf(':');
+  if (lastColon > -1 && lastColon === firstColon){
+    const port = s.slice(lastColon+1);
+    if (/^\d+$/.test(port)) return { ip: s.slice(0,lastColon), port };
+  }
+  return { ip: s, port: "-" };
 }
 
 // Fecha: formateo en zona sin restas manuales
@@ -341,7 +360,67 @@ function renderPreview(){
     contactsList.appendChild(row);
   });
   buildPrefixDash(list);
+  updateMatchesGraph(currentContacts);
   downloadBtn.disabled = currentContacts.length === 0;
+}
+
+function updateMatchesGraph(nums){
+  if (!window.d3 || !matchesGraph) return;
+  const svg = d3.select(matchesGraph);
+  svg.selectAll('*').remove();
+  const width = +svg.attr('width');
+  const height = +svg.attr('height');
+  const nodes = [{ id: 'target', label: getNormalizedObjective() || 'Objetivo' }];
+  const links = [];
+  nums.forEach((n,i)=>{
+    const id = 'n'+i;
+    nodes.push({ id, label: n });
+    links.push({ source: 'target', target: id });
+  });
+  const simulation = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(links).id(d=>d.id).distance(80))
+    .force('charge', d3.forceManyBody().strength(-200))
+    .force('center', d3.forceCenter(width/2, height/2));
+  const link = svg.append('g')
+    .selectAll('line')
+    .data(links)
+    .enter().append('line')
+    .attr('stroke', '#999');
+  const node = svg.append('g')
+    .selectAll('circle')
+    .data(nodes)
+    .enter().append('circle')
+    .attr('r', 20)
+    .attr('fill', '#69b3a2')
+    .call(d3.drag()
+      .on('start', dragstarted)
+      .on('drag', dragged)
+      .on('end', dragended));
+  const label = svg.append('g')
+    .selectAll('text')
+    .data(nodes)
+    .enter().append('text')
+    .attr('text-anchor','middle')
+    .attr('dy','.35em')
+    .text(d=>d.label);
+  simulation.on('tick', ()=>{
+    link
+      .attr('x1', d=>d.source.x).attr('y1', d=>d.source.y)
+      .attr('x2', d=>d.target.x).attr('y2', d=>d.target.y);
+    node.attr('cx', d=>d.x).attr('cy', d=>d.y);
+    label.attr('x', d=>d.x).attr('y', d=>d.y);
+  });
+  function dragstarted(event,d){
+    if(!event.active) simulation.alphaTarget(0.3).restart();
+    d.fx = d.x; d.fy = d.y;
+  }
+  function dragged(event,d){
+    d.fx = event.x; d.fy = event.y;
+  }
+  function dragended(event,d){
+    if(!event.active) simulation.alphaTarget(0);
+    d.fx = null; d.fy = null;
+  }
 }
 
 // =================== RENDER BATCH ===================
@@ -801,7 +880,14 @@ function setConnState(val){
   currentServiceInfo.connState = v;
 }
 function setOSBuild(val){ const v = (val && String(val).trim()) || "-"; setText(osBuildEl, v); currentServiceInfo.osBuild = v; }
-function setLastIp(val){ const v = (val && String(val).trim()) || "-"; setText(lastIpEl, v); currentServiceInfo.lastIP = v; }
+function setLastIp(val){
+  const { ip, port } = parseIpPort(val);
+  setText(lastIpEl, ip);
+  setText(lastPortEl, port);
+  currentServiceInfo.lastIP = ip;
+  currentServiceInfo.lastPort = port;
+  return ip;
+}
 function setISP(val){ const v = (val && String(val).trim()) || "-"; setText(ispEl, v); currentServiceInfo.isp = v; }
 function setIPVersion(val){ const v = (val && String(val).trim()) || "-"; setText(ipVersionEl, v); currentServiceInfo.ipVersion = v; }
 function setIPType(val){
@@ -1082,7 +1168,6 @@ const ipCache = new Map();
 /* ====== consulta IP + clasificación (reforzada) ====== */
 async function lookupIP(ip){
   if (!ip || ip === "-") return;
-  setLastIp(ip);
 
   // caché
   if (ipCache.has(ip)){
@@ -1216,9 +1301,9 @@ function extractServiceInfoFromSource(raw){
   setOSBuild(ob || "-");
   setConnState(cs || "-");
   setLastSeen(ls ? (parseFlexibleDate(ls) || ls) : null);
-  setLastIp(lastIP || "-");
+  const ipOnly = setLastIp(lastIP || "-");
 
-  if (lastIP) lookupIP(lastIP);
+  if (ipOnly && ipOnly !== '-') lookupIP(ipOnly);
 }
 
 /* ====== Tabla residencial (generación/visibilidad) ====== */
@@ -1308,6 +1393,7 @@ function getServiceRowsForCurrent(){
     ["Last seen", currentServiceInfo.lastSeen || "-"],
     ["Visto hace", currentServiceInfo.lastSeenAgo || "-"],
     ["Last IP", currentServiceInfo.lastIP || "-"],
+    ["Last Port", currentServiceInfo.lastPort || "-"],
     ["ISP", currentServiceInfo.isp || "-"],
     ["Versión", currentServiceInfo.ipVersion || "-"],
     ["Tipo", currentServiceInfo.ipType || "-"],
@@ -1319,7 +1405,7 @@ function getServiceRowsForCurrent(){
   ];
 }
 function getServiceRowsForBatch(){
-  const rows = [["Objetivo","Caso","Service start","Device OS Build Number","Connection State","Last seen","Visto hace","Last IP","ISP","Versión","Tipo","Ciudad","País","Proxy","VPN","Tor"]];
+  const rows = [["Objetivo","Caso","Service start","Device OS Build Number","Connection State","Last seen","Visto hace","Last IP","Last Port","ISP","Versión","Tipo","Ciudad","País","Proxy","VPN","Tor"]];
   batch.forEach(item=>{
     const s = item.service || {};
     const pais = (s.flag ? s.flag+" " : "") + (s.country || "-");
@@ -1332,6 +1418,7 @@ function getServiceRowsForBatch(){
       s.lastSeen || "-",
       s.lastSeenAgo || "-",
       s.lastIP || "-",
+      s.lastPort || "-",
       s.isp || "-",
       s.ipVersion || "-",
       s.ipType || "-",

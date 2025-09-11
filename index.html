@@ -198,6 +198,10 @@
             <div class="v" id="lastIpVal">-</div>
           </div>
           <div class="kv">
+            <div class="k">Puerto:</div>
+            <div class="v" id="lastPortVal">-</div>
+          </div>
+          <div class="kv">
             <div class="k">ISP:</div>
             <div class="v" id="ispVal">-</div>
           </div>
@@ -223,6 +227,12 @@
           </div>
         </div>
         <p class="muted small-note">Fechas ajustadas a UTC−5. <span class="warn-note">“Última vez visto” en <span class="red">rojo</span> si es anterior a ahora; <span class="green">verde</span> si es igual/posterior.</span></p>
+      </section>
+
+      <!-- Panel de coincidencias -->
+      <section class="card span-12" id="matchesCard">
+        <h2>Coincidencias</h2>
+        <svg id="matchesGraph" width="600" height="400"></svg>
       </section>
 
       <!-- NUEVO: Tabla residencial (auto) -->
@@ -272,6 +282,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://d3js.org/d3.v7.min.js" crossorigin="anonymous"></script>
 
   <script type="module">
     import { VERSION } from './config.js';
