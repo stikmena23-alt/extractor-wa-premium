@@ -1,5 +1,9 @@
 // app.js
-// =================== v1.2.0 (clasificación IP ampliada + tabla residencial) ===================
+// =================== v1.2.1 (clasificación IP ampliada + tabla residencial) ===================
+
+import { LS, VERSION } from './config.js';
+
+console.info(`Extractor WA Premium v${VERSION}`);
 
 // ----------- DOM ELEMENTS -----------
 const inputText = document.getElementById("inputText");
@@ -346,13 +350,43 @@ function renderBatch(){
   batch.forEach(item => {
     const div = document.createElement("div");
     div.className = "item";
-    div.innerHTML = `
-      <div class="meta">
-        <div class="tag">Objetivo:</div><div><code>${item.objective || "—"}</code></div>
-        <div class="tag">Caso:</div><div><code>${item.caseId || "—"}</code></div>
-        <div class="tag">Contactos:</div><div class="count">${item.contacts.size}</div>
-      </div>
-      <div class="rm"><button data-id="${item.id}">Quitar</button></div>`;
+
+    const meta = document.createElement("div");
+    meta.className = "meta";
+
+    const tagObj = document.createElement("div");
+    tagObj.className = "tag";
+    tagObj.textContent = "Objetivo:";
+    const objVal = document.createElement("div");
+    const objCode = document.createElement("code");
+    objCode.textContent = item.objective || "—";
+    objVal.appendChild(objCode);
+
+    const tagCase = document.createElement("div");
+    tagCase.className = "tag";
+    tagCase.textContent = "Caso:";
+    const caseVal = document.createElement("div");
+    const caseCode = document.createElement("code");
+    caseCode.textContent = item.caseId || "—";
+    caseVal.appendChild(caseCode);
+
+    const tagContacts = document.createElement("div");
+    tagContacts.className = "tag";
+    tagContacts.textContent = "Contactos:";
+    const countVal = document.createElement("div");
+    countVal.className = "count";
+    countVal.textContent = item.contacts.size;
+
+    meta.append(tagObj, objVal, tagCase, caseVal, tagContacts, countVal);
+
+    const rm = document.createElement("div");
+    rm.className = "rm";
+    const btn = document.createElement("button");
+    btn.setAttribute("data-id", item.id);
+    btn.textContent = "Quitar";
+    rm.appendChild(btn);
+
+    div.append(meta, rm);
     batchList.appendChild(div);
   });
   batchList.querySelectorAll("button[data-id]").forEach(btn=>{
@@ -395,7 +429,6 @@ function downloadJson(filename, obj) {
 }
 
 // =================== LOCAL STORAGE ===================
-const LS = { settings: 'v122_settings', batch: 'v122_batch', history: 'v122_history' };
 function saveLocal(){
   if (!settings.autosave) return;
   try {
@@ -1248,10 +1281,16 @@ function renderResidentialTable(){
   }
 
   if (resTableBody){
-    resTableBody.innerHTML = rows
-      .slice(1)
-      .map(r => `<tr><td>${r[0]}</td><td>${r[1]}</td><td>${r[2]}</td><td>${r[3]}</td></tr>`)
-      .join('');
+    resTableBody.innerHTML = "";
+    rows.slice(1).forEach(r => {
+      const tr = document.createElement('tr');
+      r.forEach(c => {
+        const td = document.createElement('td');
+        td.textContent = c;
+        tr.appendChild(td);
+      });
+      resTableBody.appendChild(tr);
+    });
   }
   resCard.classList.remove("hidden");
   currentServiceInfo.residentialRows = rows; // para exportar/copiar

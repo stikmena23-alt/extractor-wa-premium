@@ -4,7 +4,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Extractor Contactos de WhatsApp – Texto a XLSX (v1.2.1)</title>
+  <title>Extractor Contactos de WhatsApp – Texto a XLSX</title>
 
   <!-- Iconos -->
   <link rel="icon" type="image/png" href="https://cdn-icons-png.flaticon.com/512/9445/9445678.png?v=1">
@@ -45,7 +45,7 @@
     <header class="hero">
       <h1>Extractor Contactos de WhatsApp Premium</h1>
       <p class="sub">Limpia, une y exporta contactos ➜ XLSX <span class="muted">(+ CSV/JSON opcional)</span></p>
-      <p> Versión 1.2.1 </p>
+      <p> Versión <span class="app-version"></span> </p>
     </header>
 
     <!-- Barra superior -->
@@ -251,7 +251,7 @@
     <footer class="footer">
       <div class="sig">DESARROLLADO POR <strong>DEVINSON MENA</strong></div>
       <div class="links">
-        <span>Versión 1.2.1</span>
+        <span>Versión <span class="app-version"></span></span>
         <span class="dot">•</span>
         <a href="mailto:devinson.mena@correo.policia.gov.co" rel="noopener">Contacto</a>
         <span class="dot">•</span>
@@ -273,7 +273,13 @@
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
 
+  <script type="module">
+    import { VERSION } from './config.js';
+    document.querySelectorAll('.app-version').forEach(el => el.textContent = VERSION);
+    document.title += ` (v${VERSION})`;
+  </script>
+
   <!-- App -->
-  <script src="app.js"></script>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
