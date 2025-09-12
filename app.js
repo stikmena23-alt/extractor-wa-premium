@@ -24,6 +24,7 @@ const clearBatchBtn = document.getElementById("clearBatchBtn");
 const previewFilter = document.getElementById("previewFilter");
 const sortSelect = document.getElementById("sortSelect");
 const prefixDash = document.getElementById("prefixDash");
+const prefixPanel = document.getElementById("prefixPanel");
 
 const fmtXlsx = document.getElementById("fmtXlsx");
 const fmtCsv = document.getElementById("fmtCsv");
@@ -104,6 +105,18 @@ function stripCountry57(d){
   if (d.startsWith("0057")) return d.slice(4);
   if (d.startsWith("57") && d.length > 2) return d.slice(2);
   return d;
+}
+function cleanIP(ip){
+  let s = (ip || "").trim();
+  const hadBracket = s.startsWith("[");
+  if (hadBracket) {
+    s = s.replace(/[\[\]]/g, "");
+    return s.replace(/:{1,2}\d+$/, "");
+  }
+  if (s.includes(".")) {
+    return s.replace(/:{1,2}\d+$/, "");
+  }
+  return s;
 }
 function isYearLike(d){ return /^\d{4}$/.test(d) && +d >= 1900 && +d <= 2099; }
 function getNormalizedObjective(){
@@ -336,7 +349,6 @@ function renderPreview(){
     row.appendChild(b); row.appendChild(v);
     contactsList.appendChild(row);
   });
-  buildPrefixDash(list);
   downloadBtn.disabled = currentContacts.length === 0;
 }
 
@@ -362,6 +374,14 @@ function renderBatch(){
       renderBatch(); exportMergedBtn.disabled = batch.length === 0; saveLocal();
     });
   });
+  const allNumbers = batch.flatMap(item => Array.from(item.contacts));
+  if (allNumbers.length) {
+    buildPrefixDash(allNumbers);
+    prefixPanel?.classList.remove('hidden');
+  } else {
+    prefixDash.innerHTML = '<div class="hint">Sin datos suficientes para prefijos</div>';
+    prefixPanel?.classList.add('hidden');
+  }
   exportMergedBtn.disabled = batch.length === 0; saveLocal();
 }
 
@@ -645,8 +665,8 @@ const lbls = {
   lastIp: [/^last\s*ip$/i, /^[úu]ltim[ao]\s+ip$/i]
 };
 const RX = {
-  ipv4: /\b(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?!$)|$)){4}\b/g,
-  ipv6: /\b(?:[0-9a-f]{1,4}:){2,7}[0-9a-f]{0,4}\b/gi,
+  ipv4: /\b(?:25[0-5]|2[0-4]\d|1?\d?\d)(?:\.(?:25[0-5]|2[0-4]\d|1?\d?\d)){3}(?:[:]{1,2}\d{1,5})?\b/g,
+  ipv6: /\b(?:(?:[a-fA-F\d]{1,4}:){7}(?:[a-fA-F\d]{1,4}|:)|(?:[a-fA-F\d]{1,4}:){6}(?:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}|:[a-fA-F\d]{1,4}|:)|(?:[a-fA-F\d]{1,4}:){5}(?::(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}|(?::[a-fA-F\d]{1,4}){1,2}|:)|(?:[a-fA-F\d]{1,4}:){4}(?:(?::[a-fA-F\d]{1,4}){0,1}:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}|(?::[a-fA-F\d]{1,4}){1,3}|:)|(?:[a-fA-F\d]{1,4}:){3}(?:(?::[a-fA-F\d]{1,4}){0,2}:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}|(?::[a-fA-F\d]{1,4}){1,4}|:)|(?:[a-fA-F\d]{1,4}:){2}(?:(?::[a-fA-F\d]{1,4}){0,3}:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}|(?::[a-fA-F\d]{1,4}){1,5}|:)|(?:[a-fA-F\d]{1,4}:){1}(?:(?::[a-fA-F\d]{1,4}){0,4}:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}|(?::[a-fA-F\d]{1,4}){1,6}|:)|(?::(?:(?::[a-fA-F\d]{1,4}){0,5}:(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)(?:\.(?:25[0-5]|2[0-4]\d|1\d\d|[1-9]\d|\d)){3}|(?::[a-fA-F\d]{1,4}){1,7}|:)))(?:%[0-9a-zA-Z]{1,})?(?:[:]{1,2}\d{1,5})?\b/gi,
   ddmmyyyy_hms: /\b(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\s*UTC|Z)?\b/i,
   iso: /\b\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}(?::\d{2})?(?:\.\d+)?(?:Z| ?UTC)?\b/i
 };
@@ -720,10 +740,12 @@ function extractByLabelsFallback(raw, patterns){
 }
 function extractIPStructured(doc, patterns){
   const val = findValueByStructuredLabels(doc, patterns);
+  RX.ipv4.lastIndex = 0; RX.ipv6.lastIndex = 0;
   if (val && (RX.ipv4.test(val) || RX.ipv6.test(val))) {
     const m4 = val.match(RX.ipv4);
     const m6 = val.match(RX.ipv6);
-    return (m6 && m6[0]) || (m4 && m4[0]) || null;
+    const ip = (m4 && m4[0]) || (m6 && m6[0]) || null;
+    return ip ? cleanIP(ip) : null;
   }
   const html = doc.body ? doc.body.innerText || doc.body.textContent : "";
   for (const re of patterns){
@@ -731,15 +753,15 @@ function extractIPStructured(doc, patterns){
     if (m){
       const seg = m[0];
       const ip4 = seg.match(RX.ipv4);
-      if (ip4 && ip4[0]) return ip4[0];
+      if (ip4 && ip4[0]) return cleanIP(ip4[0]);
       const ip6 = seg.match(RX.ipv6);
-      if (ip6 && ip6[0]) return ip6[0];
+      if (ip6 && ip6[0]) return cleanIP(ip6[0]);
     }
   }
   const ip4All = html.match(RX.ipv4);
-  if (ip4All && ip4All[0]) return ip4All[0];
+  if (ip4All && ip4All[0]) return cleanIP(ip4All[0]);
   const ip6All = html.match(RX.ipv6);
-  if (ip6All && ip6All[0]) return ip6All[0];
+  if (ip6All && ip6All[0]) return cleanIP(ip6All[0]);
   return null;
 }
 function setText(el, val){ if (el) el.textContent = (val == null || val === "") ? "-" : String(val); }
@@ -1176,7 +1198,7 @@ function extractServiceInfoFromSource(raw){
   if (!lastIP){
     const text = String(raw);
     const ip4 = text.match(RX.ipv4); const ip6 = text.match(RX.ipv6);
-    lastIP = (ip6 && ip6[0]) || (ip4 && ip4[0]) || null;
+    lastIP = (ip4 && cleanIP(ip4[0])) || (ip6 && cleanIP(ip6[0])) || null;
   }
 
   setServiceStart(ss ? (parseFlexibleDate(ss) || ss) : null);
