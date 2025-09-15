@@ -385,6 +385,7 @@ function renderBatch(){
     });
   });
   exportMergedBtn.disabled = batch.length === 0; saveLocal();
+  renderGraph(currentContacts);
 }
 
 // =================== XLSX / CSV / JSON HELPERS ===================
@@ -1351,6 +1352,8 @@ function getResidentialRowsForBatch(){
 let graphNetwork = null;
 function renderGraph(numbers){
   if (!graphEl) return;
+  if (batch.length > 1){ return renderBatchGraph(); }
+  graphEl.innerHTML = "";
   const nodes = [{ id:'root', label:'Objetivo', shape:'box' }];
   const edges = [];
   (numbers||[]).forEach((n,i)=>{
@@ -1361,6 +1364,35 @@ function renderGraph(numbers){
   const options = { physics:{ stabilization:true }, nodes:{ shape:'dot', size:16 }, edges:{ arrows:'to' } };
   if (graphNetwork) graphNetwork.destroy();
   graphNetwork = new vis.Network(graphEl, data, options);
+}
+
+function renderBatchGraph(){
+  if (!graphEl) return;
+  const nodes=[]; const edges=[]; const owners=new Map();
+  batch.forEach((item,idx)=>{
+    const id=`item-${idx}`;
+    nodes.push({ id, label:item.objective || `Reporte ${idx+1}`, shape:'box' });
+    item.contacts.forEach(c=>{
+      if(!owners.has(c)) owners.set(c,new Set());
+      owners.get(c).add(id);
+    });
+  });
+  let cIdx=0;
+  owners.forEach((set,contact)=>{
+    if(set.size<2) return;
+    const cid=`c-${cIdx++}`;
+    nodes.push({ id:cid, label:contact });
+    set.forEach(id=>edges.push({ from:id, to:cid }));
+  });
+  if(edges.length===0){
+    if(graphNetwork){ graphNetwork.destroy(); graphNetwork=null; }
+    graphEl.innerHTML='<div class="muted">Sin coincidencias cruzadas en el lote</div>';
+    return;
+  }
+  const data={ nodes:new vis.DataSet(nodes), edges:new vis.DataSet(edges) };
+  const options={ physics:{ stabilization:true }, nodes:{ shape:'dot', size:16 }, edges:{ arrows:'to' } };
+  if(graphNetwork) graphNetwork.destroy();
+  graphNetwork=new vis.Network(graphEl,data,options);
 }
 
 function addChatMessage(text, who){
