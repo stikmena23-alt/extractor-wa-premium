@@ -74,6 +74,7 @@ const loginUser = document.getElementById("loginUser");
 const loginPassword = document.getElementById("loginPassword");
 const loginBtn = document.getElementById("loginBtn");
 const loginError = document.getElementById("loginError");
+const loginLoading = document.getElementById("loginLoading");
 const appWrap = document.getElementById("appWrap");
 const adminPanel = document.getElementById("adminPanel");
 const clientsTable = document.getElementById("clientsTable");
@@ -1579,16 +1580,22 @@ function renderClients(){
 function handleLogin(){
   const user=loginUser.value.trim();
   const pass=loginPassword.value;
-  if(user===adminUser.username && pass===adminUser.password){
-    loginError.style.display='none';
-    loginScreen.style.display='none';
-    appWrap.style.display='block';
-    adminPanel.style.display='block';
-    renderClients();
-  }else{
-    loginError.textContent='Credenciales inválidas';
-    loginError.style.display='block';
-  }
+  loginError.style.display='none';
+  loginLoading.style.display='block';
+  loginBtn.disabled=true;
+  setTimeout(()=>{
+    if(user===adminUser.username && pass===adminUser.password){
+      loginScreen.style.display='none';
+      appWrap.style.display='block';
+      adminPanel.style.display='block';
+      renderClients();
+    }else{
+      loginError.textContent='Credenciales inválidas';
+      loginError.style.display='block';
+    }
+    loginLoading.style.display='none';
+    loginBtn.disabled=false;
+  },600);
 }
 
 loginBtn?.addEventListener('click', handleLogin);

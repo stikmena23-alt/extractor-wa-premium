@@ -1173,10 +1173,11 @@ body[data-theme="light"] .table thead th{
   width:min(90%,360px);
   display:flex;
   flex-direction:column;
-  gap:var(--gap);
+  gap:calc(var(--gap)*.75);
   border:1px solid var(--border);
 }
 .login-card h2{ text-align:center; margin:0; font-size:clamp(22px,2vw,24px); }
+.loading-msg{ text-align:center; color:var(--text-2); display:none; }
 .error-msg{ color:var(--danger); text-align:center; display:none; }
 
 .admin-table{ width:100%; border-collapse:collapse; margin-top:var(--gap); }
