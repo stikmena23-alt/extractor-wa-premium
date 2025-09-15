@@ -83,10 +83,19 @@ const planNameEl = document.getElementById("planName");
 const creditsChip = document.getElementById("creditsChip");
 const creditCountEl = document.getElementById("creditCount");
 
+const loginLoadingDefault = loginLoading ? loginLoading.textContent : '';
+let loginBootOverlayEl = null;
+
 const SUPABASE_URL = "https://htkwcjhcuqyepclpmpsv.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a3djamhjdXF5ZXBjbHBtcHN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTk4MTgsImV4cCI6MjA3MzQ5NTgxOH0.dBeJjYm12YW27LqIxon5ifPR1ygfFXAHVg8ZuCZCEf8";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true
+  }
+});
 
 // ----------- ESTADO GLOBAL -----------
 let currentContacts = [];
@@ -1517,6 +1526,40 @@ function addChatMessage(text, who){
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
+function ensureLoginOverlay(){
+  if (!loginScreen) return null;
+  if (!loginBootOverlayEl){
+    loginBootOverlayEl = document.createElement('div');
+    loginBootOverlayEl.id = 'loginBootOverlay';
+    loginBootOverlayEl.innerHTML = '<div class="visor"><div class="spinner"></div><span></span></div>';
+    loginScreen.appendChild(loginBootOverlayEl);
+  }
+  return loginBootOverlayEl;
+}
+
+function showLoginOverlay(message){
+  const overlay = ensureLoginOverlay();
+  if (!overlay) return;
+  const label = overlay.querySelector('span');
+  if (label) label.textContent = message;
+  overlay.classList.add('active');
+  if (loginScreen) loginScreen.style.display = 'grid';
+  if (loginForm) loginForm.classList.add('is-hidden');
+  if (loginBtn) loginBtn.disabled = true;
+  if (loginLoading){
+    loginLoading.style.display = 'none';
+    loginLoading.textContent = loginLoadingDefault;
+  }
+}
+
+function hideLoginOverlay(){
+  if (loginBootOverlayEl){
+    loginBootOverlayEl.classList.remove('active');
+  }
+  if (loginForm) loginForm.classList.remove('is-hidden');
+  if (loginBtn) loginBtn.disabled = false;
+}
+
 const sentiment = window.Sentiment ? new window.Sentiment() : null;
 async function handleChat(msg){
   const m = msg.toLowerCase();
@@ -1596,7 +1639,10 @@ loginForm?.addEventListener('submit', async (e)=>{
   e.preventDefault();
   loginError.style.display='none';
   loginBtn.disabled = true;
-  loginLoading.style.display='block';
+  if (loginLoading){
+    loginLoading.textContent = loginLoadingDefault || loginLoading.textContent;
+    loginLoading.style.display='block';
+  }
   const email = loginEmail.value.trim();
   const password = loginPassword.value.trim();
   if(!email || !password){
@@ -1605,6 +1651,18 @@ loginForm?.addEventListener('submit', async (e)=>{
     loginError.textContent='Completa email y contraseña';
     loginError.style.display='block';
     return;
+  }
+  try{
+    const { data: guardData, error: guardError } = await sb.auth.getSession();
+    if(!guardError && guardData?.session){
+      loginLoading.style.display='none';
+      loginBtn.disabled = false;
+      loginError.textContent = 'Ya hay una sesión activa en este navegador. Cierra la actual para iniciar otra.';
+      loginError.style.display='block';
+      return;
+    }
+  }catch(guardErr){
+    console.error('Guard sesión activa', guardErr);
   }
   const { error } = await sb.auth.signInWithPassword({ email, password });
   loginLoading.style.display='none';
@@ -1625,14 +1683,16 @@ logoutBtn?.addEventListener('click', async ()=>{
     alert('No se pudo cerrar sesión');
     return;
   }
-  loginForm.reset();
+  loginForm?.reset();
+  hideLoginOverlay();
   loginError.style.display='none';
   loginLoading.style.display='none';
+  if (loginLoading) loginLoading.textContent = loginLoadingDefault;
   planChip.style.display='none';
   creditsChip.style.display='none';
   logoutBtn.style.display='none';
   appWrap.style.display='none';
-  loginScreen.style.display='flex';
+  if (loginScreen) loginScreen.style.display='grid';
 });
 
 async function spendCredit(){
@@ -1659,25 +1719,61 @@ async function spendCredit(){
 window.addEventListener('DOMContentLoaded', async () => {
   restoreLocal();
   renderPreview();
-  const { data: { session } } = await sb.auth.getSession();
+  showLoginOverlay('Verificando sesión...');
+  let session = null;
+  try{
+    const { data, error } = await sb.auth.getSession();
+    if(error){
+      console.error('Obtener sesión', error);
+    } else {
+      session = data?.session || null;
+    }
+    if(!session){
+      const { data: refreshed, error: refreshError } = await sb.auth.refreshSession();
+      if(refreshError){
+        console.warn('Refrescar sesión', refreshError);
+      } else if (refreshed?.session){
+        session = refreshed.session;
+      }
+    }
+  }catch(err){
+    console.error('Verificación de sesión', err);
+  }
+  hideLoginOverlay();
+  if(loginLoading){
+    loginLoading.style.display = 'none';
+    loginLoading.textContent = loginLoadingDefault;
+  }
   if(session){
-    loginScreen.style.display='none';
+    if(loginScreen) loginScreen.style.display='none';
     appWrap.style.display='block';
     await updateCredits();
+  } else {
+    if(loginScreen) loginScreen.style.display='grid';
+    if(loginForm) loginForm.classList.remove('is-hidden');
+    if(loginBtn) loginBtn.disabled = false;
   }
 });
 
 sb.auth.onAuthStateChange(async (_evt, session)=>{
   if(session){
-    loginScreen.style.display='none';
+    hideLoginOverlay();
+    if(loginScreen) loginScreen.style.display='none';
     appWrap.style.display='block';
     await updateCredits();
   }else{
+    hideLoginOverlay();
     planChip.style.display='none';
     creditsChip.style.display='none';
     logoutBtn.style.display='none';
     appWrap.style.display='none';
-    loginScreen.style.display='flex';
+    if(loginScreen) loginScreen.style.display='grid';
+    if(loginForm) loginForm.classList.remove('is-hidden');
+    if(loginBtn) loginBtn.disabled = false;
+    if(loginLoading){
+      loginLoading.style.display='none';
+      loginLoading.textContent = loginLoadingDefault;
+    }
     uploadBtn.disabled = true;
     processBtn.disabled = true;
   }
