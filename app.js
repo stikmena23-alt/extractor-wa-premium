@@ -62,6 +62,7 @@ const chatInput = document.getElementById("chatInput");
 const chatSend = document.getElementById("chatSend");
 const chatLog = document.getElementById("chatLog");
 const graphEl = document.getElementById("graph");
+const relBtn = document.getElementById("relBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 const filePicker = document.getElementById("filePicker");
 
@@ -336,6 +337,14 @@ function buildPrefixDash(list){
     return `<div class="bar-row"><span class="bar-label">${p}</span><div class="bar"><i style="width:${w}%"></i></div><span>${c}</span></div>`;
   }).join('') || '<div class="hint">Sin datos suficientes para prefijos</div>';
 }
+function updateRelBtn(){
+  if(!relBtn) return;
+  relBtn.disabled = (batch.length === 0 && currentContacts.length === 0);
+  if(relBtn.disabled){
+    if(graphNetwork){ graphNetwork.destroy(); graphNetwork=null; }
+    if(graphEl) graphEl.innerHTML='';
+  }
+}
 function renderPreview(){
   if (accountIdEl.value){
     accountIdEl.value = stripCountry57(normalizeNumber(accountIdEl.value));
@@ -358,7 +367,7 @@ function renderPreview(){
     contactsList.appendChild(row);
   });
   buildPrefixDash(list);
-  renderGraph(currentContacts);
+  updateRelBtn();
   downloadBtn.disabled = currentContacts.length === 0;
 }
 
@@ -385,7 +394,7 @@ function renderBatch(){
     });
   });
   exportMergedBtn.disabled = batch.length === 0; saveLocal();
-  renderGraph(currentContacts);
+  updateRelBtn();
 }
 
 // =================== XLSX / CSV / JSON HELPERS ===================
@@ -1379,20 +1388,25 @@ function renderBatchGraph(){
   });
   let cIdx=0;
   owners.forEach((set,contact)=>{
-    if(set.size<2) return;
     const cid=`c-${cIdx++}`;
-    nodes.push({ id:cid, label:contact });
+    const color = set.size>1 ? { background:'#ff6b6b' } : undefined;
+    nodes.push({ id:cid, label:contact, color });
     set.forEach(id=>edges.push({ from:id, to:cid }));
   });
   if(edges.length===0){
     if(graphNetwork){ graphNetwork.destroy(); graphNetwork=null; }
-    graphEl.innerHTML='<div class="muted">Sin coincidencias cruzadas en el lote</div>';
+    graphEl.innerHTML='<div class="muted">Sin datos en el lote</div>';
     return;
   }
   const data={ nodes:new vis.DataSet(nodes), edges:new vis.DataSet(edges) };
   const options={ physics:{ stabilization:true }, nodes:{ shape:'dot', size:16 }, edges:{ arrows:'to' } };
   if(graphNetwork) graphNetwork.destroy();
   graphNetwork=new vis.Network(graphEl,data,options);
+}
+
+function renderRelations(){
+  if(batch.length>1) renderBatchGraph();
+  else renderGraph(currentContacts);
 }
 
 function addChatMessage(text, who){
@@ -1412,6 +1426,13 @@ function handleChat(msg){
   if (m.includes('duplicados')){
     return `Hay ${currentCounts.duplicates || 0} números duplicados.`;
   }
+  if (m.includes('lote') || m.includes('relacion')){
+    const counts={};
+    batch.forEach(it=>{ it.contacts.forEach(c=>{ counts[c]=(counts[c]||0)+1; }); });
+    const total=Object.keys(counts).length;
+    const shared=Object.values(counts).filter(v=>v>1).length;
+    return `En el lote hay ${total} contactos y ${shared} compartidos entre reportes.`;
+  }
   return 'No tengo una respuesta para eso.';
 }
 
@@ -1427,6 +1448,9 @@ function sendChat(){
 if (chatSend){
   chatSend.addEventListener('click', sendChat);
   chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
+}
+if (relBtn){
+  relBtn.addEventListener('click', renderRelations);
 }
 
 /* ====== init ====== */

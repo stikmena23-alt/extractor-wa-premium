@@ -1130,3 +1130,4 @@ body[data-theme="light"] .table thead th{
 .chat-input{ display:flex; gap:8px; }
 .chat-input input{ flex:1; }
 #graph{ height:400px; }
+#graphPanel .btn{ margin-bottom:var(--gap); }
