@@ -70,7 +70,7 @@ const filePicker = document.getElementById("filePicker");
 
 // Login y administración
 const loginScreen = document.getElementById("loginScreen");
-const loginEmail = document.getElementById("loginEmail");
+const loginUser = document.getElementById("loginUser");
 const loginPassword = document.getElementById("loginPassword");
 const loginBtn = document.getElementById("loginBtn");
 const loginError = document.getElementById("loginError");
@@ -92,7 +92,7 @@ let settings = {
   exportHistory: []
 };
 
-const adminUser = { email: 'admin@example.com', password: 'admin123' };
+const adminUser = { username: 'admin', password: '12345' };
 let clients = [ { name: 'Cliente demo', credits: 10 } ];
 
 // Zona horaria de referencia (UTC−5 sin DST)
@@ -1577,9 +1577,9 @@ function renderClients(){
 }
 
 function handleLogin(){
-  const email=loginEmail.value.trim();
+  const user=loginUser.value.trim();
   const pass=loginPassword.value;
-  if(email===adminUser.email && pass===adminUser.password){
+  if(user===adminUser.username && pass===adminUser.password){
     loginError.style.display='none';
     loginScreen.style.display='none';
     appWrap.style.display='block';
@@ -1592,7 +1592,7 @@ function handleLogin(){
 }
 
 loginBtn?.addEventListener('click', handleLogin);
-loginEmail?.addEventListener('keydown', e=>{ if(e.key==='Enter') handleLogin(); });
+loginUser?.addEventListener('keydown', e=>{ if(e.key==='Enter') handleLogin(); });
 loginPassword?.addEventListener('keydown', e=>{ if(e.key==='Enter') handleLogin(); });
 
 clientsTable?.addEventListener('click', e=>{
