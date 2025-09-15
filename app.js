@@ -68,19 +68,23 @@ const relBtn = document.getElementById("relBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 const filePicker = document.getElementById("filePicker");
 
-// Login y administración
+// Login y créditos
 const loginScreen = document.getElementById("loginScreen");
-const loginUser = document.getElementById("loginUser");
+const loginForm = document.getElementById("loginForm");
+const loginEmail = document.getElementById("loginEmail");
 const loginPassword = document.getElementById("loginPassword");
 const loginBtn = document.getElementById("loginBtn");
 const loginError = document.getElementById("loginError");
 const loginLoading = document.getElementById("loginLoading");
+const logoutBtn = document.getElementById("logoutBtn");
 const appWrap = document.getElementById("appWrap");
-const adminPanel = document.getElementById("adminPanel");
-const clientsTable = document.getElementById("clientsTable");
-const newClientName = document.getElementById("newClientName");
-const newClientCredits = document.getElementById("newClientCredits");
-const addClientBtn = document.getElementById("addClientBtn");
+const creditsChip = document.getElementById("creditsChip");
+const creditCountEl = document.getElementById("creditCount");
+
+const SUPABASE_URL = "https://htkwcjhcuqyepclpmpsv.supabase.co";
+const SUPABASE_ANON_KEY =
+  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a3djamhjdXF5ZXBjbHBtcHN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTk4MTgsImV4cCI6MjA3MzQ5NTgxOH0.dBeJjYm12YW27LqIxon5ifPR1ygfFXAHVg8ZuCZCEf8";
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // ----------- ESTADO GLOBAL -----------
 let currentContacts = [];
@@ -93,8 +97,6 @@ let settings = {
   exportHistory: []
 };
 
-const adminUser = { username: 'admin', password: '12345' };
-let clients = [ { name: 'Cliente demo', credits: 10 } ];
 
 // Zona horaria de referencia (UTC−5 sin DST)
 const HLC_TZ = 'America/Bogota';
@@ -699,8 +701,10 @@ if (dropZone){
     e.preventDefault(); e.stopPropagation();
     dropZone.classList.remove('dragging'); dragCounter = 0;
     const dt = e.dataTransfer; if (!dt) return;
-    if (dt.files && dt.files.length){ await handleDroppedFiles(dt.files); }
-    else alert("Suelta archivos válidos (.zip con records.html, o .txt/.csv/.html).");
+    if (dt.files && dt.files.length){
+      const ok = await spendCredit();
+      if(ok) await handleDroppedFiles(dt.files);
+    } else alert("Suelta archivos válidos (.zip con records.html, o .txt/.csv/.html).");
   });
 }
 
@@ -709,7 +713,10 @@ if (uploadBtn && filePicker){
   uploadBtn.addEventListener('click', () => { filePicker.click(); });
   filePicker.addEventListener('change', async (e) => {
     const files = e.target.files;
-    if (files && files.length){ await handleDroppedFiles(files); }
+    if (files && files.length){
+      const ok = await spendCredit();
+      if(ok) await handleDroppedFiles(files);
+    }
     filePicker.value = "";
   });
 }
@@ -1566,62 +1573,76 @@ if (relBtn){
   });
 }
 
-function renderClients(){
-  if(!clientsTable) return;
-  const tbody = clientsTable.querySelector('tbody');
-  tbody.innerHTML='';
-  clients.forEach((c,idx)=>{
-    const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${c.name}</td><td><input type="number" value="${c.credits}" data-idx="${idx}" class="credit-input"></td><td><button class="btn" data-idx="${idx}">Guardar</button></td>`;
-    tbody.appendChild(tr);
-  });
+async function updateCredits(){
+  const { data: profile, error } = await sb.from('profiles').select('credits').single();
+  if(error){ console.error('Perfil', error); return; }
+  creditCountEl.textContent = profile.credits;
+  creditsChip.style.display='inline-block';
+  logoutBtn.style.display='inline-block';
+  uploadBtn.disabled = profile.credits <= 0;
 }
 
-function handleLogin(){
-  const user=loginUser.value.trim();
-  const pass=loginPassword.value;
+loginForm?.addEventListener('submit', async (e)=>{
+  e.preventDefault();
   loginError.style.display='none';
   loginLoading.style.display='block';
-  loginBtn.disabled=true;
-  setTimeout(()=>{
-    if(user===adminUser.username && pass===adminUser.password){
-      loginScreen.style.display='none';
-      appWrap.style.display='block';
-      adminPanel.style.display='block';
-      renderClients();
-    }else{
-      loginError.textContent='Credenciales inválidas';
-      loginError.style.display='block';
+  const email = loginEmail.value.trim();
+  const password = loginPassword.value;
+  const { error } = await sb.auth.signInWithPassword({ email, password });
+  loginLoading.style.display='none';
+  if(error){
+    loginError.textContent='Error de login';
+    loginError.style.display='block';
+    return;
+  }
+  loginScreen.style.display='none';
+  appWrap.style.display='block';
+  await updateCredits();
+});
+
+logoutBtn?.addEventListener('click', async ()=>{
+  await sb.auth.signOut();
+});
+
+async function spendCredit(){
+  const { error } = await sb.rpc('spend_credit');
+  if(error){
+    if((error.message||'').includes('NO_CREDITS')){
+      alert('Sin créditos');
+      uploadBtn.disabled=true;
+    } else {
+      alert('Error: '+error.message);
     }
-    loginLoading.style.display='none';
-    loginBtn.disabled=false;
-  },600);
+    await updateCredits();
+    return false;
+  }
+  const n = parseInt(creditCountEl.textContent||'0',10) - 1;
+  creditCountEl.textContent = Math.max(0,n);
+  uploadBtn.disabled = n <= 0;
+  return true;
 }
 
-loginBtn?.addEventListener('click', handleLogin);
-loginUser?.addEventListener('keydown', e=>{ if(e.key==='Enter') handleLogin(); });
-loginPassword?.addEventListener('keydown', e=>{ if(e.key==='Enter') handleLogin(); });
-
-clientsTable?.addEventListener('click', e=>{
-  if(e.target.matches('button[data-idx]')){
-    const idx=+e.target.dataset.idx;
-    const inp=clientsTable.querySelector(`input[data-idx="${idx}"]`);
-    clients[idx].credits=parseInt(inp.value,10)||0;
+/* ====== init ====== */
+window.addEventListener('DOMContentLoaded', async () => {
+  restoreLocal();
+  renderPreview();
+  const { data: { session } } = await sb.auth.getSession();
+  if(session){
+    loginScreen.style.display='none';
+    appWrap.style.display='block';
+    await updateCredits();
   }
 });
 
-addClientBtn?.addEventListener('click', ()=>{
-  const name=(newClientName.value||'').trim();
-  const credits=parseInt(newClientCredits.value,10)||0;
-  if(!name) return;
-  clients.push({ name, credits });
-  renderClients();
-  newClientName.value='';
-  newClientCredits.value='';
-});
-
-/* ====== init ====== */
-window.addEventListener('DOMContentLoaded', () => {
-  restoreLocal();
-  renderPreview();
+sb.auth.onAuthStateChange(async (_evt, session)=>{
+  if(session){
+    loginScreen.style.display='none';
+    appWrap.style.display='block';
+    await updateCredits();
+  }else{
+    creditsChip.style.display='none';
+    logoutBtn.style.display='none';
+    appWrap.style.display='none';
+    loginScreen.style.display='flex';
+  }
 });

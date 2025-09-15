@@ -17,20 +17,20 @@
 <body>
   <!-- Pantalla de inicio de sesión -->
   <div id="loginScreen" class="login-screen">
-    <div class="login-card">
-      <h2>Acceso</h2>
+    <form id="loginForm" class="login-card">
+      <h2>Bienvenido</h2>
       <label class="field">
-        <span>Usuario</span>
-        <input type="text" id="loginUser" placeholder="admin" />
+        <span>Email</span>
+        <input type="email" id="loginEmail" placeholder="usuario@correo.com" required />
       </label>
       <label class="field">
         <span>Contraseña</span>
-        <input type="password" id="loginPassword" placeholder="12345" />
+        <input type="password" id="loginPassword" placeholder="Contraseña" required />
       </label>
       <button id="loginBtn" class="btn">Entrar</button>
       <p id="loginLoading" class="loading-msg">Iniciando sesión...</p>
       <p id="loginError" class="error-msg"></p>
-    </div>
+    </form>
   </div>
 
   <!-- MODAL: Guía -->
@@ -99,6 +99,8 @@
         </label>
 
         <div class="row actions one-line">
+          <div class="chip" id="creditsChip" style="display:none;">Créditos: <span id="creditCount">0</span></div>
+          <button id="logoutBtn" class="btn ghost" style="display:none;">Salir</button>
           <button id="openGuide" class="btn ghost">Guía ( ? )</button>
         </div>
       </div>
@@ -285,20 +287,6 @@
       </section>
 
       <!-- Panel de administración -->
-      <section class="card panel span-12" id="adminPanel" style="display:none;">
-        <h2>Clientes</h2>
-        <table class="admin-table" id="clientsTable">
-          <thead>
-            <tr><th>Cliente</th><th>Créditos</th><th>Acciones</th></tr>
-          </thead>
-          <tbody></tbody>
-        </table>
-        <div class="row">
-          <input id="newClientName" placeholder="Nuevo cliente" />
-          <input id="newClientCredits" type="number" placeholder="Créditos" />
-          <button id="addClientBtn" class="btn">Agregar</button>
-        </div>
-      </section>
     </main>
 
     <footer class="footer">
@@ -327,6 +315,7 @@
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sentiment@5.0.2/build/sentiment.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
   <!-- App -->
   <script src="app.js"></script>
