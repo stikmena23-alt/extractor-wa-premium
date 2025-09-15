@@ -58,6 +58,10 @@ const resTableBody   = document.getElementById("resTableBody");
 const copyResTableBtn= document.getElementById("copyResTableBtn");
 
 // Subir archivos
+const chatInput = document.getElementById("chatInput");
+const chatSend = document.getElementById("chatSend");
+const chatLog = document.getElementById("chatLog");
+const graphEl = document.getElementById("graph");
 const uploadBtn = document.getElementById("uploadBtn");
 const filePicker = document.getElementById("filePicker");
 
@@ -354,6 +358,7 @@ function renderPreview(){
     contactsList.appendChild(row);
   });
   buildPrefixDash(list);
+  renderGraph(currentContacts);
   downloadBtn.disabled = currentContacts.length === 0;
 }
 
@@ -1340,6 +1345,56 @@ function getResidentialRowsForBatch(){
     if (rows) { rows.slice(1).forEach(r => out.push(r)); added += 1; }
   });
   return added ? out : null;
+}
+
+// ====== Chatbot y gráfico de conexiones ======
+let graphNetwork = null;
+function renderGraph(numbers){
+  if (!graphEl) return;
+  const nodes = [{ id:'root', label:'Objetivo', shape:'box' }];
+  const edges = [];
+  (numbers||[]).forEach((n,i)=>{
+    nodes.push({ id:i, label:n });
+    edges.push({ from:'root', to:i });
+  });
+  const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
+  const options = { physics:{ stabilization:true }, nodes:{ shape:'dot', size:16 }, edges:{ arrows:'to' } };
+  if (graphNetwork) graphNetwork.destroy();
+  graphNetwork = new vis.Network(graphEl, data, options);
+}
+
+function addChatMessage(text, who){
+  if (!chatLog) return;
+  const p = document.createElement('p');
+  p.className = who;
+  p.textContent = text;
+  chatLog.appendChild(p);
+  chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+function handleChat(msg){
+  const m = msg.toLowerCase();
+  if (m.includes('cuantos') || m.includes('contar')){
+    return `Se encontraron ${currentContacts.length} números.`;
+  }
+  if (m.includes('duplicados')){
+    return `Hay ${currentCounts.duplicates || 0} números duplicados.`;
+  }
+  return 'No tengo una respuesta para eso.';
+}
+
+function sendChat(){
+  const msg = (chatInput.value||'').trim();
+  if(!msg) return;
+  addChatMessage(msg,'user');
+  const resp = handleChat(msg);
+  addChatMessage(resp,'bot');
+  chatInput.value='';
+}
+
+if (chatSend){
+  chatSend.addEventListener('click', sendChat);
+  chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
 }
 
 /* ====== init ====== */

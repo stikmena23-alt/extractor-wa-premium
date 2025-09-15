@@ -246,6 +246,21 @@
           <div class="small-note muted"> → Generada a partir de “Última IP” y “Última vez visto” (FECHA Y HORA SOLICITADAS HLC: 5 min antes y 5 min después).</div>
         </div>
       </section>
+      <!-- Panel de gráfico de conexiones -->
+      <section class="card panel span-6" id="graphPanel">
+        <h2>Relaciones</h2>
+        <div id="graph"></div>
+      </section>
+
+      <!-- Panel de chatbot -->
+      <section class="card panel span-6" id="chatbotPanel">
+        <h2>Chatbot de Análisis</h2>
+        <div id="chatLog" class="chat-log"></div>
+        <div class="chat-input">
+          <input type="text" id="chatInput" placeholder="Escribe una instrucción...">
+          <button id="chatSend" class="btn">Enviar</button>
+        </div>
+      </section>
     </main>
 
     <footer class="footer">
@@ -272,6 +287,7 @@
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
 
   <!-- App -->
   <script src="app.js"></script>

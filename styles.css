@@ -206,7 +206,8 @@ body[data-theme="light"] .hero h1{
 .span-12{ grid-column:span 12 }
 .span-7{ grid-column:span 7 }
 .span-5{ grid-column:span 5 }
-@media (max-width: 960px){ .span-7, .span-5, .span-12{ grid-column:1/-1 } }
+.span-6{ grid-column:span 6 }
+@media (max-width: 960px){ .span-7, .span-6, .span-5, .span-12{ grid-column:1/-1 } }
 
 .card{
   position:relative; background: linear-gradient(180deg, var(--glass), var(--glass-2));
@@ -1110,3 +1111,22 @@ body[data-theme="light"] .table thead th{
   text-align: center;
   vertical-align: middle;
 }
+
+/* =========================
+   Chatbot
+   ========================= */
+.chat-log{
+  height:260px;
+  overflow-y:auto;
+  border:1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding:var(--pad);
+  background:var(--surface-0);
+  margin-bottom:10px;
+}
+.chat-log p{ margin:0 0 6px; }
+.chat-log p.user{ color:var(--pri); }
+.chat-log p.bot{ color:var(--text-1); }
+.chat-input{ display:flex; gap:8px; }
+.chat-input input{ flex:1; }
+#graph{ height:400px; }
