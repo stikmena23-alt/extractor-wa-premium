@@ -78,6 +78,8 @@ const loginError = document.getElementById("loginError");
 const loginLoading = document.getElementById("loginLoading");
 const logoutBtn = document.getElementById("logoutBtn");
 const appWrap = document.getElementById("appWrap");
+const planChip = document.getElementById("planChip");
+const planNameEl = document.getElementById("planName");
 const creditsChip = document.getElementById("creditsChip");
 const creditCountEl = document.getElementById("creditCount");
 
@@ -1576,12 +1578,18 @@ if (relBtn){
 }
 
 async function updateCredits(){
-  const { data: profile, error } = await sb.from('profiles').select('credits').single();
+  const { data: profile, error } = await sb.from('profiles').select('plan, credits').single();
   if(error){ console.error('Perfil', error); return; }
+  planNameEl.textContent = profile.plan || '-';
+  const planClass = (profile.plan||'').toLowerCase();
+  planChip.className = 'chip' + (planClass ? ' plan-' + planClass : '');
+  planChip.style.display='inline-block';
   creditCountEl.textContent = profile.credits;
   creditsChip.style.display='inline-block';
   logoutBtn.style.display='inline-block';
-  uploadBtn.disabled = profile.credits <= 0;
+  const noCredits = profile.credits <= 0;
+  uploadBtn.disabled = noCredits;
+  processBtn.disabled = noCredits;
 }
 
 loginForm?.addEventListener('submit', async (e)=>{
@@ -1612,7 +1620,19 @@ loginForm?.addEventListener('submit', async (e)=>{
 });
 
 logoutBtn?.addEventListener('click', async ()=>{
-  await sb.auth.signOut();
+  const { error } = await sb.auth.signOut();
+  if(error){
+    alert('No se pudo cerrar sesión');
+    return;
+  }
+  loginForm.reset();
+  loginError.style.display='none';
+  loginLoading.style.display='none';
+  planChip.style.display='none';
+  creditsChip.style.display='none';
+  logoutBtn.style.display='none';
+  appWrap.style.display='none';
+  loginScreen.style.display='flex';
 });
 
 async function spendCredit(){
@@ -1621,6 +1641,7 @@ async function spendCredit(){
     if((error.message||'').includes('NO_CREDITS')){
       alert('Sin créditos');
       uploadBtn.disabled=true;
+      processBtn.disabled=true;
     } else {
       alert('Error: '+error.message);
     }
@@ -1630,6 +1651,7 @@ async function spendCredit(){
   const n = parseInt(creditCountEl.textContent||'0',10) - 1;
   creditCountEl.textContent = Math.max(0,n);
   uploadBtn.disabled = n <= 0;
+  processBtn.disabled = n <= 0;
   return true;
 }
 
@@ -1651,9 +1673,12 @@ sb.auth.onAuthStateChange(async (_evt, session)=>{
     appWrap.style.display='block';
     await updateCredits();
   }else{
+    planChip.style.display='none';
     creditsChip.style.display='none';
     logoutBtn.style.display='none';
     appWrap.style.display='none';
     loginScreen.style.display='flex';
+    uploadBtn.disabled = true;
+    processBtn.disabled = true;
   }
 });
