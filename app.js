@@ -277,7 +277,7 @@ async function handleDroppedFiles(fileList){
       const res = await processZipFile(z);
       if (res){
         parts.push(res.html);
-        if (res.ai && !accountIdEl.value) accountIdEl.value = res.ai;
+        if (res.ai) accountIdEl.value = res.ai;
       }
     }
   }
@@ -292,7 +292,7 @@ async function handleDroppedFiles(fileList){
   if (parts.length){
     const merged = parts.join("\n\n");
     const ai = extractAccountIdentifierFromHtml(merged);
-    if (ai && !accountIdEl.value) accountIdEl.value = ai;
+    if (ai) accountIdEl.value = ai;
     const srcSan = sanitizeSource(merged);
     inputText.value = merged;
     currentContacts = textToContacts(srcSan);
@@ -1409,7 +1409,8 @@ function attachNumberLabels(network, nodeData){
 function renderGraph(numbers){
   if (!graphEl) return;
   graphEl.innerHTML = '';
-  const nodeArr = [{ id: 'root', label: 'Objetivo', shape: 'box' }];
+  const objectiveLabel = getNormalizedObjective() || 'Objetivo';
+  const nodeArr = [{ id: 'root', label: objectiveLabel, shape: 'box' }];
   const edges = [];
   (numbers || []).forEach((n, i) => {
     const freq = currentCounts.countsMap[n] || 1;
@@ -1425,6 +1426,9 @@ function renderGraph(numbers){
   };
   if (graphNetwork) graphNetwork.destroy();
   graphNetwork = new vis.Network(graphEl, data, options);
+  graphNetwork.once('stabilizationIterationsDone', () => {
+    graphNetwork.setOptions({ physics: false });
+  });
   attachNumberLabels(graphNetwork, nodeArr);
 }
 
@@ -1461,6 +1465,9 @@ function renderBatchGraph(){
   };
   if (graphNetwork) graphNetwork.destroy();
   graphNetwork = new vis.Network(graphEl, data, options);
+  graphNetwork.once('stabilizationIterationsDone', () => {
+    graphNetwork.setOptions({ physics: false });
+  });
   attachNumberLabels(graphNetwork, nodeArr);
 }
 
@@ -1514,7 +1521,10 @@ async function handleChat(msg){
     const shared=Object.values(counts).filter(v=>v>1).length;
     return `En el lote hay ${total} contactos y ${shared} compartidos entre reportes.`;
   }
-  return 'No tengo una respuesta para eso.';
+  if (m.includes('hola') || m.includes('ayuda') || m.includes('dime')){
+    return 'Puedes preguntarme por "cuantos", "duplicados", "promedio", "sentimiento" o "lote".';
+  }
+  return 'No tengo una respuesta para eso. Escribe "ayuda" para ver opciones.';
 }
 
 async function sendChat(){
