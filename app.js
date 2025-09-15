@@ -1388,50 +1388,80 @@ function getResidentialRowsForBatch(){
 
 // ====== Chatbot y gráfico de conexiones ======
 let graphNetwork = null;
+
+function attachNumberLabels(network, nodeData){
+  network.on('afterDrawing', ctx => {
+    ctx.save();
+    ctx.font = '12px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillStyle = settings.theme === 'dark' ? '#fff' : '#000';
+    nodeData.forEach(n => {
+      if (!n.title) return; // usar title como número
+      const pos = network.getPositions([n.id])[n.id];
+      if (!pos) return;
+      ctx.fillText(n.title, pos.x, pos.y + 32);
+    });
+    ctx.restore();
+  });
+}
+
 function renderGraph(numbers){
   if (!graphEl) return;
-  graphEl.innerHTML = "";
-  const nodes = [{ id:'root', label:'Objetivo', shape:'box' }];
+  graphEl.innerHTML = '';
+  const nodeArr = [{ id: 'root', label: 'Objetivo', shape: 'box' }];
   const edges = [];
-  (numbers||[]).forEach((n,i)=>{
+  (numbers || []).forEach((n, i) => {
     const freq = currentCounts.countsMap[n] || 1;
-    nodes.push({ id:i, label:String(freq), title:n });
-    edges.push({ from:'root', to:i });
+    nodeArr.push({ id: i, label: String(freq), title: n });
+    edges.push({ from: 'root', to: i });
   });
-  const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
-  const options = { physics:{ stabilization:true }, nodes:{ shape:'dot', size:16 }, edges:{ arrows:'to' } };
+  const nodesDs = new vis.DataSet(nodeArr);
+  const data = { nodes: nodesDs, edges: new vis.DataSet(edges) };
+  const options = {
+    physics: { stabilization: true },
+    nodes: { shape: 'circle', size: 30, font: { color: '#fff' } },
+    edges: { arrows: 'to' }
+  };
   if (graphNetwork) graphNetwork.destroy();
   graphNetwork = new vis.Network(graphEl, data, options);
+  attachNumberLabels(graphNetwork, nodeArr);
 }
 
 function renderBatchGraph(){
   if (!graphEl) return;
-  const nodes=[]; const edges=[]; const owners=new Map();
-  batch.forEach((item,idx)=>{
-    const id=`item-${idx}`;
-    nodes.push({ id, label:item.objective || `Reporte ${idx+1}`, shape:'box', color:{background:item.color} });
-    item.contacts.forEach(c=>{
-      if(!owners.has(c)) owners.set(c,new Set());
+  const nodeArr = []; const edges = []; const owners = new Map();
+  batch.forEach((item, idx) => {
+    const id = `item-${idx}`;
+    nodeArr.push({ id, label: item.objective || `Reporte ${idx + 1}`, shape: 'box', color: { background: item.color } });
+    item.contacts.forEach(c => {
+      if (!owners.has(c)) owners.set(c, new Set());
       owners.get(c).add(id);
     });
   });
-  let cIdx=0;
-  owners.forEach((set,contact)=>{
-    const cid=`c-${cIdx++}`;
-    const freq=set.size;
-    const color = freq>1 ? { background:'#ff6b6b' } : undefined;
-    nodes.push({ id:cid, label:String(freq), title:contact, color });
-    set.forEach(id=>edges.push({ from:id, to:cid }));
+  let cIdx = 0;
+  owners.forEach((set, contact) => {
+    const cid = `c-${cIdx++}`;
+    const freq = set.size;
+    const color = freq > 1 ? { background: '#ff6b6b' } : undefined;
+    nodeArr.push({ id: cid, label: String(freq), title: contact, color });
+    set.forEach(id => edges.push({ from: id, to: cid }));
   });
-  if(edges.length===0){
-    if(graphNetwork){ graphNetwork.destroy(); graphNetwork=null; }
-    graphEl.innerHTML='<div class="muted">Sin datos en el lote</div>';
+  if (edges.length === 0) {
+    if (graphNetwork) { graphNetwork.destroy(); graphNetwork = null; }
+    graphEl.innerHTML = '<div class="muted">Sin datos en el lote</div>';
     return;
   }
-  const data={ nodes:new vis.DataSet(nodes), edges:new vis.DataSet(edges) };
-  const options={ physics:{ stabilization:true }, nodes:{ shape:'dot', size:16 }, edges:{ arrows:'to' } };
-  if(graphNetwork) graphNetwork.destroy();
-  graphNetwork=new vis.Network(graphEl,data,options);
+  const nodesDs = new vis.DataSet(nodeArr);
+  const data = { nodes: nodesDs, edges: new vis.DataSet(edges) };
+  const options = {
+    physics: { stabilization: true },
+    nodes: { shape: 'circle', size: 30, font: { color: '#fff' } },
+    edges: { arrows: 'to' }
+  };
+  if (graphNetwork) graphNetwork.destroy();
+  graphNetwork = new vis.Network(graphEl, data, options);
+  attachNumberLabels(graphNetwork, nodeArr);
 }
 
 function renderRelations(){
