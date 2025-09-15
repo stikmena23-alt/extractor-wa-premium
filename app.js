@@ -1445,6 +1445,7 @@ function renderGraph(numbers){
   const data = { nodes: nodesDs, edges: new vis.DataSet(edges) };
   const options = {
     physics: { stabilization: true },
+    layout: { improvedLayout: false },
     nodes: { shape: 'circle', size: 30, font: { color: '#fff' } },
     edges: { arrows: 'to' }
   };
@@ -1484,6 +1485,7 @@ function renderBatchGraph(){
   const data = { nodes: nodesDs, edges: new vis.DataSet(edges) };
   const options = {
     physics: { stabilization: true },
+    layout: { improvedLayout: false },
     nodes: { shape: 'circle', size: 30, font: { color: '#fff' } },
     edges: { arrows: 'to' }
   };
