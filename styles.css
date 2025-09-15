@@ -223,6 +223,13 @@ body[data-theme="light"] .hero h1{
 }
 .card > *{ position:relative; z-index:1 }
 
+/* Variante con estilo de panel reforzado */
+.card.panel{ background: var(--surface-0); }
+.card.panel::before{
+  background: linear-gradient(135deg, var(--pri) 0%, transparent 70%);
+  filter: none; opacity: .08;
+}
+
 h2{ margin:6px 0 12px; font-size:var(--fs-h2); letter-spacing:.2px }
 p{ margin:8px 0 }
 

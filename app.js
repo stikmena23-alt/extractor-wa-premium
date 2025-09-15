@@ -123,25 +123,43 @@ function sanitizeSource(text){
   t = t.replace(/(Account\s*Identifier)([^0-9A-Za-z]{0,20})\+?[\d()\[\]\s\-.]{8,}/gi,'$1$2[omitido]');
   return t;
 }
+
+// =================== ERRORES Y APRENDIZAJE ===================
+const ERROR_STATS_KEY = 'v123_errorStats';
+let errorStats = {};
+try { errorStats = JSON.parse(localStorage.getItem(ERROR_STATS_KEY) || '{}'); } catch {}
+
+function logError(code){
+  errorStats[code] = (errorStats[code] || 0) + 1;
+  try { localStorage.setItem(ERROR_STATS_KEY, JSON.stringify(errorStats)); } catch {}
+}
+function learnedMinDigits(){
+  return (errorStats.shortNumbers && errorStats.shortNumbers > 5) ? 7 : 8;
+}
+
 function textToContacts(text){
-  const matches = (text || "").match(/\d{8,}/g) || [];
+  const matches = (text || "").match(/\d{7,}/g) || [];
   const clean = [];
+  const minDigits = learnedMinDigits();
   for (let n of matches){
     n = stripCountry57(normalizeNumber(n));
     if (!n) continue;
     if (isYearLike(n)) continue;
+    if (n.length < minDigits){ logError('shortNumbers'); continue; }
     clean.push(n);
   }
   const ai = getNormalizedObjective();
   return removeNumberAndUniq(clean, ai);
 }
 function countOccurrences(text){
-  const matches = (text || "").match(/\d{8,}/g) || [];
+  const matches = (text || "").match(/\d{7,}/g) || [];
   const map = Object.create(null);
   let readCount = 0;
+  const minDigits = learnedMinDigits();
   for (let n of matches){
     n = stripCountry57(normalizeNumber(n));
     if (!n || isYearLike(n)) continue;
+    if (n.length < minDigits){ logError('shortNumbers'); continue; }
     map[n] = (map[n] || 0) + 1;
     readCount++;
   }
@@ -224,61 +242,60 @@ async function processZipFile(file){
     const zip = await JSZip.loadAsync(file);
     const candidates = [];
     zip.forEach((path, entry) => { if (/records\.html$/i.test(path)) candidates.push(entry); });
-    if (candidates.length === 0){
-      alert("No se encontró records.html dentro del ZIP.");
-      return;
-    }
-    const entry = candidates[0];
-    const html = await entry.async('string');
-
+    if (candidates.length === 0){ logError('zip_no_records'); return null; }
+    const html = await candidates[0].async('string');
     const aiRaw = extractAccountIdentifierFromHtml(html);
-    if (aiRaw){ accountIdEl.value = aiRaw; }
-
-    const srcSan = sanitizeSource(html);
-    currentContacts = textToContacts(srcSan);
-    currentCounts = countOccurrences(srcSan);
-    inputText.value = html;
-    renderPreview();
-
-    extractServiceInfoFromSource(html);
-
-    alert("ZIP procesado: se extrajeron números y (si se detectó) el Account Identifier.");
+    return { html, ai: aiRaw };
   }catch(err){
+    logError('zip_read');
     console.error(err);
-    alert("Error al leer el ZIP. ¿Es un archivo ZIP válido?");
+    return null;
   }
 }
+
 async function handleDroppedFiles(fileList){
   const files = Array.from(fileList || []);
   if (!files.length) return;
 
-  const zipFile = files.find(f => /\.zip$/i.test(f.name));
-  if (zipFile){ await processZipFile(zipFile); return; }
-
+  const zipFiles = files.filter(f => /\.zip$/i.test(f.name));
   const textFiles = files.filter(f => /\.(txt|csv|html?)$/i.test(f.name));
-  if (textFiles.length){
-    const parts = [];
-    for (const f of textFiles){
-      try{ parts.push(await readFileAsText(f)); }catch{}
-    }
-    const merged = parts.join("\n\n");
-    if (merged){
-      const ai = extractAccountIdentifierFromHtml(merged);
-      if (ai) accountIdEl.value = ai;
 
-      const srcSan = sanitizeSource(merged);
-      inputText.value = merged;
-      currentContacts = textToContacts(srcSan);
-      currentCounts = countOccurrences(srcSan);
-      renderPreview();
+  const parts = [];
 
-      extractServiceInfoFromSource(merged);
-
-      alert("Archivos cargados. Vista previa actualizada.");
-      return;
+  if (zipFiles.length){
+    for (const z of zipFiles){
+      const res = await processZipFile(z);
+      if (res){
+        parts.push(res.html);
+        if (res.ai && !accountIdEl.value) accountIdEl.value = res.ai;
+      }
     }
   }
-  alert("No se detectaron archivos compatibles. Arrastra un .zip con records.html o .txt/.csv/.html.");
+
+  if (textFiles.length){
+    for (const f of textFiles){
+      try{ parts.push(await readFileAsText(f)); }
+      catch{ logError('file_read'); }
+    }
+  }
+
+  if (parts.length){
+    const merged = parts.join("\n\n");
+    const ai = extractAccountIdentifierFromHtml(merged);
+    if (ai && !accountIdEl.value) accountIdEl.value = ai;
+    const srcSan = sanitizeSource(merged);
+    inputText.value = merged;
+    currentContacts = textToContacts(srcSan);
+    currentCounts = countOccurrences(srcSan);
+    renderPreview();
+    extractServiceInfoFromSource(merged);
+    alert("Archivos cargados. Vista previa actualizada.");
+    return;
+  }
+
+  logError('no_files');
+  const msg = "No se detectaron archivos compatibles. Arrastra un .zip con records.html o .txt/.csv/.html.";
+  alert(errorStats.no_files > 1 ? msg + " Revisa que sean archivos válidos." : msg);
 }
 
 // =================== RENDER PREVIEW ===================
