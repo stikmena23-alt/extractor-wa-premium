@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iniciar sesión</title>
+  <link rel="stylesheet" href="login.css" />
+</head>
+<body>
+  <div class="login-wrapper">
+    <form id="loginForm" class="login-card">
+      <h1 class="title">Extractor WA Premium</h1>
+      <label>
+        <span>Usuario</span>
+        <input type="text" id="username" required />
+      </label>
+      <label>
+        <span>Contraseña</span>
+        <input type="password" id="password" required />
+      </label>
+      <button type="submit" id="loginBtn">Entrar</button>
+      <div id="errorMsg" class="error"></div>
+    </form>
+  </div>
+  <div id="loading" class="loading hidden">
+    <div class="loader"></div>
+    <p id="loadingText">Cargando...</p>
+  </div>
+  <script src="auth.js"></script>
+  <script>
+    const USERS = {
+      demo:    { password: 'demo',    credits: 3, plan: 'Gratis'   },
+      premium: { password: '1234',    credits: 10, plan: 'Premium' }
+    };
+
+    const form = document.getElementById('loginForm');
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('errorMsg');
+    const loading = document.getElementById('loading');
+    const loadingText = document.getElementById('loadingText');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value.trim();
+      const record = USERS[user];
+      if (record && record.password === pass){
+        btn.disabled = true;
+        loadingText.innerHTML = `Plan: ${record.plan} &middot; Créditos: ${record.credits}`;
+        loading.classList.remove('hidden');
+        Auth.setSession({ user, credits: record.credits, plan: record.plan });
+        setTimeout(()=>{ window.location.href = 'index.html'; }, 800);
+      } else {
+        err.textContent = 'Credenciales inválidas';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -421,6 +421,7 @@ function renderHistory(){}
 
 // =================== EVENTOS ===================
 processBtn.addEventListener("click", () => {
+  if (window.Auth) Auth.consumeCredit();
   const pasted = inputText.value || "";
 
   const aiFromPasted = extractAccountIdentifierFromHtml(pasted);

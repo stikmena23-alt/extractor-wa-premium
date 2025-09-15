@@ -654,6 +654,8 @@ body[data-theme="light"] .modal-overlay{ background:rgba(0,0,0,.32) }
    ========================= */
 .topbar + .grid{ margin-top:clamp(8px,1.5vh,18px) }
 .topbar .row .actions.one-line{ margin-left:auto; justify-content:flex-end }
+.topbar .session-row{ margin-top:8px; }
+.session-info{ display:flex; gap:12px; font-size:14px; }
 
 /* =========================
    Scrollbars globales

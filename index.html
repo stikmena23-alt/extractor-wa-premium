@@ -13,8 +13,20 @@
 
   <!-- Estilos -->
   <link rel="stylesheet" href="styles.css"/>
-</head>
-<body>
+  <script src="auth.js"></script>
+  <script>
+    const session = Auth.requireSession();
+    window.addEventListener('DOMContentLoaded', () => {
+      Auth.updateUI();
+      const logoutBtn = document.getElementById('logoutBtn');
+      if (logoutBtn) logoutBtn.addEventListener('click', () => {
+        Auth.clearSession();
+        window.location.href = 'login.html';
+      });
+    });
+    </script>
+  </head>
+  <body>
   <!-- MODAL: Guía -->
   <div id="modalOverlay" class="modal-overlay" aria-hidden="true"></div>
   <div id="howtoModal" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc">
@@ -80,6 +92,16 @@
 
         <div class="row actions one-line">
           <button id="openGuide" class="btn ghost">Guía ( ? )</button>
+        </div>
+      </div>
+      <div class="row session-row">
+        <div class="session-info">
+          <span id="userName"></span>
+          <span>Plan: <span id="planName"></span></span>
+          <span>Créditos: <span id="creditCount"></span></span>
+        </div>
+        <div class="row actions one-line">
+          <button id="logoutBtn" class="btn ghost">Cerrar sesión</button>
         </div>
       </div>
     </section>
