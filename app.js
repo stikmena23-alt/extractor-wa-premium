@@ -420,7 +420,11 @@ function pushHistory(entry){ settings.exportHistory.unshift(entry); settings.exp
 function renderHistory(){}
 
 // =================== EVENTOS ===================
-processBtn.addEventListener("click", () => {
+processBtn.addEventListener("click", async () => {
+  if (window.Auth){
+    const allowed = await Auth.consumeCredit();
+    if (!allowed) return;
+  }
   const pasted = inputText.value || "";
 
   const aiFromPasted = extractAccountIdentifierFromHtml(pasted);

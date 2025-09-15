@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iniciar sesión</title>
+  <link rel="stylesheet" href="login.css" />
+</head>
+<body>
+  <div class="login-wrapper">
+    <form id="loginForm" class="login-card">
+      <h1 class="title">Extractor WA Premium</h1>
+      <label>
+        <span>Usuario</span>
+        <input type="text" id="username" required />
+      </label>
+      <label>
+        <span>Contraseña</span>
+        <input type="password" id="password" required />
+      </label>
+      <button type="submit" id="loginBtn">Entrar</button>
+      <div id="errorMsg" class="error"></div>
+    </form>
+  </div>
+  <div id="loading" class="loading hidden">
+    <div class="loader"></div>
+    <p id="loadingText">Cargando...</p>
+  </div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="supabase-config.js"></script>
+  <script src="auth.js"></script>
+  <script>
+    const form = document.getElementById('loginForm');
+    const btn = document.getElementById('loginBtn');
+    const err = document.getElementById('errorMsg');
+    const loading = document.getElementById('loading');
+    const loadingText = document.getElementById('loadingText');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      err.textContent = '';
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value.trim();
+      btn.disabled = true;
+      loading.classList.remove('hidden');
+      try {
+        const session = await Auth.login(user, pass);
+        loadingText.innerHTML = `Plan: ${session.plan} &middot; Créditos: ${session.credits}`;
+        setTimeout(()=>{ window.location.href = 'index.html'; }, 800);
+      } catch (e){
+        if (e && e.message === 'Sin créditos disponibles'){
+          err.textContent = 'No tienes créditos disponibles. Contacta al administrador.';
+        } else {
+          err.textContent = 'Credenciales inválidas';
+        }
+        btn.disabled = false;
+        loading.classList.add('hidden');
+      }
+    });
+  </script>
+</body>
+</html>
