@@ -31,7 +31,7 @@
           <li>Presiona <strong>Procesar texto</strong></li>
           <li>Usa <strong>filtro</strong>, <strong>ordenamiento</strong> y revisa <strong>duplicados</strong> resaltados</li>
           <li><strong>Agregar al lote</strong> para unir reportes. <strong>Descargar (Actual/Unificado)</strong> crea XLSX + CSV/JSON</li>
-          <li>En el panel <strong>Relaciones</strong>, usa <strong>Generar relaciones</strong> para cruzar contactos del lote.</li>
+          <li>El panel <strong>Relaciones</strong> dibuja el grafo automáticamente; usa <strong>Pantalla completa</strong> para ampliarlo y colorear cada objetivo.</li>
           <li>El panel <strong>Información del Dispositivo / Servicio</strong> se llena automáticamente desde el HTML / texto (UTC−5 y consulta de IP)</li>
         </ol>
         <p class="note"><strong>Nota:</strong> No toma fechas/años (1900–2099), <u>omite</u> “Internal Ticket Number” / “Número de ticket interno” y <u>solo considera números con 8+ dígitos</u>. También excluye el <em>Account Identifier</em> de la lista.</p>
@@ -250,7 +250,8 @@
       <!-- Panel de gráfico de conexiones -->
       <section class="card panel span-6" id="graphPanel">
         <h2>Relaciones</h2>
-        <button id="relBtn" class="btn">Generar relaciones</button>
+        <button id="relBtn" class="btn">Pantalla completa</button>
+        <div id="colorControls" class="color-controls"></div>
         <div id="graph"></div>
       </section>
 
@@ -290,6 +291,7 @@
   <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sentiment@5.0.2/build/sentiment.min.js"></script>
 
   <!-- App -->
   <script src="app.js"></script>

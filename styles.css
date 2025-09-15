@@ -1131,3 +1131,23 @@ body[data-theme="light"] .table thead th{
 .chat-input input{ flex:1; }
 #graph{ height:400px; }
 #graphPanel .btn{ margin-bottom:var(--gap); }
+#graphPanel.fullscreen{
+  position:fixed;
+  inset:0;
+  width:100vw;
+  height:100vh;
+  background:var(--surface-0);
+  z-index:1000;
+  padding:var(--pad);
+}
+#graphPanel.fullscreen h2{ display:none; }
+#graphPanel.fullscreen #graph{ height:calc(100vh - 80px); }
+#graphPanel.fullscreen #relBtn{
+  position:absolute;
+  top:10px;
+  right:10px;
+}
+.color-controls{ display:none; gap:8px; flex-wrap:wrap; margin-bottom:var(--gap); }
+#graphPanel.fullscreen .color-controls{ display:flex; }
+.color-item{ display:flex; align-items:center; gap:4px; }
+.color-item input{ width:40px; height:24px; padding:0; border:none; background:transparent; }

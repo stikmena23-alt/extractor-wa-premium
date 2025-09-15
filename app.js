@@ -62,6 +62,8 @@ const chatInput = document.getElementById("chatInput");
 const chatSend = document.getElementById("chatSend");
 const chatLog = document.getElementById("chatLog");
 const graphEl = document.getElementById("graph");
+const graphPanel = document.getElementById("graphPanel");
+const colorControls = document.getElementById("colorControls");
 const relBtn = document.getElementById("relBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 const filePicker = document.getElementById("filePicker");
@@ -115,6 +117,9 @@ function getNormalizedObjective(){
   const v = (accountIdEl.value || "").trim();
   const n = stripCountry57(normalizeNumber(v));
   return n || "";
+}
+function randomColor(){
+  return '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6,'0');
 }
 function removeNumberAndUniq(arr, numToRemove){
   if (!numToRemove) return Array.from(new Set(arr));
@@ -339,10 +344,11 @@ function buildPrefixDash(list){
 }
 function updateRelBtn(){
   if(!relBtn) return;
-  relBtn.disabled = (batch.length === 0 && currentContacts.length === 0);
-  if(relBtn.disabled){
-    if(graphNetwork){ graphNetwork.destroy(); graphNetwork=null; }
-    if(graphEl) graphEl.innerHTML='';
+  const disable = (batch.length === 0 && currentContacts.length === 0);
+  relBtn.disabled = disable;
+  if(disable && graphPanel){
+    graphPanel.classList.remove('fullscreen');
+    relBtn.textContent='Pantalla completa';
   }
 }
 function renderPreview(){
@@ -369,6 +375,7 @@ function renderPreview(){
   buildPrefixDash(list);
   updateRelBtn();
   downloadBtn.disabled = currentContacts.length === 0;
+  renderRelations();
 }
 
 // =================== RENDER BATCH ===================
@@ -395,6 +402,27 @@ function renderBatch(){
   });
   exportMergedBtn.disabled = batch.length === 0; saveLocal();
   updateRelBtn();
+  renderColorControls();
+  renderRelations();
+}
+
+function renderColorControls(){
+  if(!colorControls) return;
+  colorControls.innerHTML="";
+  batch.forEach(item=>{
+    const wrap=document.createElement('div');
+    wrap.className='color-item';
+    const label=document.createElement('span');
+    label.textContent=item.objective||'—';
+    const inp=document.createElement('input');
+    inp.type='color';
+    const val=item.color||randomColor();
+    item.color=val;
+    inp.value=val;
+    inp.addEventListener('input',()=>{ item.color=inp.value; renderBatchGraph(); saveLocal(); });
+    wrap.appendChild(label); wrap.appendChild(inp);
+    colorControls.appendChild(wrap);
+  });
 }
 
 // =================== XLSX / CSV / JSON HELPERS ===================
@@ -487,7 +515,8 @@ addToBatchBtn.addEventListener("click", () => {
     objective,
     caseId,
     contacts: new Set(currentContacts),
-    service: serviceSnapshot
+    service: serviceSnapshot,
+    color: randomColor()
   });
   renderBatch();
   inputText.value="";
@@ -1361,12 +1390,12 @@ function getResidentialRowsForBatch(){
 let graphNetwork = null;
 function renderGraph(numbers){
   if (!graphEl) return;
-  if (batch.length > 1){ return renderBatchGraph(); }
   graphEl.innerHTML = "";
   const nodes = [{ id:'root', label:'Objetivo', shape:'box' }];
   const edges = [];
   (numbers||[]).forEach((n,i)=>{
-    nodes.push({ id:i, label:n });
+    const freq = currentCounts.countsMap[n] || 1;
+    nodes.push({ id:i, label:String(freq), title:n });
     edges.push({ from:'root', to:i });
   });
   const data = { nodes: new vis.DataSet(nodes), edges: new vis.DataSet(edges) };
@@ -1380,7 +1409,7 @@ function renderBatchGraph(){
   const nodes=[]; const edges=[]; const owners=new Map();
   batch.forEach((item,idx)=>{
     const id=`item-${idx}`;
-    nodes.push({ id, label:item.objective || `Reporte ${idx+1}`, shape:'box' });
+    nodes.push({ id, label:item.objective || `Reporte ${idx+1}`, shape:'box', color:{background:item.color} });
     item.contacts.forEach(c=>{
       if(!owners.has(c)) owners.set(c,new Set());
       owners.get(c).add(id);
@@ -1389,8 +1418,9 @@ function renderBatchGraph(){
   let cIdx=0;
   owners.forEach((set,contact)=>{
     const cid=`c-${cIdx++}`;
-    const color = set.size>1 ? { background:'#ff6b6b' } : undefined;
-    nodes.push({ id:cid, label:contact, color });
+    const freq=set.size;
+    const color = freq>1 ? { background:'#ff6b6b' } : undefined;
+    nodes.push({ id:cid, label:String(freq), title:contact, color });
     set.forEach(id=>edges.push({ from:id, to:cid }));
   });
   if(edges.length===0){
@@ -1405,8 +1435,12 @@ function renderBatchGraph(){
 }
 
 function renderRelations(){
-  if(batch.length>1) renderBatchGraph();
-  else renderGraph(currentContacts);
+  if(batch.length>0) renderBatchGraph();
+  else if(currentContacts.length) renderGraph(currentContacts);
+  else{
+    if(graphNetwork){ graphNetwork.destroy(); graphNetwork=null; }
+    if(graphEl) graphEl.innerHTML='';
+  }
 }
 
 function addChatMessage(text, who){
@@ -1418,13 +1452,30 @@ function addChatMessage(text, who){
   chatLog.scrollTop = chatLog.scrollHeight;
 }
 
-function handleChat(msg){
+const sentiment = window.Sentiment ? new window.Sentiment() : null;
+async function handleChat(msg){
   const m = msg.toLowerCase();
   if (m.includes('cuantos') || m.includes('contar')){
     return `Se encontraron ${currentContacts.length} números.`;
   }
   if (m.includes('duplicados')){
     return `Hay ${currentCounts.duplicates || 0} números duplicados.`;
+  }
+  if (m.includes('promedio')){
+    const nums = currentContacts.map(Number).filter(n=>!isNaN(n));
+    if(!nums.length) return 'No hay números para analizar.';
+    const expr = `mean(${JSON.stringify(nums)})`;
+    try{
+      const res = await fetch(`https://api.mathjs.org/v4/?expr=${encodeURIComponent(expr)}`);
+      const txt = await res.text();
+      return `El promedio es ${txt}`;
+    }catch{
+      return 'No pude obtener el promedio.';
+    }
+  }
+  if (m.includes('sentimiento') && sentiment){
+    const r = sentiment.analyze(msg);
+    return `Sentimiento: ${r.score >= 0 ? 'positivo' : 'negativo'} (puntaje ${r.score}).`;
   }
   if (m.includes('lote') || m.includes('relacion')){
     const counts={};
@@ -1436,11 +1487,11 @@ function handleChat(msg){
   return 'No tengo una respuesta para eso.';
 }
 
-function sendChat(){
+async function sendChat(){
   const msg = (chatInput.value||'').trim();
   if(!msg) return;
   addChatMessage(msg,'user');
-  const resp = handleChat(msg);
+  const resp = await handleChat(msg);
   addChatMessage(resp,'bot');
   chatInput.value='';
 }
@@ -1450,7 +1501,12 @@ if (chatSend){
   chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
 }
 if (relBtn){
-  relBtn.addEventListener('click', renderRelations);
+  relBtn.addEventListener('click', ()=>{
+    if(!graphPanel) return;
+    graphPanel.classList.toggle('fullscreen');
+    relBtn.textContent = graphPanel.classList.contains('fullscreen') ? 'Cerrar' : 'Pantalla completa';
+    if(graphNetwork) graphNetwork.redraw();
+  });
 }
 
 /* ====== init ====== */
