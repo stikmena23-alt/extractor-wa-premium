@@ -1151,3 +1151,32 @@ body[data-theme="light"] .table thead th{
 #graphPanel.fullscreen .color-controls{ display:flex; }
 .color-item{ display:flex; align-items:center; gap:4px; }
 .color-item input{ width:40px; height:24px; padding:0; border:none; background:transparent; }
+
+/* =========================
+   Login y administración
+   ========================= */
+.login-screen{
+  position:fixed;
+  inset:0;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--bg1);
+  z-index:1000;
+}
+.login-card{
+  background:var(--surface-0);
+  padding:var(--pad);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow-2);
+  width:min(90%,320px);
+  display:flex;
+  flex-direction:column;
+  gap:var(--gap);
+}
+.login-card h2{ text-align:center; margin:0; }
+.error-msg{ color:var(--danger); text-align:center; display:none; }
+
+.admin-table{ width:100%; border-collapse:collapse; margin-top:var(--gap); }
+.admin-table th, .admin-table td{ border-bottom:1px solid var(--border); padding:var(--gap); text-align:left; }
+.admin-table input{ width:80px; }

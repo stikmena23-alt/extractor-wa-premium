@@ -68,6 +68,19 @@ const relBtn = document.getElementById("relBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 const filePicker = document.getElementById("filePicker");
 
+// Login y administración
+const loginScreen = document.getElementById("loginScreen");
+const loginEmail = document.getElementById("loginEmail");
+const loginPassword = document.getElementById("loginPassword");
+const loginBtn = document.getElementById("loginBtn");
+const loginError = document.getElementById("loginError");
+const appWrap = document.getElementById("appWrap");
+const adminPanel = document.getElementById("adminPanel");
+const clientsTable = document.getElementById("clientsTable");
+const newClientName = document.getElementById("newClientName");
+const newClientCredits = document.getElementById("newClientCredits");
+const addClientBtn = document.getElementById("addClientBtn");
+
 // ----------- ESTADO GLOBAL -----------
 let currentContacts = [];
 let batch = [];
@@ -78,6 +91,9 @@ let settings = {
   autosave: true,
   exportHistory: []
 };
+
+const adminUser = { email: 'admin@example.com', password: 'admin123' };
+let clients = [ { name: 'Cliente demo', credits: 10 } ];
 
 // Zona horaria de referencia (UTC−5 sin DST)
 const HLC_TZ = 'America/Bogota';
@@ -1548,6 +1564,54 @@ if (relBtn){
     if(graphNetwork) graphNetwork.redraw();
   });
 }
+
+function renderClients(){
+  if(!clientsTable) return;
+  const tbody = clientsTable.querySelector('tbody');
+  tbody.innerHTML='';
+  clients.forEach((c,idx)=>{
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${c.name}</td><td><input type="number" value="${c.credits}" data-idx="${idx}" class="credit-input"></td><td><button class="btn" data-idx="${idx}">Guardar</button></td>`;
+    tbody.appendChild(tr);
+  });
+}
+
+function handleLogin(){
+  const email=loginEmail.value.trim();
+  const pass=loginPassword.value;
+  if(email===adminUser.email && pass===adminUser.password){
+    loginError.style.display='none';
+    loginScreen.style.display='none';
+    appWrap.style.display='block';
+    adminPanel.style.display='block';
+    renderClients();
+  }else{
+    loginError.textContent='Credenciales inválidas';
+    loginError.style.display='block';
+  }
+}
+
+loginBtn?.addEventListener('click', handleLogin);
+loginEmail?.addEventListener('keydown', e=>{ if(e.key==='Enter') handleLogin(); });
+loginPassword?.addEventListener('keydown', e=>{ if(e.key==='Enter') handleLogin(); });
+
+clientsTable?.addEventListener('click', e=>{
+  if(e.target.matches('button[data-idx]')){
+    const idx=+e.target.dataset.idx;
+    const inp=clientsTable.querySelector(`input[data-idx="${idx}"]`);
+    clients[idx].credits=parseInt(inp.value,10)||0;
+  }
+});
+
+addClientBtn?.addEventListener('click', ()=>{
+  const name=(newClientName.value||'').trim();
+  const credits=parseInt(newClientCredits.value,10)||0;
+  if(!name) return;
+  clients.push({ name, credits });
+  renderClients();
+  newClientName.value='';
+  newClientCredits.value='';
+});
 
 /* ====== init ====== */
 window.addEventListener('DOMContentLoaded', () => {

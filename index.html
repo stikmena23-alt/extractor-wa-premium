@@ -15,6 +15,23 @@
   <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
+  <!-- Pantalla de inicio de sesión -->
+  <div id="loginScreen" class="login-screen">
+    <div class="login-card">
+      <h2>Iniciar sesión</h2>
+      <label class="field">
+        <span>Correo</span>
+        <input type="email" id="loginEmail" />
+      </label>
+      <label class="field">
+        <span>Contraseña</span>
+        <input type="password" id="loginPassword" />
+      </label>
+      <button id="loginBtn" class="btn">Entrar</button>
+      <p id="loginError" class="error-msg"></p>
+    </div>
+  </div>
+
   <!-- MODAL: Guía -->
   <div id="modalOverlay" class="modal-overlay" aria-hidden="true"></div>
   <div id="howtoModal" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc">
@@ -43,7 +60,7 @@
     </div>
   </div>
 
-  <div class="wrap">
+  <div class="wrap" id="appWrap" style="display:none;">
     <header class="hero">
       <h1>Extractor Contactos de WhatsApp Premium</h1>
       <p class="sub">Limpia, une y exporta contactos ➜ XLSX <span class="muted">(+ CSV/JSON opcional)</span></p>
@@ -263,6 +280,22 @@
         <div class="chat-input">
           <input type="text" id="chatInput" placeholder="Escribe una instrucción...">
           <button id="chatSend" class="btn">Enviar</button>
+        </div>
+      </section>
+
+      <!-- Panel de administración -->
+      <section class="card panel span-12" id="adminPanel" style="display:none;">
+        <h2>Clientes</h2>
+        <table class="admin-table" id="clientsTable">
+          <thead>
+            <tr><th>Cliente</th><th>Créditos</th><th>Acciones</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+        <div class="row">
+          <input id="newClientName" placeholder="Nuevo cliente" />
+          <input id="newClientCredits" type="number" placeholder="Créditos" />
+          <button id="addClientBtn" class="btn">Agregar</button>
         </div>
       </section>
     </main>
