@@ -1173,12 +1173,13 @@ body[data-theme="light"] .table thead th{
   width:min(90%,380px);
   display:flex;
   flex-direction:column;
-  gap:var(--gap);
+  gap:8px;
   border:1px solid var(--border);
 }
 [data-theme="dark"] .login-card{ background:rgba(0,0,0,.6); }
-.login-card h2{ text-align:center; margin:0 0 var(--gap); font-size:clamp(24px,2.5vw,28px); }
+.login-card h2{ text-align:center; margin:0 0 8px; font-size:clamp(24px,2.5vw,28px); }
+.login-card .field{ gap:4px; }
 .login-card .field span{font-weight:600;}
-.login-card .btn{margin-top:var(--gap);}
+.login-card .btn{margin-top:8px;}
 .loading-msg{ text-align:center; color:var(--text-2); display:none; }
 .error-msg{ color:var(--danger); text-align:center; display:none; }

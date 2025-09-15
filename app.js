@@ -1587,13 +1587,22 @@ async function updateCredits(){
 loginForm?.addEventListener('submit', async (e)=>{
   e.preventDefault();
   loginError.style.display='none';
+  loginBtn.disabled = true;
   loginLoading.style.display='block';
   const email = loginEmail.value.trim();
-  const password = loginPassword.value;
+  const password = loginPassword.value.trim();
+  if(!email || !password){
+    loginLoading.style.display='none';
+    loginBtn.disabled = false;
+    loginError.textContent='Completa email y contraseña';
+    loginError.style.display='block';
+    return;
+  }
   const { error } = await sb.auth.signInWithPassword({ email, password });
   loginLoading.style.display='none';
+  loginBtn.disabled = false;
   if(error){
-    loginError.textContent='Error de login';
+    loginError.textContent = error.message || 'Error de login';
     loginError.style.display='block';
     return;
   }
