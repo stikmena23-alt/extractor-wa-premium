@@ -34,13 +34,103 @@
   const creditBarEl = document.getElementById("creditBar");
   const creditBarFillEl = document.getElementById("creditBarFill");
   const creditAlertEl = document.getElementById("creditAlertMsg");
+  const sessionStatusText = document.getElementById("sessionStatusText");
+  const sessionToast = document.getElementById("sessionToast");
+  const sessionModal = document.getElementById("sessionModal");
+  const sessionModalTitle = document.getElementById("sessionModalTitle");
+  const sessionModalMessage = document.getElementById("sessionModalMessage");
+  const sessionModalClose = document.getElementById("sessionModalClose");
 
   let lastCreditsValue = null;
   let maxCreditsSeen = 0;
+  let toastTimeout = null;
+  let pendingWelcomeEmail = null;
 
   function toggleLoginButton(disabled) {
     if (loginBtn) loginBtn.disabled = !!disabled;
   }
+
+  function toggleLogoutButton(disabled) {
+    if (logoutBtn) logoutBtn.disabled = !!disabled;
+  }
+
+  function setSessionStatusMessage(message, state) {
+    if (!sessionStatusText) return;
+    sessionStatusText.textContent = message || "";
+    sessionStatusText.classList.remove("active", "closed");
+    if (state === "active") {
+      sessionStatusText.classList.add("active");
+    } else if (state === "closed") {
+      sessionStatusText.classList.add("closed");
+    }
+  }
+
+  function hideSessionToast() {
+    if (!sessionToast) return;
+    sessionToast.classList.remove("is-visible");
+    sessionToast.setAttribute("aria-hidden", "true");
+    if (toastTimeout) {
+      clearTimeout(toastTimeout);
+      toastTimeout = null;
+    }
+  }
+
+  function showSessionToast(message, variant = "info") {
+    if (!sessionToast) return;
+    sessionToast.textContent = message;
+    sessionToast.dataset.variant = variant;
+    sessionToast.classList.add("is-visible");
+    sessionToast.setAttribute("aria-hidden", "false");
+    if (toastTimeout) clearTimeout(toastTimeout);
+    toastTimeout = setTimeout(() => {
+      hideSessionToast();
+    }, 4600);
+  }
+
+  function closeSessionModal() {
+    if (!sessionModal) return;
+    sessionModal.classList.remove("is-open");
+    sessionModal.setAttribute("aria-hidden", "true");
+  }
+
+  function openSessionModal(title, message) {
+    if (!sessionModal) return;
+    if (sessionModalTitle) sessionModalTitle.textContent = title;
+    if (sessionModalMessage) sessionModalMessage.textContent = message;
+    sessionModal.classList.add("is-open");
+    sessionModal.setAttribute("aria-hidden", "false");
+    if (sessionModalClose) {
+      try {
+        sessionModalClose.focus({ preventScroll: true });
+      } catch (_err) {
+        sessionModalClose.focus();
+      }
+    }
+  }
+
+  function showWelcomeFeedback(email) {
+    const displayEmail = email || "tu cuenta";
+    showSessionToast(`Inicio de sesión exitoso para ${displayEmail}.`, "success");
+    openSessionModal("¡Sesión iniciada!", `Bienvenido, ${displayEmail}. Tus créditos y reportes ya están disponibles.`);
+  }
+
+  function activeSessionMessage(email) {
+    const displayEmail = email || "tu cuenta";
+    return `Sesión activa como ${displayEmail}. ¡Listo para trabajar!`;
+  }
+
+  sessionToast?.addEventListener("click", hideSessionToast);
+  sessionModalClose?.addEventListener("click", closeSessionModal);
+  sessionModal?.addEventListener("click", (event) => {
+    if (event.target === sessionModal) {
+      closeSessionModal();
+    }
+  });
+  document.addEventListener("keydown", (event) => {
+    if (event.key === "Escape") {
+      closeSessionModal();
+    }
+  });
 
   function updateUserIdentity(user) {
     if (userEmailEl) userEmailEl.textContent = user?.email || "-";
@@ -135,16 +225,26 @@
     if (creditsChip) creditsChip.style.display = "none";
     if (creditCountEl) creditCountEl.textContent = "0";
     renderCreditState(null);
-    if (logoutBtn) logoutBtn.style.display = "none";
+    if (logoutBtn) {
+      logoutBtn.style.display = "none";
+      logoutBtn.disabled = false;
+    }
     global.AppCore?.setCreditDependentActionsEnabled(false);
   }
 
-  function showLoginUI() {
+  function showLoginUI(message, state) {
     if (appWrap) appWrap.style.display = "none";
     if (loginScreen) loginScreen.style.display = "flex";
     clearCreditsUI();
     resetLoginForm();
     updateUserIdentity(null);
+    closeSessionModal();
+    pendingWelcomeEmail = null;
+    if (message) {
+      setSessionStatusMessage(message, state);
+    } else {
+      setSessionStatusMessage("Inicia sesión para ver tu plan y tus créditos en tiempo real.");
+    }
   }
 
   function showAppUI() {
@@ -201,36 +301,59 @@
       return;
     }
 
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     showLoading(false);
     toggleLoginButton(false);
 
     if (error) {
-      showError(error.message || "Error de login");
+      const message = error.message || "Error de login";
+      showError(message);
+      showSessionToast(message, "danger");
       return;
     }
 
-    showAppUI();
-    await updateCredits();
+    pendingWelcomeEmail = data?.user?.email || email;
+    showError("");
   }
 
   async function handleLogout() {
-    const { error } = await supabase.auth.signOut();
-    if (error) {
-      alert("No se pudo cerrar sesión");
+    toggleLogoutButton(true);
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      toggleLogoutButton(false);
+      showSessionToast("No hay una sesión activa para cerrar.", "info");
+      showLoginUI();
       return;
     }
-    showLoginUI();
+
+    const { error } = await supabase.auth.signOut();
+    toggleLogoutButton(false);
+    if (error) {
+      showSessionToast("No se pudo cerrar sesión. Intenta nuevamente.", "danger");
+    }
   }
 
   async function spendCredit() {
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
+
+    if (!session) {
+      showSessionToast("Tu sesión expiró. Inicia sesión para continuar.", "danger");
+      showLoginUI("Tu sesión expiró. Inicia sesión para continuar.", "closed");
+      return false;
+    }
+
     const { error } = await supabase.rpc("spend_credit");
     if (error) {
       if ((error.message || "").includes("NO_CREDITS")) {
-        alert("Sin créditos");
+        showSessionToast("Sin créditos disponibles. Escríbenos al +57 312 646 1216 para recargar.", "danger");
         global.AppCore?.setCreditDependentActionsEnabled(false);
       } else {
-        alert("Error: " + error.message);
+        showSessionToast(error.message || "No se pudo consumir un crédito.", "danger");
       }
       await updateCredits();
       return false;
@@ -258,19 +381,32 @@
     updateUserIdentity(session?.user || null);
 
     if (session) {
+      setSessionStatusMessage(activeSessionMessage(session.user?.email), "active");
       showAppUI();
       await updateCredits();
     } else {
       showLoginUI();
     }
 
-    supabase.auth.onAuthStateChange(async (_evt, session) => {
+    supabase.auth.onAuthStateChange(async (event, session) => {
       updateUserIdentity(session?.user || null);
       if (session) {
         showAppUI();
         await updateCredits();
+        const email = session.user?.email || pendingWelcomeEmail || "tu cuenta";
+        setSessionStatusMessage(activeSessionMessage(email), "active");
+        if (pendingWelcomeEmail || event === "SIGNED_IN") {
+          showWelcomeFeedback(email);
+          pendingWelcomeEmail = null;
+        }
       } else {
-        showLoginUI();
+        const message = event === "SIGNED_OUT"
+          ? "Sesión cerrada. ¡Hasta pronto!"
+          : "Inicia sesión para ver tu plan y tus créditos en tiempo real.";
+        showLoginUI(message, event === "SIGNED_OUT" ? "closed" : undefined);
+        if (event === "SIGNED_OUT") {
+          showSessionToast("Sesión cerrada correctamente. ¡Hasta pronto!", "info");
+        }
       }
     });
   }

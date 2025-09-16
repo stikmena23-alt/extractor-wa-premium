@@ -36,6 +36,19 @@
     </form>
   </div>
 
+  <div id="sessionToast" class="session-toast" role="status" aria-live="polite" aria-hidden="true"></div>
+
+  <div id="sessionModal" class="session-modal" aria-hidden="true" role="dialog" aria-labelledby="sessionModalTitle" aria-describedby="sessionModalMessage">
+    <div class="session-modal-card">
+      <div class="session-modal-icon" aria-hidden="true">
+        <span>✓</span>
+      </div>
+      <h3 id="sessionModalTitle">¡Sesión iniciada!</h3>
+      <p id="sessionModalMessage">Has iniciado sesión con éxito.</p>
+      <button id="sessionModalClose" class="btn" type="button">Continuar</button>
+    </div>
+  </div>
+
   <!-- MODAL: Guía -->
   <div id="modalOverlay" class="modal-overlay" aria-hidden="true"></div>
   <div id="howtoModal" class="modal-panel" role="dialog" aria-modal="true" aria-labelledby="modal-title" aria-describedby="modal-desc">
@@ -104,7 +117,7 @@
         <div class="row actions one-line">
           <div class="chip" id="planChip" style="display:none;">Plan: <span id="planName">-</span></div>
           <div class="chip" id="creditsChip" style="display:none;">Créditos: <span id="creditCount">0</span></div>
-          <button id="logoutBtn" class="btn ghost" style="display:none;">Salir</button>
+          <button id="logoutBtn" class="btn danger" style="display:none;">Salir</button>
           <button id="openGuide" class="btn ghost">Guía ( ? )</button>
         </div>
       </div>
@@ -186,8 +199,9 @@
       </section>
 
       <!-- Panel de estado de usuario -->
-      <section class="card panel span-7" id="accountPanel">
+      <section class="card panel span-12" id="accountPanel">
         <h2>Estado de cuenta</h2>
+        <p id="sessionStatusText" class="session-status">Inicia sesión para ver tu plan y tus créditos en tiempo real.</p>
         <div class="user-status">
           <div class="user-meta">
             <div class="meta-block">
@@ -307,7 +321,7 @@
               <option value="hierarchical-lr">Jerárquico (Horizontal)</option>
               <option value="hierarchical-ud">Jerárquico (Vertical)</option>
             </select>
-            <button id="graphRefreshBtn" class="btn ghost graph-refresh" type="button">Reordenar</button>
+            <button id="graphRefreshBtn" class="btn graph-refresh" type="button">Reordenar</button>
             <button id="relBtn" class="graph-fullscreen-btn" type="button" aria-pressed="false">
               <span class="icon" aria-hidden="true"></span>
               <span class="text">Pantalla completa</span>
