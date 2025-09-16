@@ -28,7 +28,9 @@
         <span>Contraseña</span>
         <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password" required />
       </label>
-      <button id="loginBtn" class="btn">Entrar</button>
+      <button id="loginBtn" class="btn login-primary">Entrar</button>
+      <a id="loginBuyCredits" class="btn login-buy" href="https://wa.me/573126461216" target="_blank" rel="noopener">Comprar créditos</a>
+      <p class="buy-info">¿Quieres comprar créditos de <strong>WF TOOLS</strong>? Escríbenos al <a href="https://wa.me/573126461216" target="_blank" rel="noopener">+57 312 646 1216</a>.</p>
       <p id="loginLoading" class="loading-msg">Iniciando sesión...</p>
       <p id="loginError" class="error-msg"></p>
     </form>
@@ -183,6 +185,30 @@
         </div>
       </section>
 
+      <!-- Panel de estado de usuario -->
+      <section class="card panel span-7" id="accountPanel">
+        <h2>Estado de cuenta</h2>
+        <div class="user-status">
+          <div class="user-meta">
+            <div class="meta-block">
+              <span class="meta-label">Usuario</span>
+              <span id="currentUserEmail" class="meta-value">-</span>
+            </div>
+            <div class="meta-block">
+              <span class="meta-label">Plan</span>
+              <span id="currentUserPlan" class="meta-value">-</span>
+            </div>
+          </div>
+          <div class="credit-status" id="creditStatus" data-state="idle">
+            <div class="credit-count">Créditos disponibles: <strong id="currentUserCredits">0</strong></div>
+            <div class="credit-bar" id="creditBar" role="progressbar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+              <div id="creditBarFill" class="credit-bar-fill"></div>
+            </div>
+            <p id="creditAlertMsg" class="credit-alert muted">Inicia sesión para visualizar tu saldo.</p>
+          </div>
+        </div>
+      </section>
+
       <!-- Lote -->
       <section class="card panel span-12">
         <h2>Reportes cargados (Lote)</h2>
@@ -272,8 +298,22 @@
       </section>
       <!-- Panel de gráfico de conexiones -->
       <section class="card panel span-6" id="graphPanel">
-        <h2>Relaciones</h2>
-        <button id="relBtn" class="btn">Pantalla completa</button>
+        <div class="graph-top">
+          <h2>Relaciones</h2>
+          <div class="graph-actions">
+            <label for="graphLayoutSelect" class="graph-label">Organizar</label>
+            <select id="graphLayoutSelect" class="mini-input graph-select">
+              <option value="free">Automático</option>
+              <option value="hierarchical-lr">Jerárquico (Horizontal)</option>
+              <option value="hierarchical-ud">Jerárquico (Vertical)</option>
+            </select>
+            <button id="graphRefreshBtn" class="btn ghost graph-refresh" type="button">Reordenar</button>
+            <button id="relBtn" class="graph-fullscreen-btn" type="button" aria-pressed="false">
+              <span class="icon" aria-hidden="true"></span>
+              <span class="text">Pantalla completa</span>
+            </button>
+          </div>
+        </div>
         <div id="colorControls" class="color-controls"></div>
         <div id="graph"></div>
       </section>

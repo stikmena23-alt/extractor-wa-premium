@@ -65,6 +65,8 @@ const graphEl = document.getElementById("graph");
 const graphPanel = document.getElementById("graphPanel");
 const colorControls = document.getElementById("colorControls");
 const relBtn = document.getElementById("relBtn");
+const graphLayoutSelect = document.getElementById("graphLayoutSelect");
+const graphRefreshBtn = document.getElementById("graphRefreshBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 const filePicker = document.getElementById("filePicker");
 
@@ -541,7 +543,12 @@ showAllEl.addEventListener("change", () => { renderPreview(); });
 previewFilter.addEventListener("input", () => { renderPreview(); });
 sortSelect.addEventListener("change", () => { renderPreview(); });
 
-themeToggle.addEventListener("change", ()=>{ settings.theme=themeToggle.checked?'light':'dark'; document.body.setAttribute('data-theme', settings.theme); saveLocal(); });
+themeToggle.addEventListener("change", ()=>{
+  settings.theme=themeToggle.checked?'light':'dark';
+  document.body.setAttribute('data-theme', settings.theme);
+  saveLocal();
+  renderRelations();
+});
 anonToggle.addEventListener("change", ()=>{ settings.anonymize=anonToggle.checked; saveLocal(); renderPreview(); });
 autosaveToggle.addEventListener("change", ()=>{ settings.autosave=autosaveToggle.checked; saveLocal(); });
 
@@ -1394,6 +1401,57 @@ function getResidentialRowsForBatch(){
 
 // ====== Chatbot y gráfico de conexiones ======
 let graphNetwork = null;
+let graphLayoutMode = 'free';
+let graphRandomSeed = Math.floor(Math.random() * 1e6);
+
+function graphFontColor(){
+  const themeAttr = document.documentElement?.getAttribute('data-theme') || document.body?.getAttribute('data-theme') || settings.theme;
+  return (themeAttr && themeAttr.toLowerCase() === 'light') ? '#0a223d' : '#f8fafc';
+}
+
+function getGraphOptions(){
+  const base = {
+    nodes: { shape: 'circle', size: 30, font: { color: graphFontColor(), face: 'Space Grotesk', strokeWidth: 0 } },
+    edges: {
+      arrows: 'to',
+      color: { color: 'rgba(148,163,184,.55)', highlight: '#38bdf8' },
+      smooth: { type: 'dynamic' }
+    }
+  };
+
+  if (graphLayoutMode === 'hierarchical-lr'){
+    base.layout = {
+      hierarchical: {
+        enabled: true,
+        direction: 'LR',
+        nodeSpacing: 220,
+        levelSeparation: 220,
+        sortMethod: 'hubsize'
+      }
+    };
+    base.physics = { enabled: false };
+  } else if (graphLayoutMode === 'hierarchical-ud'){
+    base.layout = {
+      hierarchical: {
+        enabled: true,
+        direction: 'UD',
+        nodeSpacing: 200,
+        levelSeparation: 200,
+        sortMethod: 'hubsize'
+      }
+    };
+    base.physics = { enabled: false };
+  } else {
+    base.layout = { randomSeed: graphRandomSeed, improvedLayout: false };
+    base.physics = {
+      enabled: true,
+      solver: 'forceAtlas2Based',
+      stabilization: { iterations: 220 },
+      barnesHut: { springLength: 160, avoidOverlap: 0.25 }
+    };
+  }
+  return base;
+}
 
 function attachNumberLabels(network, nodeData){
   network.on('afterDrawing', ctx => {
@@ -1412,39 +1470,63 @@ function attachNumberLabels(network, nodeData){
   });
 }
 
+function renderGraphNetwork(nodeArr, edges){
+  if (!graphEl) return;
+  const options = getGraphOptions();
+  const data = {
+    nodes: new vis.DataSet(nodeArr),
+    edges: new vis.DataSet(edges)
+  };
+  if (graphNetwork) {
+    graphNetwork.destroy();
+    graphNetwork = null;
+  }
+  graphNetwork = new vis.Network(graphEl, data, options);
+  if (options.physics && options.physics.enabled){
+    graphNetwork.once('stabilizationIterationsDone', () => {
+      graphNetwork.setOptions({ physics: false });
+      requestAnimationFrame(() => {
+        try { graphNetwork.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } }); } catch {}
+      });
+    });
+  } else {
+    setTimeout(() => {
+      if (!graphNetwork) return;
+      try { graphNetwork.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } }); } catch {}
+    }, 80);
+  }
+  attachNumberLabels(graphNetwork, nodeArr);
+}
+
 function renderGraph(numbers){
   if (!graphEl) return;
+  const list = Array.isArray(numbers) ? numbers : [];
+  if (!list.length){
+    if (graphNetwork) { graphNetwork.destroy(); graphNetwork = null; }
+    graphEl.innerHTML = '<div class="muted">Sin contactos para graficar</div>';
+    return false;
+  }
   graphEl.innerHTML = '';
   const objectiveLabel = getNormalizedObjective() || 'Objetivo';
-  const nodeArr = [{ id: 'root', label: objectiveLabel, shape: 'box' }];
+  const nodeArr = [{ id: 'root', label: objectiveLabel, shape: 'box', color: { background: '#0ea5e9', border: '#0b8ec7' }, font: { color: '#041024' } }];
   const edges = [];
-  (numbers || []).forEach((n, i) => {
+  list.forEach((n, i) => {
     const freq = currentCounts.countsMap[n] || 1;
-    nodeArr.push({ id: i, label: String(freq), title: n });
+    nodeArr.push({ id: i, label: String(freq), title: n, value: Math.max(1, freq) });
     edges.push({ from: 'root', to: i });
   });
-  const nodesDs = new vis.DataSet(nodeArr);
-  const data = { nodes: nodesDs, edges: new vis.DataSet(edges) };
-  const options = {
-    physics: { stabilization: true },
-    layout: { improvedLayout: false },
-    nodes: { shape: 'circle', size: 30, font: { color: '#fff' } },
-    edges: { arrows: 'to' }
-  };
-  if (graphNetwork) graphNetwork.destroy();
-  graphNetwork = new vis.Network(graphEl, data, options);
-  graphNetwork.once('stabilizationIterationsDone', () => {
-    graphNetwork.setOptions({ physics: false });
-  });
-  attachNumberLabels(graphNetwork, nodeArr);
+  renderGraphNetwork(nodeArr, edges);
+  return true;
 }
 
 function renderBatchGraph(){
   if (!graphEl) return;
-  const nodeArr = []; const edges = []; const owners = new Map();
+  const nodeArr = [];
+  const edges = [];
+  const owners = new Map();
   batch.forEach((item, idx) => {
     const id = `item-${idx}`;
-    nodeArr.push({ id, label: item.objective || `Reporte ${idx + 1}`, shape: 'box', color: { background: item.color } });
+    nodeArr.push({ id, label: item.objective || `Reporte ${idx + 1}`, shape: 'box', color: { background: item.color }, font: { color: '#041024' } });
     item.contacts.forEach(c => {
       if (!owners.has(c)) owners.set(c, new Set());
       owners.get(c).add(id);
@@ -1454,38 +1536,34 @@ function renderBatchGraph(){
   owners.forEach((set, contact) => {
     const cid = `c-${cIdx++}`;
     const freq = set.size;
-    const color = freq > 1 ? { background: '#ff6b6b' } : undefined;
-    nodeArr.push({ id: cid, label: String(freq), title: contact, color });
+    const color = freq > 1 ? { background: '#f87171', border: '#ef4444' } : { background: '#1e293b', border: '#334155' };
+    nodeArr.push({ id: cid, label: String(freq), title: contact, color, value: Math.max(1, freq) });
     set.forEach(id => edges.push({ from: id, to: cid }));
   });
   if (edges.length === 0) {
     if (graphNetwork) { graphNetwork.destroy(); graphNetwork = null; }
     graphEl.innerHTML = '<div class="muted">Sin datos en el lote</div>';
-    return;
+    return false;
   }
-  const nodesDs = new vis.DataSet(nodeArr);
-  const data = { nodes: nodesDs, edges: new vis.DataSet(edges) };
-  const options = {
-    physics: { stabilization: true },
-    layout: { improvedLayout: false },
-    nodes: { shape: 'circle', size: 30, font: { color: '#fff' } },
-    edges: { arrows: 'to' }
-  };
-  if (graphNetwork) graphNetwork.destroy();
-  graphNetwork = new vis.Network(graphEl, data, options);
-  graphNetwork.once('stabilizationIterationsDone', () => {
-    graphNetwork.setOptions({ physics: false });
-  });
-  attachNumberLabels(graphNetwork, nodeArr);
+  graphEl.innerHTML = '';
+  renderGraphNetwork(nodeArr, edges);
+  return true;
+}
+
+function setGraphControlsEnabled(enabled){
+  if (graphLayoutSelect) graphLayoutSelect.disabled = !enabled;
+  if (graphRefreshBtn) graphRefreshBtn.disabled = !enabled;
 }
 
 function renderRelations(){
-  if(batch.length>0) renderBatchGraph();
-  else if(currentContacts.length) renderGraph(currentContacts);
+  let hasData = false;
+  if(batch.length>0) hasData = !!renderBatchGraph();
+  else if(currentContacts.length) hasData = !!renderGraph(currentContacts);
   else{
     if(graphNetwork){ graphNetwork.destroy(); graphNetwork=null; }
     if(graphEl) graphEl.innerHTML='';
   }
+  setGraphControlsEnabled(hasData);
 }
 
 function addChatMessage(text, who){
@@ -1548,14 +1626,47 @@ if (chatSend){
   chatSend.addEventListener('click', sendChat);
   chatInput.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChat(); });
 }
+
+function updateFullscreenButtonState(isFull){
+  if (!relBtn) return;
+  const textEl = relBtn.querySelector('.text');
+  if (textEl) textEl.textContent = isFull ? 'Cerrar gráfico' : 'Pantalla completa';
+  relBtn.setAttribute('aria-pressed', String(isFull));
+  relBtn.classList.toggle('is-close', isFull);
+}
+
 if (relBtn){
+  updateFullscreenButtonState(graphPanel?.classList.contains('fullscreen'));
   relBtn.addEventListener('click', ()=>{
     if(!graphPanel) return;
-    graphPanel.classList.toggle('fullscreen');
-    relBtn.textContent = graphPanel.classList.contains('fullscreen') ? 'Cerrar' : 'Pantalla completa';
-    if(graphNetwork) graphNetwork.redraw();
+    const isFull = graphPanel.classList.toggle('fullscreen');
+    updateFullscreenButtonState(isFull);
+    if(graphNetwork){
+      graphNetwork.redraw();
+      setTimeout(() => {
+        try { graphNetwork.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } }); } catch {}
+      }, 100);
+    }
   });
 }
+
+if (graphLayoutSelect){
+  if (graphLayoutSelect.value) graphLayoutMode = graphLayoutSelect.value;
+  graphLayoutSelect.addEventListener('change', event => {
+    graphLayoutMode = event.target.value || 'free';
+    graphRandomSeed = Math.floor(Math.random() * 1e6);
+    renderRelations();
+  });
+}
+
+if (graphRefreshBtn){
+  graphRefreshBtn.addEventListener('click', () => {
+    graphRandomSeed = Math.floor(Math.random() * 1e6);
+    renderRelations();
+  });
+}
+
+setGraphControlsEnabled(false);
 
 async function requestCredit(){
   if (window.Auth && typeof window.Auth.spendCredit === 'function'){

@@ -1118,6 +1118,116 @@ body[data-theme="light"] .table thead th{
 }
 
 /* =========================
+   Panel de estado de usuario
+   ========================= */
+#accountPanel .user-status{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
+#accountPanel .user-meta{
+  display:flex;
+  flex-wrap:wrap;
+  gap:12px;
+}
+
+#accountPanel .meta-block{
+  flex:1 1 220px;
+  min-width:200px;
+  padding:14px 16px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface-1), var(--surface-2));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+}
+
+#accountPanel .meta-label{
+  font-size:12px;
+  letter-spacing:.32px;
+  text-transform:uppercase;
+  color: var(--text-2);
+}
+
+#accountPanel .meta-value{
+  font-weight:700;
+  color: var(--text-1);
+  word-break:break-word;
+}
+
+.credit-status{
+  display:flex;
+  flex-direction:column;
+  gap:10px;
+  padding:16px;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--border);
+  background: linear-gradient(180deg, var(--surface-0), rgba(255,255,255,.02));
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,.02);
+  transition: border-color .2s ease, box-shadow .2s ease;
+}
+
+#creditStatus[data-state="success"]{ border-color: rgba(34,197,94,.35); }
+#creditStatus[data-state="warning"]{ border-color: rgba(245,158,11,.35); }
+#creditStatus[data-state="danger"]{ border-color: rgba(239,68,68,.45); box-shadow: inset 0 0 0 1px rgba(239,68,68,.12); }
+
+.credit-count{ font-weight:700; color: var(--text-1); }
+
+.credit-bar{
+  position:relative;
+  width:100%;
+  height:12px;
+  border-radius:999px;
+  background: rgba(255,255,255,.08);
+  overflow:hidden;
+  border:1px solid rgba(255,255,255,.12);
+}
+
+.credit-bar-fill{
+  position:absolute;
+  inset:0;
+  width:0%;
+  border-radius:inherit;
+  background: linear-gradient(90deg, var(--pri), var(--sec));
+  transition: width .3s ease, background .3s ease;
+}
+
+#creditStatus[data-state="success"] .credit-bar-fill{
+  background: linear-gradient(90deg, var(--success), #16b364);
+}
+
+#creditStatus[data-state="warning"] .credit-bar-fill{
+  background: linear-gradient(90deg, var(--warning), #facc15);
+}
+
+#creditStatus[data-state="danger"] .credit-bar-fill{
+  background: linear-gradient(90deg, var(--danger), #f43f5e);
+}
+
+#creditStatus[data-state="idle"] .credit-bar{
+  background: rgba(255,255,255,.05);
+  border-color: rgba(255,255,255,.08);
+}
+
+.credit-alert{
+  margin:0;
+  font-size:.9rem;
+  color: var(--text-2);
+  transition: color .2s ease;
+}
+
+#creditStatus[data-state="success"] .credit-alert{ color: var(--success); }
+#creditStatus[data-state="warning"] .credit-alert{ color: var(--warning); }
+#creditStatus[data-state="danger"] .credit-alert{ color: var(--danger); }
+
+.credit-alert.pulse{ animation: creditPulse 1.4s ease-in-out 2; }
+
+@keyframes creditPulse{
+  0%,100%{ opacity:1; }
+  50%{ opacity:.5; }
+}
+
+/* =========================
    Chatbot
    ========================= */
 .chat-log{
@@ -1135,23 +1245,107 @@ body[data-theme="light"] .table thead th{
 .chat-input{ display:flex; gap:8px; }
 .chat-input input{ flex:1; }
 #graph{ height:400px; }
-#graphPanel .btn{ margin-bottom:var(--gap); }
+
+.graph-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:var(--gap);
+  margin-bottom:var(--gap);
+  flex-wrap:wrap;
+}
+
+.graph-actions{
+  display:flex;
+  align-items:center;
+  gap:10px;
+  flex-wrap:wrap;
+}
+
+.graph-label{
+  font-size:12px;
+  letter-spacing:.32px;
+  text-transform:uppercase;
+  color: var(--text-2);
+}
+
+.graph-select{ min-width:180px; }
+
+.graph-refresh{
+  border-radius:999px;
+  padding:8px 14px;
+}
+
+.graph-fullscreen-btn{
+  display:inline-flex;
+  align-items:center;
+  gap:8px;
+  padding:10px 18px;
+  border-radius:999px;
+  border:1px solid rgba(14,165,233,.35);
+  background: linear-gradient(135deg, rgba(14,165,233,.18), rgba(3,105,161,.24));
+  color: var(--text-1);
+  font-weight:800;
+  cursor:pointer;
+  transition: transform .12s ease, box-shadow .18s ease, background .18s ease, color .18s ease;
+}
+
+.graph-fullscreen-btn .icon::before{
+  content:'\2922';
+  font-size:18px;
+  line-height:1;
+}
+
+.graph-fullscreen-btn .text{ font-size:.95rem; }
+
+.graph-fullscreen-btn:hover{
+  transform: translateY(-1px);
+  box-shadow:0 12px 30px rgba(14,165,233,.25);
+}
+
+.graph-fullscreen-btn:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 3px rgba(14,165,233,.35);
+}
+
 #graphPanel.fullscreen{
   position:fixed;
   inset:0;
   width:100vw;
   height:100vh;
-  background:var(--surface-0);
+  background: linear-gradient(140deg, var(--bg1), var(--bg2));
   z-index:1000;
-  padding:var(--pad);
+  padding:clamp(18px, 3vw, 32px);
+  display:flex;
+  flex-direction:column;
+  gap:var(--gap);
 }
-#graphPanel.fullscreen h2{ display:none; }
-#graphPanel.fullscreen #graph{ height:calc(100vh - 80px); }
-#graphPanel.fullscreen #relBtn{
-  position:absolute;
-  top:10px;
-  right:10px;
+
+#graphPanel.fullscreen .graph-top{
+  align-items:center;
+  margin-bottom:clamp(8px, 2vh, 16px);
 }
+
+#graphPanel.fullscreen h2{
+  font-size:clamp(24px, 3vw, 28px);
+}
+
+#graphPanel.fullscreen #graph{
+  flex:1 1 auto;
+  height:auto;
+}
+
+#graphPanel.fullscreen .graph-fullscreen-btn{
+  margin-left:auto;
+  position:static;
+  background: linear-gradient(135deg, rgba(239,68,68,.95), rgba(244,63,94,.9));
+  border-color: transparent;
+  color:#fff;
+  box-shadow:0 18px 40px rgba(239,68,68,.32);
+}
+
+#graphPanel.fullscreen .graph-fullscreen-btn .icon::before{ content:'\2715'; }
+
 .color-controls{ display:none; gap:8px; flex-wrap:wrap; margin-bottom:var(--gap); }
 #graphPanel.fullscreen .color-controls{ display:flex; }
 .color-item{ display:flex; align-items:center; gap:4px; }
@@ -1163,207 +1357,135 @@ body[data-theme="light"] .table thead th{
 .login-screen{
   position:fixed;
   inset:0;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  background:linear-gradient(135deg,#3b82f6,#9333ea);
-  z-index:1000;
-}
-.login-card{
-  background:rgba(255,255,255,.85);
-  backdrop-filter:blur(12px);
-  padding:calc(var(--pad)*2);
-  border-radius:var(--radius);
-  box-shadow:var(--shadow-3);
-  width:min(90%,380px);
-  display:flex;
-  flex-direction:column;
-  gap:8px;
-  border:1px solid var(--border);
-}
-[data-theme="dark"] .login-card{ background:rgba(0,0,0,.6); }
-.login-card h2{ text-align:center; margin:0 0 8px; font-size:clamp(24px,2.5vw,28px); }
-.login-card .field{ gap:4px; }
-.login-card .field span{font-weight:600;}
-.login-card .btn{margin-top:8px;}
-.loading-msg{ text-align:center; color:var(--text-2); display:none; }
-.error-msg{ color:var(--danger); text-align:center; display:none; }
-
-
-/* ===== Login mejorado (glass, icons y botón rojo con spinner) ===== */
-.login-screen{
-  position:fixed; inset:0;
-  display:grid; place-items:center;
-  /* fondo con degradé + “halo” */
+  display:grid;
+  place-items:center;
+  padding:clamp(24px, 6vw, 60px);
   background:
-    radial-gradient(60vw 50vh at 15% 10%, rgba(255,255,255,.05), transparent 60%),
-    radial-gradient(60vw 50vh at 85% 90%, rgba(14,165,233,.08), transparent 60%),
-    linear-gradient(135deg,#0b1226,#000513 40%, #0b1d3a 100%);
-  padding: 24px;
+    radial-gradient(70vw 60vh at -15% -15%, rgba(4,26,64,.72), transparent 65%),
+    radial-gradient(65vw 60vh at 125% 10%, rgba(2,24,51,.68), transparent 60%),
+    linear-gradient(140deg, var(--bg1), var(--bg2));
   z-index:1000;
 }
 
 .login-card{
   width:min(92vw, 420px);
-  border-radius: 20px;
-  padding: clamp(22px, 3.2vw, 28px);
-  border: 1px solid color-mix(in oklab, var(--pri) 35%, transparent);
-  background:
-    linear-gradient(180deg, rgba(2,8,20,.76), rgba(2,8,20,.66)),
-    radial-gradient(120% 140% at 0% 0%, rgba(14,165,233,.16), transparent 60%);
-  backdrop-filter: blur(14px) saturate(120%);
-  box-shadow:
-    0 10px 35px rgba(0,0,0,.45),
-    0 0 0 1px rgba(255,255,255,.05) inset;
-  display:flex; flex-direction:column; gap:12px;
+  border-radius:22px;
+  padding:clamp(26px, 3.2vw, 34px);
+  border:1px solid rgba(255,255,255,.08);
+  background: linear-gradient(180deg, rgba(2,8,20,.9), rgba(2,8,20,.82));
+  backdrop-filter: blur(16px) saturate(120%);
+  box-shadow: 0 18px 48px rgba(0,0,0,.45);
+  display:flex;
+  flex-direction:column;
+  gap:16px;
 }
 
 [data-theme="light"] .login-card{
-  background:
-    linear-gradient(180deg, rgba(255,255,255,.86), rgba(255,255,255,.82));
-  border-color: rgba(0,0,0,.12);
-  box-shadow: 0 20px 60px rgba(0,0,0,.16);
+  background: linear-gradient(180deg, rgba(255,255,255,.92), rgba(255,255,255,.86));
+  border-color: rgba(0,0,0,.08);
+  box-shadow: 0 18px 48px rgba(0,0,0,.15);
 }
 
 .login-card h2{
-  margin: 4px 0 6px;
+  margin:0;
   text-align:center;
-  font-size: clamp(22px, 2.4vw, 28px);
+  font-size: clamp(24px, 2.6vw, 30px);
   font-weight: 800;
-  letter-spacing:.3px;
-  background: linear-gradient(90deg, #e5f4ff, #a8d7ff);
-  -webkit-background-clip:text; background-clip:text; color:transparent;
+  color: var(--text-1);
 }
+
+[data-theme="light"] .login-card h2{ color:#0a223d; }
 
 .login-card .field{ gap:6px; }
-.login-card .field > span{
-  font-weight:700; color: var(--text-2);
-}
-
-/* Inputs con icono embebido */
-#loginEmail, #loginPassword{
-  padding-left: 14px;
-  padding-right: 44px;              /* espacio para el icono */
-  border-radius: 14px;
-  background:
-    var(--input-bg)
-    no-repeat right 12px center / 18px;
-  border: 1px solid var(--border);
-  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
-  height: 44px;
-}
-#loginEmail{
-  background-image: url("data:image/svg+xml;utf8,\
-  <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='%23a9c3e6' viewBox='0 0 24 24'><path d='M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 4-8 5L4 8V6l8 5 8-5v2z'/></svg>");
-}
-#loginPassword{
-  background-image: url("data:image/svg+xml;utf8,\
-  <svg xmlns='http://www.w3.org/2000/svg' width='24' height='24' fill='%23a9c3e6' viewBox='0 0 24 24'><path d='M12 17a2 2 0 1 0 0-4 2 2 0 0 0 0 4Zm6-6h-1V9a5 5 0 0 0-10 0v2H6a2 2 0 0 0-2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-7a2 2 0 0 0-2-2Zm-9-2a3 3 0 0 1 6 0v2H9V9Zm9 11H6v-7h12v7Z'/></svg>");
-}
-
-#loginEmail:focus, #loginPassword:focus{
-  border-color: color-mix(in oklab, var(--pri) 55%, transparent);
-  box-shadow: 0 0 0 4px rgba(14,165,233,.22);
-}
-
-/* Botón rojo “chévere” */
-.btn-red{
-  --r1: #ff5a7a;
-  --r2: #ff2e4d;
-  --r3: #d60a2c;
-  color: #fff !important;
-  background:
-    radial-gradient(120% 180% at 10% 0%, rgba(255,255,255,.30), transparent 40%),
-    linear-gradient(90deg, var(--r1), var(--r2));
-  border-radius: 14px;
-  font-weight: 900;
-  letter-spacing:.3px;
-  box-shadow:
-    0 10px 30px rgba(255,46,77,.35),
-    0 0 0 1px rgba(255,255,255,.06) inset;
-  height: 46px;
-}
-.btn-red:hover{
-  transform: translateY(-1px);
-  box-shadow:
-    0 14px 36px rgba(255,46,77,.45),
-    0 0 0 1px rgba(255,255,255,.08) inset;
-  filter: saturate(1.08);
-}
-.btn-red:active{ transform: translateY(0) }
-
-/* Spinner automático cuando el botón está deshabilitado */
-@keyframes spin { to { transform: rotate(1turn); } }
-.btn-red:disabled{
-  position: relative;
-  opacity: .85;
-  cursor: not-allowed;
-}
-.btn-red:disabled::after{
-  content: "";
-  position: absolute;
-  right: 14px;                       /* a la derecha del texto */
-  width: 18px; height: 18px;
-  border-radius: 50%;
-  border: 2px solid rgba(255,255,255,.45);
-  border-top-color: #fff;
-  animation: spin .8s linear infinite;
-}
-
-/* Mensajes */
-.loading-msg{
-  margin: 4px 0 0;
-  text-align:center;
+.login-card .field span{
+  font-weight:700;
   color: var(--text-2);
 }
-.error-msg{
-  margin: 2px 0 0;
+
+#loginEmail,
+#loginPassword{
+  height:48px;
+  border-radius:14px;
+  border:1px solid var(--border);
+  background: var(--input-bg);
+  color: var(--text-1);
+  padding:0 14px;
+  transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+
+#loginEmail:focus,
+#loginPassword:focus{
+  outline:none;
+  border-color: var(--pri);
+  box-shadow: 0 0 0 4px rgba(14,165,233,.18);
+}
+
+.login-primary,
+.login-buy{
+  width:100%;
+  justify-content:center;
+  border-radius:14px;
+  height:48px;
+  font-weight:800;
+  padding:0 18px;
+  transition: transform .1s ease, box-shadow .18s ease, border-color .18s ease;
+}
+
+.login-primary{
+  background: linear-gradient(90deg, var(--pri), var(--sec));
+  color:#00202f;
+  border:0;
+  box-shadow: 0 12px 30px rgba(14,165,233,.28);
+}
+
+.login-primary:hover{ transform: translateY(-1px); }
+.login-primary:active{ transform: translateY(0); }
+.login-primary:disabled{ opacity:.55; cursor:not-allowed; }
+
+.login-buy{
+  border:1px solid var(--border);
+  background: rgba(255,255,255,.05);
+  color: var(--text-1);
+  text-decoration:none;
+}
+
+[data-theme="light"] .login-buy{
+  background: rgba(0,0,0,.02);
+  color:#0a223d;
+}
+
+.login-buy:hover{
+  border-color: var(--pri);
+  color: var(--pri);
+}
+
+.buy-info{
+  margin:0;
   text-align:center;
-  color: #ff8a9f;
-  font-weight: 700;
+  font-size:.92rem;
+  color: var(--text-2);
 }
 
-/* Botón “Salir” en la topbar cuando quieras rojo también */
-#logoutBtn.btn-red{
-  --r1:#ff6a56; --r2:#ff3a1f;
-  color:#fff;
-  background: linear-gradient(90deg, var(--r1), var(--r2));
-  box-shadow: 0 10px 26px rgba(255,72,54,.32), 0 0 0 1px rgba(255,255,255,.06) inset;
-}
-#logoutBtn.btn-red:disabled::after{
-  content:"";
-  position:absolute; right:12px; width:16px; height:16px;
-  border-radius:50%;
-  border:2px solid rgba(255,255,255,.5);
-  border-top-color:#fff;
-  animation: spin .8s linear infinite;
+.buy-info a{
+  color: var(--pri);
+  font-weight:700;
+  text-decoration:none;
 }
 
+.buy-info a:hover{ text-decoration:underline; }
 
-/* Ajuste de login compacto */
-.login-card {
-  gap: 12px; /* reduce separación global */
+.loading-msg{
+  margin:6px 0 0;
+  text-align:center;
+  color: var(--text-2);
+  display:none;
 }
 
-.login-card .field {
-  gap: 2px;        /* menos espacio entre label y input */
-  margin: 0;       /* quita margen extra */
+.error-msg{
+  margin:0;
+  text-align:center;
+  color: var(--danger);
+  font-weight:700;
+  display:none;
 }
 
-.login-card .field span {
-  font-size: 14px; /* más discreto */
-  margin-bottom: 2px;
-}
-
-.login-card input {
-  padding: 10px 12px; /* menos padding interno */
-  font-size: 15px;
-}
-
-.login-card .btn {
-  margin-top: 10px; /* botón más cerca */
-}
-
-.login-card h2 {
-  margin-bottom: 12px; /* título separado pero no exagerado */
-}

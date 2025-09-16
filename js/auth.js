@@ -27,9 +27,85 @@
   const planNameEl = document.getElementById("planName");
   const creditsChip = document.getElementById("creditsChip");
   const creditCountEl = document.getElementById("creditCount");
+  const userEmailEl = document.getElementById("currentUserEmail");
+  const userPlanEl = document.getElementById("currentUserPlan");
+  const userCreditsEl = document.getElementById("currentUserCredits");
+  const creditStatusEl = document.getElementById("creditStatus");
+  const creditBarEl = document.getElementById("creditBar");
+  const creditBarFillEl = document.getElementById("creditBarFill");
+  const creditAlertEl = document.getElementById("creditAlertMsg");
+
+  let lastCreditsValue = null;
+  let maxCreditsSeen = 0;
 
   function toggleLoginButton(disabled) {
     if (loginBtn) loginBtn.disabled = !!disabled;
+  }
+
+  function updateUserIdentity(user) {
+    if (userEmailEl) userEmailEl.textContent = user?.email || "-";
+  }
+
+  function renderCreditState(rawCredits) {
+    if (!creditStatusEl) return;
+    const hasValue = typeof rawCredits === "number" && Number.isFinite(rawCredits);
+    if (!hasValue) {
+      if (userCreditsEl) userCreditsEl.textContent = "0";
+      creditStatusEl.dataset.state = "idle";
+      if (creditBarEl) {
+        creditBarEl.setAttribute("aria-valuenow", "0");
+        creditBarEl.setAttribute("aria-valuemax", "0");
+      }
+      if (creditBarFillEl) creditBarFillEl.style.width = "0%";
+      if (creditAlertEl) {
+        creditAlertEl.textContent = "Inicia sesión para visualizar tu saldo.";
+        creditAlertEl.classList.remove("pulse");
+      }
+      lastCreditsValue = null;
+      maxCreditsSeen = 0;
+      return;
+    }
+
+    const credits = Math.max(0, Math.floor(rawCredits));
+    if (userCreditsEl) userCreditsEl.textContent = String(credits);
+
+    maxCreditsSeen = Math.max(maxCreditsSeen, credits);
+    const maxForBar = maxCreditsSeen || credits || 1;
+    const percent = Math.max(0, Math.min(100, Math.round((credits / maxForBar) * 100)));
+    if (creditBarFillEl) creditBarFillEl.style.width = `${percent}%`;
+    if (creditBarEl) {
+      creditBarEl.setAttribute("aria-valuenow", String(credits));
+      creditBarEl.setAttribute("aria-valuemax", String(maxForBar));
+    }
+
+    let state = "success";
+    let message = `Saldo disponible: ${credits} crédito${credits === 1 ? "" : "s"}.`;
+
+    if (credits === 0) {
+      state = "danger";
+      message = "Sin créditos disponibles. Escríbenos al +57 312 646 1216 para recargar.";
+    } else if (credits <= 3) {
+      state = "danger";
+      message = `Te quedan ${credits} crédito${credits === 1 ? "" : "s"}. Escríbenos al +57 312 646 1216 para recargar.`;
+    } else if (credits <= 8) {
+      state = "warning";
+      message = `Te quedan ${credits} créditos. Ve preparando una recarga.`;
+    } else if (credits <= 15) {
+      state = "success";
+      message = `Saldo moderado: ${credits} créditos disponibles.`;
+    }
+
+    creditStatusEl.dataset.state = state;
+    if (creditAlertEl) {
+      const decreased = lastCreditsValue !== null && credits < lastCreditsValue;
+      creditAlertEl.textContent = message;
+      creditAlertEl.classList.toggle("pulse", decreased);
+      if (decreased) {
+        setTimeout(() => creditAlertEl.classList.remove("pulse"), 1600);
+      }
+    }
+
+    lastCreditsValue = credits;
   }
 
   function showLoading(show) {
@@ -55,8 +131,10 @@
       planChip.className = "chip";
     }
     if (planNameEl) planNameEl.textContent = "-";
+    if (userPlanEl) userPlanEl.textContent = "-";
     if (creditsChip) creditsChip.style.display = "none";
     if (creditCountEl) creditCountEl.textContent = "0";
+    renderCreditState(null);
     if (logoutBtn) logoutBtn.style.display = "none";
     global.AppCore?.setCreditDependentActionsEnabled(false);
   }
@@ -66,6 +144,7 @@
     if (loginScreen) loginScreen.style.display = "flex";
     clearCreditsUI();
     resetLoginForm();
+    updateUserIdentity(null);
   }
 
   function showAppUI() {
@@ -78,17 +157,21 @@
     if (!profile) return;
     const planName = profile.plan || "-";
     if (planNameEl) planNameEl.textContent = planName;
+    if (userPlanEl) userPlanEl.textContent = planName;
     if (planChip) {
       const planClass = planName.toLowerCase();
       planChip.className = "chip" + (planClass ? " plan-" + planClass : "");
       planChip.style.display = "inline-block";
     }
-    if (typeof profile.credits === "number" && creditCountEl) {
-      creditCountEl.textContent = String(profile.credits);
+    const numericCredits = Number(profile.credits);
+    if (Number.isFinite(numericCredits) && creditCountEl) {
+      creditCountEl.textContent = String(Math.max(0, Math.floor(numericCredits)));
     }
     if (creditsChip) creditsChip.style.display = "inline-block";
     if (logoutBtn) logoutBtn.style.display = "inline-block";
-    global.AppCore?.setCreditDependentActionsEnabled((profile.credits || 0) > 0);
+    const safeCredits = Number.isFinite(numericCredits) ? numericCredits : null;
+    global.AppCore?.setCreditDependentActionsEnabled((safeCredits || 0) > 0);
+    renderCreditState(safeCredits);
   }
 
   async function updateCredits() {
@@ -153,12 +236,13 @@
       return false;
     }
 
+    const currentUi = creditCountEl ? parseInt(creditCountEl.textContent || "0", 10) : (lastCreditsValue ?? 0);
+    const next = Math.max(0, (Number.isFinite(currentUi) ? currentUi : 0) - 1);
     if (creditCountEl) {
-      const current = parseInt(creditCountEl.textContent || "0", 10) - 1;
-      const next = Math.max(0, current);
       creditCountEl.textContent = String(next);
-      global.AppCore?.setCreditDependentActionsEnabled(next > 0);
     }
+    global.AppCore?.setCreditDependentActionsEnabled(next > 0);
+    renderCreditState(next);
     return true;
   }
 
@@ -171,6 +255,8 @@
       data: { session },
     } = await supabase.auth.getSession();
 
+    updateUserIdentity(session?.user || null);
+
     if (session) {
       showAppUI();
       await updateCredits();
@@ -179,6 +265,7 @@
     }
 
     supabase.auth.onAuthStateChange(async (_evt, session) => {
+      updateUserIdentity(session?.user || null);
       if (session) {
         showAppUI();
         await updateCredits();
