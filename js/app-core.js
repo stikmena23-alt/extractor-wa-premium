@@ -68,26 +68,6 @@ const relBtn = document.getElementById("relBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 const filePicker = document.getElementById("filePicker");
 
-// Login y créditos
-const loginScreen = document.getElementById("loginScreen");
-const loginForm = document.getElementById("loginForm");
-const loginEmail = document.getElementById("loginEmail");
-const loginPassword = document.getElementById("loginPassword");
-const loginBtn = document.getElementById("loginBtn");
-const loginError = document.getElementById("loginError");
-const loginLoading = document.getElementById("loginLoading");
-const logoutBtn = document.getElementById("logoutBtn");
-const appWrap = document.getElementById("appWrap");
-const planChip = document.getElementById("planChip");
-const planNameEl = document.getElementById("planName");
-const creditsChip = document.getElementById("creditsChip");
-const creditCountEl = document.getElementById("creditCount");
-
-const SUPABASE_URL = "https://htkwcjhcuqyepclpmpsv.supabase.co";
-const SUPABASE_ANON_KEY =
-  "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a3djamhjdXF5ZXBjbHBtcHN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTk4MTgsImV4cCI6MjA3MzQ5NTgxOH0.dBeJjYm12YW27LqIxon5ifPR1ygfFXAHVg8ZuCZCEf8";
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-
 // ----------- ESTADO GLOBAL -----------
 let currentContacts = [];
 let batch = [];
@@ -704,7 +684,7 @@ if (dropZone){
     dropZone.classList.remove('dragging'); dragCounter = 0;
     const dt = e.dataTransfer; if (!dt) return;
     if (dt.files && dt.files.length){
-      const ok = await spendCredit();
+      const ok = await requestCredit();
       if(ok) await handleDroppedFiles(dt.files);
     } else alert("Suelta archivos válidos (.zip con records.html, o .txt/.csv/.html).");
   });
@@ -716,7 +696,7 @@ if (uploadBtn && filePicker){
   filePicker.addEventListener('change', async (e) => {
     const files = e.target.files;
     if (files && files.length){
-      const ok = await spendCredit();
+      const ok = await requestCredit();
       if(ok) await handleDroppedFiles(files);
     }
     filePicker.value = "";
@@ -1577,108 +1557,30 @@ if (relBtn){
   });
 }
 
-async function updateCredits(){
-  const { data: profile, error } = await sb.from('profiles').select('plan, credits').single();
-  if(error){ console.error('Perfil', error); return; }
-  planNameEl.textContent = profile.plan || '-';
-  const planClass = (profile.plan||'').toLowerCase();
-  planChip.className = 'chip' + (planClass ? ' plan-' + planClass : '');
-  planChip.style.display='inline-block';
-  creditCountEl.textContent = profile.credits;
-  creditsChip.style.display='inline-block';
-  logoutBtn.style.display='inline-block';
-  const noCredits = profile.credits <= 0;
-  uploadBtn.disabled = noCredits;
-  processBtn.disabled = noCredits;
-}
-
-loginForm?.addEventListener('submit', async (e)=>{
-  e.preventDefault();
-  loginError.style.display='none';
-  loginBtn.disabled = true;
-  loginLoading.style.display='block';
-  const email = loginEmail.value.trim();
-  const password = loginPassword.value.trim();
-  if(!email || !password){
-    loginLoading.style.display='none';
-    loginBtn.disabled = false;
-    loginError.textContent='Completa email y contraseña';
-    loginError.style.display='block';
-    return;
-  }
-  const { error } = await sb.auth.signInWithPassword({ email, password });
-  loginLoading.style.display='none';
-  loginBtn.disabled = false;
-  if(error){
-    loginError.textContent = error.message || 'Error de login';
-    loginError.style.display='block';
-    return;
-  }
-  loginScreen.style.display='none';
-  appWrap.style.display='block';
-  await updateCredits();
-});
-
-logoutBtn?.addEventListener('click', async ()=>{
-  const { error } = await sb.auth.signOut();
-  if(error){
-    alert('No se pudo cerrar sesión');
-    return;
-  }
-  loginForm.reset();
-  loginError.style.display='none';
-  loginLoading.style.display='none';
-  planChip.style.display='none';
-  creditsChip.style.display='none';
-  logoutBtn.style.display='none';
-  appWrap.style.display='none';
-  loginScreen.style.display='flex';
-});
-
-async function spendCredit(){
-  const { error } = await sb.rpc('spend_credit');
-  if(error){
-    if((error.message||'').includes('NO_CREDITS')){
-      alert('Sin créditos');
-      uploadBtn.disabled=true;
-      processBtn.disabled=true;
-    } else {
-      alert('Error: '+error.message);
+async function requestCredit(){
+  if (window.Auth && typeof window.Auth.spendCredit === 'function'){
+    try {
+      return await window.Auth.spendCredit();
+    } catch (error) {
+      console.error('No se pudo consumir crédito', error);
+      return false;
     }
-    await updateCredits();
-    return false;
   }
-  const n = parseInt(creditCountEl.textContent||'0',10) - 1;
-  creditCountEl.textContent = Math.max(0,n);
-  uploadBtn.disabled = n <= 0;
-  processBtn.disabled = n <= 0;
   return true;
 }
 
-/* ====== init ====== */
-window.addEventListener('DOMContentLoaded', async () => {
+function initCore(){
   restoreLocal();
   renderPreview();
-  const { data: { session } } = await sb.auth.getSession();
-  if(session){
-    loginScreen.style.display='none';
-    appWrap.style.display='block';
-    await updateCredits();
-  }
-});
+}
 
-sb.auth.onAuthStateChange(async (_evt, session)=>{
-  if(session){
-    loginScreen.style.display='none';
-    appWrap.style.display='block';
-    await updateCredits();
-  }else{
-    planChip.style.display='none';
-    creditsChip.style.display='none';
-    logoutBtn.style.display='none';
-    appWrap.style.display='none';
-    loginScreen.style.display='flex';
-    uploadBtn.disabled = true;
-    processBtn.disabled = true;
-  }
-});
+function setCreditDependentActionsEnabled(enabled){
+  if (uploadBtn) uploadBtn.disabled = !enabled;
+  if (processBtn) processBtn.disabled = !enabled;
+}
+
+window.AppCore = {
+  init: initCore,
+  requestCredit,
+  setCreditDependentActionsEnabled
+};
