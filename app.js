@@ -1415,6 +1415,24 @@ function getResidentialRowsForBatch(){
 // ====== Chatbot y gráfico de conexiones ======
 let graphNetwork = null;
 
+function refreshGraphSize(){
+  if (!graphNetwork || !graphEl) return;
+  const network = graphNetwork;
+  const el = graphEl;
+  requestAnimationFrame(() => {
+    if (!network || !el || graphNetwork !== network) return;
+    const width = el.clientWidth;
+    const height = el.clientHeight;
+    if (width > 0 && height > 0) {
+      network.setSize(`${width}px`, `${height}px`);
+    }
+    network.redraw();
+    try {
+      network.fit({ animation: false });
+    } catch (_) {}
+  });
+}
+
 function attachNumberLabels(network, nodeData){
   network.on('afterDrawing', ctx => {
     ctx.save();
@@ -1457,6 +1475,7 @@ function renderGraph(numbers){
     graphNetwork.setOptions({ physics: false });
   });
   attachNumberLabels(graphNetwork, nodeArr);
+  refreshGraphSize();
 }
 
 function renderBatchGraph(){
@@ -1497,6 +1516,7 @@ function renderBatchGraph(){
     graphNetwork.setOptions({ physics: false });
   });
   attachNumberLabels(graphNetwork, nodeArr);
+  refreshGraphSize();
 }
 
 function renderRelations(){
@@ -1572,10 +1592,13 @@ if (relBtn){
   relBtn.addEventListener('click', ()=>{
     if(!graphPanel) return;
     graphPanel.classList.toggle('fullscreen');
-    relBtn.textContent = graphPanel.classList.contains('fullscreen') ? 'Cerrar' : 'Pantalla completa';
-    if(graphNetwork) graphNetwork.redraw();
+    const isFull = graphPanel.classList.contains('fullscreen');
+    relBtn.textContent = isFull ? 'Cerrar' : 'Pantalla completa';
+    refreshGraphSize();
   });
 }
+
+window.addEventListener('resize', refreshGraphSize);
 
 async function updateCredits(){
   const { data: profile, error } = await sb.from('profiles').select('plan, credits').single();
@@ -1617,6 +1640,7 @@ loginForm?.addEventListener('submit', async (e)=>{
   loginScreen.style.display='none';
   appWrap.style.display='block';
   await updateCredits();
+  refreshGraphSize();
 });
 
 logoutBtn?.addEventListener('click', async ()=>{
@@ -1664,6 +1688,7 @@ window.addEventListener('DOMContentLoaded', async () => {
     loginScreen.style.display='none';
     appWrap.style.display='block';
     await updateCredits();
+    refreshGraphSize();
   }
 });
 
@@ -1672,6 +1697,7 @@ sb.auth.onAuthStateChange(async (_evt, session)=>{
     loginScreen.style.display='none';
     appWrap.style.display='block';
     await updateCredits();
+    refreshGraphSize();
   }else{
     planChip.style.display='none';
     creditsChip.style.display='none';
