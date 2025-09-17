@@ -30,7 +30,8 @@
       </label>
       <button id="loginBtn" class="btn login-primary">Entrar</button>
       <a id="loginBuyCredits" class="btn login-buy" href="https://wa.me/573126461216" target="_blank" rel="noopener">Comprar créditos</a>
-      <p class="buy-info">¿Quieres comprar créditos de <strong>WF TOOLS</strong>? Escríbenos al WhatsApp <a href="https://wa.me/573126461216" target="_blank" rel="noopener">312-646-1216</a>.</p>
+      <p class="buy-info">Escríbenos al WhatsApp <a href="https://wa.me/573126461216" target="_blank" rel="noopener">312-646-1216</a>.</p>
+      <button id="adminAccessBtn" type="button" class="admin-access-link">Ingreso administrado</button>
       <p id="loginLoading" class="loading-msg">Iniciando sesión...</p>
       <p id="loginError" class="error-msg"></p>
     </form>
@@ -287,18 +288,22 @@
       <section class="card panel span-6" id="graphPanel">
         <div class="graph-top">
           <h2>Relaciones</h2>
-          <div class="graph-actions">
-            <label for="graphLayoutSelect" class="graph-label">Organizar</label>
-            <select id="graphLayoutSelect" class="mini-input graph-select">
-              <option value="free">Automático</option>
-              <option value="hierarchical-lr">Jerárquico (Horizontal)</option>
-              <option value="hierarchical-ud">Jerárquico (Vertical)</option>
-            </select>
-            <button id="graphRefreshBtn" class="btn graph-refresh" type="button">Reordenar</button>
-            <button id="relBtn" class="graph-fullscreen-btn" type="button" aria-pressed="false">
-              <span class="icon" aria-hidden="true"></span>
-              <span class="text">Pantalla completa</span>
-            </button>
+          <div class="graph-controls">
+            <div class="graph-layout-group">
+              <label for="graphLayoutSelect" class="graph-label">Organizar</label>
+              <select id="graphLayoutSelect" class="mini-input graph-select">
+                <option value="free">Automático</option>
+                <option value="hierarchical-lr">Jerárquico (Horizontal)</option>
+                <option value="hierarchical-ud">Jerárquico (Vertical)</option>
+              </select>
+            </div>
+            <div class="graph-button-group">
+              <button id="graphRefreshBtn" class="btn graph-refresh" type="button">Reordenar</button>
+              <button id="relBtn" class="graph-fullscreen-btn" type="button" aria-pressed="false">
+                <span class="icon" aria-hidden="true"></span>
+                <span class="text">Pantalla completa</span>
+              </button>
+            </div>
           </div>
         </div>
         <div id="colorControls" class="color-controls"></div>
