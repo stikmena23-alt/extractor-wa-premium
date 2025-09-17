@@ -374,7 +374,7 @@ body[data-theme="light"] .btn{ color:#0a223d }
   box-shadow: 0 10px 24px rgba(250, 204, 21, .3), 0 0 0 1px rgba(255,255,255,.08) inset;
 }
 
-#clearBtn{ margin-left:auto; }
+#clearBtn{ margin-left:auto; min-width:clamp(140px, 18vw, 220px); }
 
 /* =========================
    Switch
@@ -641,6 +641,7 @@ body[data-theme="light"] .btn{ color:#0a223d }
   .row{ gap:12px; }
   .field.small-field{ flex:1 1 100%; min-width:0; }
   .topbar .row{ flex-direction:column; align-items:stretch; gap:12px; }
+  .topbar .field.small-field{ flex-direction:column; align-items:flex-start; gap:6px; min-width:0; }
   .topbar .row .actions.one-line{
     margin-left:0;
     justify-content:flex-start;
@@ -739,6 +740,11 @@ body[data-theme="light"] .btn{ color:#0a223d }
    Ajustes extra / topbar
    ========================= */
 .topbar + .grid{ margin-top:clamp(8px,1.5vh,18px) }
+.topbar .row{ align-items:center; gap:clamp(12px,1.5vw,22px); }
+.topbar .row > *{ align-self:center; }
+.topbar .field.small-field{ flex-direction:row; align-items:center; gap:12px; flex:1 1 220px; min-width:220px; }
+.topbar .field.small-field > span{ font-weight:600; white-space:nowrap; }
+.topbar .field.small-field .switch{ margin-left:auto; }
 .topbar .row .actions.one-line{ margin-left:auto; justify-content:flex-end }
 
 /* =========================
