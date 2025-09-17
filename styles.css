@@ -250,10 +250,13 @@ p{ margin:8px 0 }
 /* =========================
    Formularios / Inputs
    ========================= */
-.row{ display:flex; align-items:center; gap:var(--gap); flex-wrap:wrap }
+.row{ display:flex; align-items:center; gap:var(--gap); flex-wrap:wrap; width:100%; }
 .small-row{ gap:6px }
 .field{ display:flex; flex-direction:column; gap:6px; }
 .field.small-field{ flex:0 0 auto; min-width:220px; }
+
+#dropZone .row .field{ flex:1 1 0; min-width:min(260px,100%); }
+#dropZone .row .field input{ width:100%; }
 
 textarea, input, select{
   appearance:none; -webkit-appearance:none; -moz-appearance:none;
@@ -365,6 +368,13 @@ body[data-theme="light"] .btn{ color:#0a223d }
   background: linear-gradient(90deg, var(--danger), #f43f5e);
   color:#3b0a14;
 }
+.btn.yellow{
+  background: linear-gradient(90deg, #facc15, #eab308);
+  color:#3b2500;
+  box-shadow: 0 10px 24px rgba(250, 204, 21, .3), 0 0 0 1px rgba(255,255,255,.08) inset;
+}
+
+#clearBtn{ margin-left:auto; }
 
 /* =========================
    Switch
@@ -598,13 +608,15 @@ body[data-theme="light"] .btn{ color:#0a223d }
    ========================= */
 .footer{ text-align:center; margin-top:auto; color:var(--text-2); padding:12px 0 16px; }
 .footer .sig{
-  font-family:'Orbitron', ui-sans-serif;
-  font-size:clamp(10px,1.05vw,12px);
-  letter-spacing:1.4px; text-transform:uppercase;
-  background:linear-gradient(90deg, #7fd3ff, #8ad1ff);
-  -webkit-background-clip:text; background-clip:text;
-  color:transparent; opacity:.95;
+  font-family:'Space Grotesk', 'Orbitron', ui-sans-serif;
+  font-weight:700;
+  font-size:clamp(11px,1.25vw,14px);
+  letter-spacing:1.2px;
+  text-transform:uppercase;
+  color:var(--text-1);
+  text-shadow:0 0 18px rgba(14,165,233,.28);
 }
+.footer .sig strong{ font-weight:800; }
 .links{ display:flex; gap:8px; justify-content:center; align-items:center; flex-wrap:wrap; }
 .links .muted{ opacity:.9 }
 .dot{ opacity:.55 }
@@ -638,6 +650,7 @@ body[data-theme="light"] .btn{ color:#0a223d }
     align-items:stretch;
     gap:10px;
   }
+  #clearBtn{ margin-left:0; }
   .row.actions.one-line .chip{
     align-self:stretch;
     display:flex;
