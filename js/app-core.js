@@ -1645,6 +1645,21 @@ if (graphRefreshBtn){
   });
 }
 
+let graphResizeTimer = null;
+if (typeof window !== 'undefined'){
+  window.addEventListener('resize', () => {
+    if (!graphNetwork) return;
+    if (graphResizeTimer) clearTimeout(graphResizeTimer);
+    graphResizeTimer = setTimeout(() => {
+      graphResizeTimer = null;
+      try {
+        graphNetwork.redraw();
+        graphNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
+      } catch {}
+    }, 160);
+  });
+}
+
 setGraphControlsEnabled(false);
 
 async function requestCredit(){
