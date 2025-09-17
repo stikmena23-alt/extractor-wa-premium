@@ -691,7 +691,7 @@ body[data-theme="light"] .btn{ color:#0a223d }
   .graph-button-group{
     width:100%;
     margin-left:0;
-    justify-content:stretch;
+    align-items:stretch;
     gap:10px;
   }
   .graph-button-group .graph-refresh,
@@ -1329,6 +1329,29 @@ body[data-theme="light"] .table thead th{
 .chat-log p.bot{ color:var(--text-1); }
 .chat-input{ display:flex; gap:8px; }
 .chat-input input{ flex:1; }
+.chat-hints{
+  margin-top:12px;
+  padding:12px 14px;
+  border:1px solid var(--border);
+  border-radius:var(--radius-sm);
+  background:rgba(148,163,184,.08);
+  color:var(--text-2);
+  font-size:.92rem;
+  line-height:1.45;
+}
+.chat-hints-title{
+  margin:0 0 6px;
+  font-weight:600;
+  color:var(--text-1);
+}
+.chat-hints ul{
+  margin:0;
+  padding-left:18px;
+  display:flex;
+  flex-direction:column;
+  gap:4px;
+}
+.chat-hints li strong{ color:var(--text-1); }
 
 #graphPanel{
   display:flex;
@@ -1374,9 +1397,9 @@ body[data-theme="light"] .table thead th{
 
 .graph-button-group{
   display:flex;
-  align-items:center;
+  flex-direction:column;
+  align-items:stretch;
   gap:10px;
-  flex-wrap:wrap;
   margin-left:auto;
 }
 
