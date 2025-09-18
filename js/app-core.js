@@ -109,7 +109,14 @@ let currentServiceInfo = {
 };
 
 // =================== CONFIG SERVER (Supabase Edge Functions) ===================
-const EDGE_BASE = '/functions/v1'; // Ajusta si llamas directo a Supabase URL
+
+// Detecta local vs prod y usa el host correcto de Functions
+const IS_LOCAL = /localhost|127\.0\.0\.1/.test(location.host);
+
+const EDGE_BASE = IS_LOCAL
+  ? 'http://localhost:54321/functions/v1'              // emulador local
+  : 'https://htkwcjhcuqyepclpmpsv.functions.supabase.co'; // PRODUCCIÓN
+
 const EXTRACT_HTML_URL = `${EDGE_BASE}/smart-extract`;
 const EXTRACT_ZIP_URL  = `${EDGE_BASE}/smart-extract-zip`;
 
