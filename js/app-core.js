@@ -77,6 +77,7 @@ const filePicker = document.getElementById("filePicker");
 let currentContacts = [];
 let batch = [];
 let currentCounts = { read:0, duplicates:0, countsMap:{} };
+let isImportingFiles = false;
 let settings = {
   theme: 'dark',
   anonymize: false,
@@ -271,47 +272,79 @@ async function processZipFile(file){
 
 async function handleDroppedFiles(fileList){
   const files = Array.from(fileList || []);
-  if (!files.length) return;
+  if (!files.length) return false;
 
-  const zipFiles = files.filter(f => /\.zip$/i.test(f.name));
-  const textFiles = files.filter(f => /\.(txt|csv|html?)$/i.test(f.name));
+  if (isImportingFiles){
+    alert("Ya hay una importación en curso. Espera a que finalice.");
+    return false;
+  }
 
-  const parts = [];
+  isImportingFiles = true;
+  if (dropZone) dropZone.classList.add('processing');
 
-  if (zipFiles.length){
-    for (const z of zipFiles){
-      const res = await processZipFile(z);
-      if (res){
-        parts.push(res.html);
-        if (res.ai) accountIdEl.value = res.ai;
+  const previousAccountId = accountIdEl ? accountIdEl.value : "";
+  let pendingAccountId = null;
+
+  try {
+    const zipFiles = files.filter(f => /\.zip$/i.test(f.name));
+    const textFiles = files.filter(f => /\.(txt|csv|html?)$/i.test(f.name));
+
+    const parts = [];
+
+    if (zipFiles.length){
+      for (const z of zipFiles){
+        const res = await processZipFile(z);
+        if (res){
+          parts.push(res.html);
+          if (res.ai && !pendingAccountId) pendingAccountId = res.ai;
+        }
       }
     }
-  }
 
-  if (textFiles.length){
-    for (const f of textFiles){
-      try{ parts.push(await readFileAsText(f)); }
-      catch{ logError('file_read'); }
+    if (textFiles.length){
+      for (const f of textFiles){
+        try{ parts.push(await readFileAsText(f)); }
+        catch{ logError('file_read'); }
+      }
     }
-  }
 
-  if (parts.length){
+    if (!parts.length){
+      logError('no_files');
+      const msg = "No se detectaron archivos compatibles. Arrastra un .zip con records.html o .txt/.csv/.html.";
+      alert(errorStats.no_files > 1 ? msg + " Revisa que sean archivos válidos." : msg);
+      if (accountIdEl) accountIdEl.value = previousAccountId;
+      return false;
+    }
+
     const merged = parts.join("\n\n");
-    const ai = extractAccountIdentifierFromHtml(merged);
-    if (ai) accountIdEl.value = ai;
+    const extractedAi = extractAccountIdentifierFromHtml(merged);
+    if (extractedAi) pendingAccountId = extractedAi;
+
+    const finalAccountId = pendingAccountId || previousAccountId;
+    if (accountIdEl) accountIdEl.value = finalAccountId;
+
     const srcSan = sanitizeSource(merged);
+    const nextContacts = textToContacts(srcSan);
+    const nextCounts = countOccurrences(srcSan);
+
+    const ok = await requestCredit();
+    if (!ok){
+      if (accountIdEl) accountIdEl.value = previousAccountId;
+      alert("No se pudo consumir un crédito. Verifica tu sesión o tus créditos disponibles.");
+      return false;
+    }
+
     inputText.value = merged;
-    currentContacts = textToContacts(srcSan);
-    currentCounts = countOccurrences(srcSan);
+    currentContacts = nextContacts;
+    currentCounts = nextCounts;
     renderPreview();
     extractServiceInfoFromSource(merged); // ← hará reset y luego parseará
     alert("Archivos cargados. Vista previa actualizada.");
-    return;
+    return true;
+  } finally {
+    if (dropZone) dropZone.classList.remove('processing');
+    isImportingFiles = false;
   }
-
-  logError('no_files');
-  const msg = "No se detectaron archivos compatibles. Arrastra un .zip con records.html o .txt/.csv/.html.";
-  alert(errorStats.no_files > 1 ? msg + " Revisa que sean archivos válidos." : msg);
 }
 
 // =================== RENDER PREVIEW ===================
@@ -670,8 +703,7 @@ if (dropZone){
     dropZone.classList.remove('dragging'); dragCounter = 0;
     const dt = e.dataTransfer; if (!dt) return;
     if (dt.files && dt.files.length){
-      const ok = await requestCredit();
-      if(ok) await handleDroppedFiles(dt.files);
+      await handleDroppedFiles(dt.files);
     } else alert("Suelta archivos válidos (.zip con records.html, o .txt/.csv/.html).");
   });
 }
@@ -682,8 +714,7 @@ if (uploadBtn && filePicker){
   filePicker.addEventListener('change', async (e) => {
     const files = e.target.files;
     if (files && files.length){
-      const ok = await requestCredit();
-      if(ok) await handleDroppedFiles(files);
+      await handleDroppedFiles(files);
     }
     filePicker.value = "";
   });

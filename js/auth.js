@@ -40,11 +40,15 @@
   const sessionModalTitle = document.getElementById("sessionModalTitle");
   const sessionModalMessage = document.getElementById("sessionModalMessage");
   const sessionModalClose = document.getElementById("sessionModalClose");
+  const bodyEl = document.body;
+  const sessionLoading = document.getElementById("sessionLoading");
+  const sessionLoadingMessage = document.getElementById("sessionLoadingMessage");
 
   let lastCreditsValue = null;
   let maxCreditsSeen = 0;
   let toastTimeout = null;
   let pendingWelcomeEmail = null;
+  const creditFormatter = new Intl.NumberFormat("es-CO");
 
   function toggleLoginButton(disabled) {
     if (loginBtn) loginBtn.disabled = !!disabled;
@@ -52,6 +56,37 @@
 
   function toggleLogoutButton(disabled) {
     if (logoutBtn) logoutBtn.disabled = !!disabled;
+  }
+
+  function setSessionLoadingState(active, message) {
+    if (sessionLoadingMessage && message) {
+      sessionLoadingMessage.textContent = message;
+    }
+    if (sessionLoading) {
+      sessionLoading.setAttribute("aria-busy", active ? "true" : "false");
+      sessionLoading.hidden = !active;
+    }
+    if (bodyEl) {
+      bodyEl.classList.toggle("is-checking-session", !!active);
+    }
+  }
+
+  function formatCreditsValue(value) {
+    const numeric = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
+    return creditFormatter.format(numeric);
+  }
+
+  function readCreditsFromText(text) {
+    if (!text) return 0;
+    const digits = text.replace(/\D+/g, "");
+    return digits ? parseInt(digits, 10) : 0;
+  }
+
+  function getCreditsFromUi() {
+    if (Number.isFinite(lastCreditsValue)) return lastCreditsValue;
+    if (creditCountEl) return readCreditsFromText(creditCountEl.textContent || "");
+    if (userCreditsEl) return readCreditsFromText(userCreditsEl.textContent || "");
+    return 0;
   }
 
   function setSessionStatusMessage(message, state) {
@@ -140,7 +175,9 @@
     if (!creditStatusEl) return;
     const hasValue = typeof rawCredits === "number" && Number.isFinite(rawCredits);
     if (!hasValue) {
-      if (userCreditsEl) userCreditsEl.textContent = "0";
+      const zeroFormatted = formatCreditsValue(0);
+      if (userCreditsEl) userCreditsEl.textContent = zeroFormatted;
+      if (creditCountEl) creditCountEl.textContent = zeroFormatted;
       creditStatusEl.dataset.state = "idle";
       if (creditBarEl) {
         creditBarEl.setAttribute("aria-valuenow", "0");
@@ -157,7 +194,9 @@
     }
 
     const credits = Math.max(0, Math.floor(rawCredits));
-    if (userCreditsEl) userCreditsEl.textContent = String(credits);
+    const formattedCredits = formatCreditsValue(credits);
+    if (userCreditsEl) userCreditsEl.textContent = formattedCredits;
+    if (creditCountEl) creditCountEl.textContent = formattedCredits;
 
     maxCreditsSeen = Math.max(maxCreditsSeen, credits);
     const maxForBar = maxCreditsSeen || credits || 1;
@@ -169,20 +208,20 @@
     }
 
     let state = "success";
-    let message = `Saldo disponible: ${credits} crédito${credits === 1 ? "" : "s"}.`;
+    let message = `Saldo disponible: ${formattedCredits} crédito${credits === 1 ? "" : "s"}.`;
 
     if (credits === 0) {
       state = "danger";
       message = "Sin créditos disponibles. Escríbenos al +57 312 646 1216 para recargar.";
     } else if (credits <= 3) {
       state = "danger";
-      message = `Te quedan ${credits} crédito${credits === 1 ? "" : "s"}. Escríbenos al +57 312 646 1216 para recargar.`;
+      message = `Te quedan ${formattedCredits} crédito${credits === 1 ? "" : "s"}. Escríbenos al +57 312 646 1216 para recargar.`;
     } else if (credits <= 8) {
       state = "warning";
-      message = `Te quedan ${credits} créditos. Ve preparando una recarga.`;
+      message = `Te quedan ${formattedCredits} créditos. Ve preparando una recarga.`;
     } else if (credits <= 15) {
       state = "success";
-      message = `Saldo moderado: ${credits} créditos disponibles.`;
+      message = `Saldo moderado: ${formattedCredits} créditos disponibles.`;
     }
 
     creditStatusEl.dataset.state = state;
@@ -223,7 +262,6 @@
     if (planNameEl) planNameEl.textContent = "-";
     if (userPlanEl) userPlanEl.textContent = "-";
     if (creditsChip) creditsChip.style.display = "none";
-    if (creditCountEl) creditCountEl.textContent = "0";
     renderCreditState(null);
     if (logoutBtn) {
       logoutBtn.style.display = "none";
@@ -233,6 +271,7 @@
   }
 
   function showLoginUI(message, state) {
+    setSessionLoadingState(false);
     if (appWrap) appWrap.style.display = "none";
     if (loginScreen) loginScreen.style.display = "flex";
     clearCreditsUI();
@@ -248,6 +287,7 @@
   }
 
   function showAppUI() {
+    setSessionLoadingState(false);
     if (loginScreen) loginScreen.style.display = "none";
     if (appWrap) appWrap.style.display = "block";
     resetLoginForm();
@@ -264,14 +304,11 @@
       planChip.style.display = "inline-block";
     }
     const numericCredits = Number(profile.credits);
-    if (Number.isFinite(numericCredits) && creditCountEl) {
-      creditCountEl.textContent = String(Math.max(0, Math.floor(numericCredits)));
-    }
     if (creditsChip) creditsChip.style.display = "inline-block";
     if (logoutBtn) logoutBtn.style.display = "inline-block";
-    const safeCredits = Number.isFinite(numericCredits) ? numericCredits : null;
-    global.AppCore?.setCreditDependentActionsEnabled((safeCredits || 0) > 0);
+    const safeCredits = Number.isFinite(numericCredits) ? Math.max(0, Math.floor(numericCredits)) : null;
     renderCreditState(safeCredits);
+    global.AppCore?.setCreditDependentActionsEnabled((safeCredits || 0) > 0);
   }
 
   async function updateCredits() {
@@ -359,13 +396,10 @@
       return false;
     }
 
-    const currentUi = creditCountEl ? parseInt(creditCountEl.textContent || "0", 10) : (lastCreditsValue ?? 0);
-    const next = Math.max(0, (Number.isFinite(currentUi) ? currentUi : 0) - 1);
-    if (creditCountEl) {
-      creditCountEl.textContent = String(next);
-    }
-    global.AppCore?.setCreditDependentActionsEnabled(next > 0);
+    const currentUi = getCreditsFromUi();
+    const next = Math.max(0, currentUi - 1);
     renderCreditState(next);
+    global.AppCore?.setCreditDependentActionsEnabled(next > 0);
     return true;
   }
 
@@ -374,9 +408,18 @@
     loginForm?.addEventListener("submit", handleLoginSubmit);
     logoutBtn?.addEventListener("click", handleLogout);
 
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    setSessionLoadingState(true, "Verificando tu sesión...");
+
+    let session = null;
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Error obteniendo la sesión", error);
+      }
+      session = data?.session || null;
+    } catch (err) {
+      console.error("No se pudo verificar la sesión actual", err);
+    }
 
     updateUserIdentity(session?.user || null);
 

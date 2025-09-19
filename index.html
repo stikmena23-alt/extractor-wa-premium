@@ -17,7 +17,12 @@
   <link rel="stylesheet" href="styles.css"/>
   
 </head>
-<body>
+<body class="is-checking-session">
+  <div id="sessionLoading" class="session-loading" role="status" aria-live="polite" aria-busy="true">
+    <div class="session-loading__spinner" aria-hidden="true"></div>
+    <p id="sessionLoadingMessage" class="session-loading__message">Verificando tu sesión...</p>
+    <p class="session-loading__hint">Por favor espera un momento.</p>
+  </div>
   <!-- Pantalla de inicio de sesión -->
   <div id="loginScreen" class="login-screen">
     <form id="loginForm" class="login-card">
