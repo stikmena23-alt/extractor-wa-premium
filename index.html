@@ -34,10 +34,20 @@
         <span>Correo/usuario</span>
         <input type="email" id="loginEmail" placeholder="usuario@correo.com" autocomplete="username" autofocus required />
       </label>
-      <label class="field">
+      <label class="field password-field">
         <span>Contraseña</span>
-        <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password" required />
+        <div class="input-affix">
+          <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password" required />
+          <button type="button" id="loginTogglePassword" class="input-affix__action" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
+        </div>
       </label>
+      <div class="login-extras">
+        <label class="remember-option" for="loginRemember">
+          <input type="checkbox" id="loginRemember" />
+          <span class="remember-option__decor" aria-hidden="true"></span>
+          <span class="remember-option__label">Recordar usuario</span>
+        </label>
+      </div>
       <button id="loginBtn" class="btn login-primary">Entrar</button>
       <a id="loginBuyCredits" class="btn login-buy" href="https://wa.me/573126461216" target="_blank" rel="noopener">Comprar créditos</a>
       <p class="buy-info">¿Quieres comprar créditos de <strong>WF TOOLS</strong>? Escríbenos al WhatsApp <a href="https://wa.me/573126461216" target="_blank" rel="noopener">312-646-1216</a>🟢</p>

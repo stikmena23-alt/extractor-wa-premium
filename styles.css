@@ -1862,6 +1862,128 @@ body[data-theme="light"] .session-modal-icon{
   box-shadow: 0 0 0 4px rgba(14,165,233,.18);
 }
 
+.password-field #loginPassword{
+  padding-right:96px;
+}
+
+.password-field .input-affix{
+  position:relative;
+}
+
+.password-field .input-affix input{
+  width:100%;
+}
+
+.input-affix__action{
+  position:absolute;
+  top:50%;
+  right:12px;
+  transform:translateY(-50%);
+  border:0;
+  border-radius:10px;
+  background:rgba(148,163,184,.16);
+  color:var(--text-2);
+  font-weight:600;
+  font-size:.85rem;
+  padding:6px 12px;
+  cursor:pointer;
+  transition: background-color .15s ease, color .15s ease, box-shadow .18s ease;
+}
+
+.input-affix__action:hover{
+  background:rgba(14,165,233,.18);
+  color:var(--pri);
+}
+
+.input-affix__action[aria-pressed="true"]{
+  background:rgba(14,165,233,.24);
+  color:var(--pri);
+}
+
+.input-affix__action:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 3px rgba(14,165,233,.28);
+}
+
+.login-extras{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-top:-4px;
+}
+
+.remember-option{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  cursor:pointer;
+  font-size:.95rem;
+  color:var(--text-2);
+  user-select:none;
+}
+
+.remember-option input{
+  position:absolute;
+  opacity:0;
+  pointer-events:none;
+}
+
+.remember-option__decor{
+  width:22px;
+  height:22px;
+  border-radius:8px;
+  border:1.5px solid rgba(148,163,184,.6);
+  background:rgba(15,23,42,.28);
+  display:grid;
+  place-items:center;
+  transition: border-color .2s ease, background-color .2s ease, transform .2s ease;
+}
+
+[data-theme="light"] .remember-option__decor{
+  background:rgba(255,255,255,.85);
+  border-color:rgba(15,23,42,.25);
+}
+
+.remember-option__decor::after{
+  content:"";
+  width:10px;
+  height:10px;
+  border-radius:3px;
+  background:linear-gradient(135deg, var(--pri), var(--sec));
+  opacity:0;
+  transform:scale(.5);
+  transition:opacity .18s ease, transform .18s ease;
+}
+
+.remember-option input:checked + .remember-option__decor{
+  border-color:rgba(14,165,233,.65);
+  background:rgba(14,165,233,.12);
+  transform:translateY(-1px);
+}
+
+.remember-option input:checked + .remember-option__decor::after{
+  opacity:1;
+  transform:scale(1);
+}
+
+.remember-option:focus-within .remember-option__decor{
+  box-shadow:0 0 0 3px rgba(14,165,233,.28);
+  border-color:rgba(14,165,233,.65);
+}
+
+.remember-option__label{
+  font-weight:600;
+}
+
+.remember-option.is-disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
+.remember-option.is-disabled .remember-option__decor{
+  box-shadow:none;
+}
+
 .login-primary,
 .login-buy{
   width:100%;

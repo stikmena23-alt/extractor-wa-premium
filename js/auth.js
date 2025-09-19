@@ -18,6 +18,8 @@
   const loginForm = document.getElementById("loginForm");
   const loginEmail = document.getElementById("loginEmail");
   const loginPassword = document.getElementById("loginPassword");
+  const loginTogglePassword = document.getElementById("loginTogglePassword");
+  const loginRemember = document.getElementById("loginRemember");
   const loginBtn = document.getElementById("loginBtn");
   const loginError = document.getElementById("loginError");
   const loginLoading = document.getElementById("loginLoading");
@@ -49,6 +51,22 @@
   let toastTimeout = null;
   let pendingWelcomeEmail = null;
   const creditFormatter = new Intl.NumberFormat("es-CO");
+  const REMEMBER_KEY = "wf-tools.login.remembered-email";
+  const STORAGE_TEST_KEY = "wf-tools.login.storage-test";
+  const storage = global.localStorage;
+  let storageAvailable = false;
+
+  try {
+    if (storage) {
+      const testValue = String(Date.now());
+      storage.setItem(STORAGE_TEST_KEY, testValue);
+      const storedValue = storage.getItem(STORAGE_TEST_KEY);
+      storage.removeItem(STORAGE_TEST_KEY);
+      storageAvailable = storedValue === testValue;
+    }
+  } catch (_err) {
+    storageAvailable = false;
+  }
 
   function toggleLoginButton(disabled) {
     if (loginBtn) loginBtn.disabled = !!disabled;
@@ -252,6 +270,54 @@
     showError("");
     showLoading(false);
     toggleLoginButton(false);
+    restoreRememberedEmail();
+    resetPasswordToggle();
+  }
+
+  function setRememberedEmail(value) {
+    if (!storageAvailable) return;
+    try {
+      if (value) {
+        storage.setItem(REMEMBER_KEY, value);
+      }
+    } catch (err) {
+      console.warn("No se pudo recordar el correo", err);
+    }
+  }
+
+  function clearRememberedEmail() {
+    if (!storageAvailable) return;
+    try {
+      storage.removeItem(REMEMBER_KEY);
+    } catch (err) {
+      console.warn("No se pudo limpiar el correo recordado", err);
+    }
+  }
+
+  function restoreRememberedEmail() {
+    if (!storageAvailable || !loginEmail) return;
+    try {
+      const remembered = storage.getItem(REMEMBER_KEY);
+      if (remembered) {
+        loginEmail.value = remembered;
+        if (loginRemember) loginRemember.checked = true;
+      } else if (loginRemember) {
+        loginRemember.checked = false;
+      }
+    } catch (err) {
+      if (loginRemember) loginRemember.checked = false;
+    }
+  }
+
+  function resetPasswordToggle() {
+    if (loginTogglePassword) {
+      loginTogglePassword.textContent = "Mostrar";
+      loginTogglePassword.setAttribute("aria-pressed", "false");
+      loginTogglePassword.setAttribute("aria-label", "Mostrar contraseña");
+    }
+    if (loginPassword) {
+      loginPassword.type = "password";
+    }
   }
 
   function clearCreditsUI() {
@@ -338,6 +404,12 @@
       return;
     }
 
+    if (loginRemember?.checked) {
+      setRememberedEmail(email);
+    } else {
+      clearRememberedEmail();
+    }
+
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     showLoading(false);
     toggleLoginButton(false);
@@ -407,6 +479,51 @@
     global.AppCore?.setCreditDependentActionsEnabled(false);
     loginForm?.addEventListener("submit", handleLoginSubmit);
     logoutBtn?.addEventListener("click", handleLogout);
+    restoreRememberedEmail();
+    resetPasswordToggle();
+
+    if (!storageAvailable && loginRemember) {
+      loginRemember.checked = false;
+      loginRemember.disabled = true;
+      loginRemember.closest?.(".remember-option")?.classList.add("is-disabled");
+    }
+
+    loginEmail?.addEventListener("blur", () => {
+      const email = loginEmail.value.trim();
+      if (email && loginRemember?.checked) {
+        setRememberedEmail(email);
+      }
+    });
+
+    loginRemember?.addEventListener("change", () => {
+      if (!loginRemember.checked) {
+        clearRememberedEmail();
+        return;
+      }
+      const email = loginEmail?.value.trim();
+      if (email) {
+        setRememberedEmail(email);
+      }
+    });
+
+    loginTogglePassword?.addEventListener("click", () => {
+      if (!loginPassword) return;
+      const isVisible = loginPassword.type === "text";
+      loginPassword.type = isVisible ? "password" : "text";
+      const label = isVisible ? "Mostrar contraseña" : "Ocultar contraseña";
+      if (loginTogglePassword) {
+        loginTogglePassword.textContent = isVisible ? "Mostrar" : "Ocultar";
+        loginTogglePassword.setAttribute("aria-pressed", isVisible ? "false" : "true");
+        loginTogglePassword.setAttribute("aria-label", label);
+      }
+      if (!isVisible) {
+        try {
+          loginPassword.focus({ preventScroll: true });
+        } catch (_err) {
+          loginPassword.focus();
+        }
+      }
+    });
 
     setSessionLoadingState(true, "Verificando tu sesión...");
 
