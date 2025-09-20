@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Planes de Créditos | CrediBoost para WF Tools</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Orbitron:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <meta name="theme-color" content="#07090f" />
+</head>
+<body>
+  <header class="site-header">
+    <div class="brand">
+      <div class="brand-logo" aria-hidden="true">
+        <svg viewBox="0 0 120 120" class="logo-svg" role="img" aria-label="Logo">
+          <defs>
+            <filter id="glow">
+              <feGaussianBlur stdDeviation="3.5" result="coloredBlur"/>
+              <feMerge>
+                <feMergeNode in="coloredBlur"/>
+                <feMergeNode in="SourceGraphic"/>
+              </feMerge>
+            </filter>
+            <linearGradient id="g" x1="0" x2="1" y1="0" y2="1">
+              <stop offset="0%" stop-color="#21e4ff"/>
+              <stop offset="100%" stop-color="#6b8cff"/>
+            </linearGradient>
+          </defs>
+          <polygon filter="url(#glow)" fill="url(#g)" points="60,6 110,36 110,84 60,114 10,84 10,36" />
+          <text x="50%" y="56%" text-anchor="middle" font-family="Orbitron, sans-serif" font-size="42" fill="#0b1220">CB</text>
+        </svg>
+      </div>
+      <div class="brand-text">
+        <h1 class="title">CrediBoost&nbsp;<span class="for-app">para WF TOOLS</span></h1>
+        <p class="subtitle">Créditos rápidos para potenciar tu experiencia.</p>
+      </div>
+    </div>
+    <nav class="top-actions">
+      <button class="btn ghost" id="toggleTheme" aria-pressed="false" title="Cambiar tema">🌓 Tema</button>
+      <a class="btn outline" href="#planes">Ver planes</a>
+    </nav>
+  </header>
+
+  <section class="hero">
+    <div class="hero-inner">
+      <h2 class="hero-title">Compra créditos WF TOOLS a <span class="price-highlight">$10,000</span> COP</h2>
+      <p class="hero-lead hero-lead--spaced">
+        Elige entre <strong>paquetes</strong> con bonos irresistibles (entre <strong>$100,000</strong> y <strong>$2,000,000</strong>) para potenciar tu cuenta de WF&nbsp;TOOLS.
+      </p>
+      <div class="hero-cta hero-cta--lower">
+        <a class="btn primary btn-lg" href="#planes">🔥 Ver Promociones</a>
+        <button class="btn outline btn-lg" id="openHowWorks">¿Cómo funciona?</button>
+      </div>
+      <p class="pricing-inline pricing-inline--hero">
+        Precios en COP. <strong>1 crédito = $10,000</strong>. Bonos sujetos a disponibilidad y vigencia de campaña.
+      </p>
+      <div class="badge-limited" aria-label="Promoción por tiempo limitado">⏳ Bonos por tiempo limitado</div>
+    </div>
+  </section>
+
+  <main id="planes" class="plans">
+    <!-- PRIMER BLOQUE (visible): Mini, Inicial, Pro -->
+    <div class="plans-grid">
+      <!-- 1. Mini -->
+      <article class="card plan">
+        <div class="plan-header">
+          <h3>Paquete Mini</h3><span class="chip">Ahorro</span>
+        </div>
+        <p class="plan-price"><span class="price">$100,000</span><span class="note">Incluye 10 créditos</span></p>
+        <ul class="plan-features">
+          <li>+ <strong>1 crédito</strong> de regalo</li>
+          <li>Total: <strong>11 créditos</strong></li>
+          <li>Ahorro equivalente: <strong>$10,000</strong></li>
+        </ul>
+        <div class="plan-cta">
+          <a class="btn primary w-full" href="#" data-plan="Mini" data-amount="100000" data-credits="11">Comprar</a>
+          <button class="btn outline w-full" data-details="Mini">Ver detalles</button>
+        </div>
+      </article>
+
+      <!-- 2. Inicial -->
+      <article class="card plan">
+        <div class="plan-header">
+          <h3>Paquete Inicial</h3><span class="chip">Popular</span>
+        </div>
+        <p class="plan-price"><span class="price">$300,000</span><span class="note">Incluye 30 créditos</span></p>
+        <ul class="plan-features">
+          <li>+ <strong>3 créditos</strong> de regalo</li>
+          <li>Total: <strong>33 créditos</strong></li>
+          <li>Ahorro equivalente: <strong>$30,000</strong></li>
+        </ul>
+        <div class="plan-cta">
+          <a class="btn primary w-full" href="#" data-plan="Inicial" data-amount="300000" data-credits="33">Comprar</a>
+          <button class="btn outline w-full" data-details="Inicial">Ver detalles</button>
+        </div>
+      </article>
+
+      <!-- 3. Pro (destacado) -->
+      <article class="card plan featured" aria-label="Plan recomendado">
+        <div class="ribbon">Mejor valor 🔥</div>
+        <div class="plan-header"><h3>Paquete Pro</h3></div>
+        <p class="plan-price"><span class="price">$500,000</span><span class="note">Incluye 50 créditos</span></p>
+        <ul class="plan-features">
+          <li>+ <strong>10 créditos</strong> de regalo</li>
+          <li>Total: <strong>60 créditos</strong></li>
+          <li>Ahorro equivalente: <strong>$100,000</strong></li>
+        </ul>
+        <div class="plan-cta">
+          <a class="btn primary w-full" href="#" data-plan="Pro" data-amount="500000" data-credits="60">Comprar</a>
+          <button class="btn outline w-full" data-details="Pro">Ver detalles</button>
+        </div>
+      </article>
+    </div>
+
+    <!-- BLOQUE OCULTO: Plus, Premium, Titán -->
+    <div id="moreDivider" class="plans-divider" hidden></div>
+
+    <div id="morePlans" class="plans-grid" hidden>
+      <!-- 4. Plus -->
+      <article class="card plan">
+        <div class="plan-header"><h3>Paquete Plus</h3><span class="chip">Volumen</span></div>
+        <p class="plan-price"><span class="price">$700,000</span><span class="note">Incluye 70 créditos</span></p>
+        <ul class="plan-features">
+          <li>+ <strong>14 créditos</strong> de regalo</li>
+          <li>Total: <strong>84 créditos</strong></li>
+          <li>Ahorro equivalente: <strong>$140,000</strong></li>
+        </ul>
+        <div class="plan-cta">
+          <a class="btn primary w-full" href="#" data-plan="Plus" data-amount="700000" data-credits="84">Comprar</a>
+          <button class="btn outline w-full" data-details="Plus">Ver detalles</button>
+        </div>
+      </article>
+
+      <!-- 5. Premium -->
+      <article class="card plan">
+        <div class="plan-header"><h3>Paquete Premium</h3><span class="chip">Empresas</span></div>
+        <p class="plan-price"><span class="price">$1,000,000</span><span class="note">Incluye 100 créditos</span></p>
+        <ul class="plan-features">
+          <li>+ <strong>30 créditos</strong> de regalo</li>
+          <li>Total: <strong>130 créditos</strong></li>
+          <li>Ahorro equivalente: <strong>$300,000</strong></li>
+        </ul>
+        <div class="plan-cta">
+          <a class="btn primary w-full" href="#" data-plan="Premium" data-amount="1000000" data-credits="130">Comprar</a>
+          <button class="btn outline w-full" data-details="Premium">Ver detalles</button>
+        </div>
+      </article>
+
+      <!-- 6. Titán -->
+      <article class="card plan">
+        <div class="plan-header"><h3>Paquete Titán</h3><span class="chip">Alta Demanda</span></div>
+        <p class="plan-price"><span class="price">$2,000,000</span><span class="note">Incluye 200 créditos</span></p>
+        <ul class="plan-features">
+          <li>+ <strong>80 créditos</strong> de regalo</li>
+          <li>Total: <strong>280 créditos</strong></li>
+          <li>Ahorro equivalente: <strong>$800,000</strong></li>
+        </ul>
+        <div class="plan-cta">
+          <a class="btn primary w-full" href="#" data-plan="Titán" data-amount="2000000" data-credits="280">Comprar</a>
+          <button class="btn outline w-full" data-details="Titán">Ver detalles</button>
+        </div>
+      </article>
+    </div>
+
+    <!-- BOTÓN CENTRADO: Ver más/menos (controla el bloque inferior) -->
+    <div class="more-plans-cta">
+      <button class="btn toggle-more btn-lg" id="toggleMore" data-state="more">Ver más planes</button>
+    </div>
+
+    <!-- SECCIÓN PERSONALIZA (debajo de las tarjetas extendidas) -->
+    <section class="custom-section" aria-labelledby="custom-title">
+      <div class="custom-container">
+        <article class="card plan plan-custom wide">
+          <div class="plan-header">
+            <h3 id="custom-title">Personaliza tu plan</h3>
+            <span class="chip glow">Calculadora</span>
+          </div>
+
+          <form class="customizer" id="customForm" novalidate>
+            <div class="input-row">
+              <label for="mode">Modo de entrada</label>
+              <div class="segmented" role="tablist" aria-label="Modo de entrada">
+                <button type="button" class="seg-btn active" data-mode="credits" role="tab" aria-selected="true" aria-controls="panel-credits" id="tab-credits">Por créditos</button>
+                <button type="button" class="seg-btn" data-mode="amount" role="tab" aria-selected="false" aria-controls="panel-amount" id="tab-amount">Por monto</button>
+              </div>
+            </div>
+
+            <div class="input-row by-credits" id="panel-credits" role="tabpanel" aria-labelledby="tab-credits">
+              <label for="creditsInput">Créditos</label>
+              <div class="field">
+                <input type="text" id="creditsInput" inputmode="numeric" autocomplete="off" placeholder="Ej. 30" />
+                <span class="hint">1 crédito = $10,000 COP</span>
+              </div>
+            </div>
+
+            <div class="input-row by-amount hidden" id="panel-amount" role="tabpanel" aria-labelledby="tab-amount" aria-hidden="true">
+              <label for="amountInput">Monto (COP)</label>
+              <div class="field">
+                <input type="text" id="amountInput" inputmode="numeric" autocomplete="off" placeholder="Ej. 300.000" />
+                <span class="hint">Múltiplos de $10,000</span>
+              </div>
+            </div>
+
+            <div class="results">
+              <div class="res-item">
+                <span class="res-label">Precio base:</span>
+                <span class="res-value" id="rBase">$0</span>
+              </div>
+              <div class="res-item">
+                <span class="res-label">Bono promocional:</span>
+                <span class="res-value" id="rBonus">0 créditos</span>
+              </div>
+              <div class="res-item">
+                <span class="res-label">Créditos totales:</span>
+                <span class="res-value" id="rTotal">0</span>
+              </div>
+              <div class="res-item">
+                <span class="res-label">Precio efectivo x crédito:</span>
+                <span class="res-value" id="rEff">$0</span>
+              </div>
+            </div>
+
+            <div class="recommend" id="recommendBox" hidden>
+              <div class="rec-title">Recomendación</div>
+              <p id="recText"></p>
+            </div>
+
+            <div class="plan-cta">
+              <a class="btn primary w-full" href="#" id="customBuy">Comprar plan personalizado</a>
+              <button class="btn outline w-full" type="button" id="customDetails">Ver detalles</button>
+            </div>
+          </form>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- Botón flotante para abrir WF‑TOOLS desde la landing -->
+  <a class="floating-btn" id="openWFBtn" href="#" onclick="if (window.parent && typeof window.parent.showFrame === 'function') { window.parent.showFrame('wfFrame'); } return false;">
+    Abrir WF‑TOOLS
+  </a>
+
+  <!-- El comportamiento del botón "Abrir WF‑TOOLS" es gestionado por el
+       archivo index.html unificado mediante inyección de eventos en el
+       iframe. -->
+
+  <section class="faq">
+    <div class="faq-inner">
+      <h3>Preguntas frecuentes</h3>
+      <details>
+        <summary>¿Cómo se entregan los créditos?</summary>
+        <p>Una vez confirmado el pago, se acreditan automáticamente en tu cuenta o se envía un código de activación (según tu sistema actual).</p>
+      </details>
+      <details>
+        <summary>¿Puedo combinar bonos?</summary>
+        <p>Los bonos por plan no son acumulables entre sí, pero puedes comprar varios planes independientes.</p>
+      </details>
+      <details>
+        <summary>¿Tienen vencimiento?</summary>
+        <p>Los créditos no vencen; la promoción de bonos sí tiene una vigencia limitada.</p>
+      </details>
+    </div>
+  </section>
+
+  <!-- Modales -->
+  <dialog id="howWorksModal" class="modal modal--how">
+    <form method="dialog" class="modal-box">
+      <h3>¿Cómo funciona la compra?</h3>
+      <ol>
+        <li>Elige un plan y haz clic en <strong>Comprar</strong>.</li>
+        <li>Completa el pago (transferencia, tarjeta, o el método que uses).</li>
+        <li>Recibirás tus créditos + bonos al instante.</li>
+      </ol>
+      <div class="modal-actions">
+        <button class="btn outline">Cerrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <dialog id="detailsModal" class="modal modal--details">
+    <form method="dialog" class="modal-box">
+      <h3 id="detailsTitle">Detalles del plan</h3>
+      <div id="detailsBody" class="details-body"></div>
+      <div class="modal-actions">
+        <button class="btn outline">Cerrar</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Oculta el botón flotante "Abrir WF‑TOOLS" cuando la página se carga dentro del index unificado.  El index
+       unificado ya ofrece su propio botón para volver a WF‑TOOLS, de modo que evitamos duplicados. -->
+  <script>
+    (function() {
+      try {
+        if (window.self !== window.top) {
+          var openBtn = document.getElementById('openWFBtn');
+          if (openBtn) openBtn.style.display = 'none';
+        }
+      } catch (err) {}
+    })();
+  </script>
+
+  <dialog id="checkoutModal" class="modal">
+    <form method="dialog" class="modal-box">
+      <h3 class="checkout-title">Finalizar compra</h3>
+      <p id="checkoutText">Procesando…</p>
+      <div class="checkout-actions">
+        <a class="btn primary w-full" id="checkoutAction" href="#" target="_blank" rel="noopener">Pagar ahora</a>
+        <button class="btn outline w-full">Cerrar</button>
+      </div>
+      <p class="tiny">Por seguridad, la recarga se asocia al correo. Si no coincide, se rechazará</p>
+    </form>
+  </dialog>
+
+  <!-- Botón flotante WhatsApp -->
+  <a class="wa-float" href="https://wa.me/573126461216?text=Hola%20Soporte%20t%C3%A9cnico%2C%20tengo%20una%20consulta%20sobre%20los%20planes%20de%20CrediBoost%20para%20WF%20TOOLS." target="_blank" rel="noopener" aria-label="Soporte técnico por WhatsApp">
+    <svg viewBox="0 0 32 32" aria-hidden="true" class="wa-icon">
+      <path d="M19.11 17.2c-.28-.14-1.62-.8-1.87-.89-.25-.09-.43-.14-.62.14-.19.28-.71.89-.87 1.07-.16.18-.32.2-.6.07-.28-.14-1.18-.44-2.25-1.41-.83-.74-1.39-1.66-1.55-1.94-.16-.28-.02-.43.12-.57.12-.12.28-.32.42-.48.14-.16.18-.28.28-.46.09-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.06-.22-.53-.45-.46-.62-.47l-.53-.01c-.18 0-.48 .07-.73 .34-.25 .28-.96 .94-.96 2.29 0 1.35.99 2.65 1.13 2.83.14 .18 1.95 2.98 4.73 4.18 1.66 .72 2.31 .78 3.14 .66.5 -.08 1.62 -.66 1.85 -1.3.23 -.64.23 -1.19.16 -1.3-.07 -.11-.25 -.18-.53 -.32z" fill="currentColor"/>
+      <path d="M27.5 15.2c0 6.77-5.5 12.27-12.27 12.27-2.19 0-4.23-.59-5.98-1.62L4.5 27.5l1.71-4.61a12.17 12.17 0 0 1-1.98-6.69C4.23 9.43 9.73 3.93 16.5 3.93S27.5 8.43 27.5 15.2zm-3.09 0c0-4.86-3.95-8.81-8.81-8.81-4.86 0-8.81 3.95-8.81 8.81 0 1.55.42 3 1.15 4.26l-.75 2.76 2.84-.74a8.79 8.79 0 0 0 5.57 1.94c4.86 0 8.81-3.95 8.81-8.81z" fill="currentColor"/>
+    </svg>
+    <span class="wa-label">Soporte técnico</span>
+  </a>
+
+  <footer class="site-footer">
+    <p>© <span id="y"></span> CrediBoost · Desarrollado por D-TECH SOLUTIONS</p>
+  </footer>
+
+  <script src="script.js"></script>
+</body>
+</html>
