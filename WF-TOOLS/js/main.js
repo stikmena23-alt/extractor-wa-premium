@@ -5,7 +5,7 @@
 // en este arreglo.
 const ADMIN_EMAILS = [
   'stikmena6@gmail.com',
-  'admin2@example.com', // correo adicional (puedes cambiarlo)
+  'andresquinto243@gmail.com', // correo adicional (puedes cambiarlo)
   'admin3@example.com'  // correo adicional (puedes cambiarlo)
 ];
 const ADMIN_PORTAL_URL = 'https://stikmena23-alt.github.io/wf-toolsadmin/';
