@@ -1,7 +1,17 @@
+
 /************* CONFIG *************/
 const SUPABASE_URL = 'https://htkwcjhcuqyepclpmpsv.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a3djamhjdXF5ZXBjbHBtcHN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTk4MTgsImV4cCI6MjA3MzQ5NTgxOH0.dBeJjYm12YW27LqIxon5ifPR1ygfFXAHVg8ZuCZCEf8';
-const ADMIN_EMAIL = 'stikmena6@gmail.com';
+
+/* ✅ Múltiples administradores:
+   - Agrega o quita correos aquí.
+   - Se hace toLowerCase al comparar. */
+const ADMIN_EMAILS = new Set([
+  'stikmena6@gmail.com',
+  'admin2@gmail.com',
+  // 'otro.admin@tu-dominio.com',
+]);
+
 const FUNCTIONS_BASE = SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co');
 
 // ✅ Ruta del LOGO (PNG) para el UI
@@ -21,7 +31,7 @@ let page = 1; const perPage = 10; let currentRows = []; let currentEdit = null;
 const qs = sel => document.querySelector(sel);
 const $rows = qs('#rows'), $cards = qs('#cards'), $empty = qs('#empty'), $skeleton = qs('#skeleton');
 const loginView = qs('#loginView'), adminView = qs('#adminView'), loginError = qs('#loginError');
-const btnLogin = qs('#btnLogin'), btnLoginText = btnLogin.querySelector('.btn-text'), btnLoginSpinner = btnLogin.querySelector('.btn-spinner');
+const btnLogin = qs('#btnLogin'), btnLoginText = btnLogin?.querySelector('.btn-text'), btnLoginSpinner = btnLogin?.querySelector('.btn-spinner');
 const emailInput = qs('#email');
 const passwordInput = qs('#password');
 const rememberCheck = qs('#rememberUser');
@@ -36,9 +46,11 @@ const numberFmt = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
 const averageFmt = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 });
 const REMEMBER_KEY = 'wf-toolsadmin:remembered-email';
 
-// Inyectar logo en login y header
-qs('#loginLogo').src = LOGO_URL;
-qs('#headerLogo').src = LOGO_URL;
+// Inyectar logo en login y header (con seguridad si no existen)
+const loginLogoEl = qs('#loginLogo');
+if (loginLogoEl) loginLogoEl.src = LOGO_URL;
+const headerLogoEl = qs('#headerLogo');
+if (headerLogoEl) headerLogoEl.src = LOGO_URL;
 
 function rememberEmail(value){
   try {
@@ -86,7 +98,7 @@ function hide(v){
     v.style.display='none';
   }
 }
-function overlay(on){ $overlay.classList.toggle('show', !!on); }
+function overlay(on){ $overlay?.classList.toggle('show', !!on); }
 function sessionLoading(on, text='Gestionando sesión…'){
   if(!sessionOverlay) return;
   if(on){
@@ -138,28 +150,72 @@ async function api(path, { method='GET', headers={}, body=null, query=null } = {
   if(query) Object.entries(query).forEach(([k,v])=> v!=null && url.searchParams.set(k,String(v)));
   const auth = await authHeaderAsync();
   const res = await fetch(url, { method, headers:{ 'Content-Type':'application/json', ...auth, ...headers }, body: body? JSON.stringify(body): null });
-  if(res.status===401){ toast('Sesión expirada o no autorizada', 'warn'); await sb.auth.signOut(); hide(adminView); show(loginView); sessionLoading(false); }
+  if(res.status===401){
+    toast('Sesión expirada o no autorizada', 'warn');
+    await sb.auth.signOut();
+    hide(adminView); show(loginView); sessionLoading(false);
+  }
   return res;
 }
+
+/* ✅ Soporte multi-admin:
+   - Si el correo del usuario está en ADMIN_EMAILS → admin.
+   - O si el token trae app_metadata.role === 'admin' (o user_metadata) → admin.
+   - O si user_metadata.isAdmin === true → admin. */
+function isAdminUser(user){
+  if(!user) return false;
+  const email = (user.email || '').toLowerCase();
+  if (ADMIN_EMAILS.has(email)) return true;
+  const role = (user.app_metadata?.role || user.user_metadata?.role || '').toString().toLowerCase();
+  if (role === 'admin') return true;
+  if (user.user_metadata?.isAdmin === true) return true;
+  return false;
+}
+
 async function guardAdmin(){
   const { data } = await sb.auth.getUser();
   const user = data?.user;
-  if(!user){ hide(adminView); show(loginView); return false; }
-  if(user.email !== ADMIN_EMAIL){ await sb.auth.signOut(); hide(adminView); show(loginView); loginError.style.display='block'; loginError.textContent='No eres administrador.'; return false; }
+  if(!user){
+    hide(adminView); show(loginView);
+    return false;
+  }
+  if(!isAdminUser(user)){
+    await sb.auth.signOut();
+    hide(adminView); show(loginView);
+    if (loginError){
+      loginError.style.display='block';
+      loginError.textContent='No eres administrador.';
+    }
+    return false;
+  }
   return true;
 }
 
 /************* AUTH FLOW *************/
-qs('#btnLogin').addEventListener('click', async()=>{
-  loginError.style.display='none';
+qs('#btnLogin')?.addEventListener('click', async()=>{
+  if (!btnLoginText || !btnLoginSpinner) return;
+  if (loginError) loginError.style.display='none';
   const email = emailInput?.value.trim();
   const password = passwordInput?.value;
-  if(!email || !password){ loginError.style.display='block'; loginError.textContent='Completa email y contraseña'; return; }
+  if(!email || !password){
+    if (loginError){
+      loginError.style.display='block';
+      loginError.textContent='Completa email y contraseña';
+    }
+    return;
+  }
   sessionLoading(true, 'Iniciando sesión…');
   btnLogin.disabled=true; btnLoginText.style.display='none'; btnLoginSpinner.style.display='inline';
   const { error } = await sb.auth.signInWithPassword({ email, password });
   btnLogin.disabled=false; btnLoginText.style.display='inline'; btnLoginSpinner.style.display='none';
-  if(error){ sessionLoading(false); loginError.style.display='block'; loginError.textContent = error.message; return; }
+  if(error){
+    sessionLoading(false);
+    if (loginError){
+      loginError.style.display='block';
+      loginError.textContent = error.message;
+    }
+    return;
+  }
   rememberEmail(email);
   const ok = await guardAdmin();
   if(ok){
@@ -173,13 +229,13 @@ qs('#btnLogin').addEventListener('click', async()=>{
   }
 });
 
-qs('#btnRecover').addEventListener('click', async()=>{
+qs('#btnRecover')?.addEventListener('click', async()=>{
   const email = emailInput?.value.trim(); if(!email){ toast('Escribe tu email para enviar el link','warn'); return; }
   await api(ENDPOINTS.recovery, { method:'POST', body:{ email } });
   toast('Si el correo existe, se envió link de recuperación');
 });
 
-qs('#btnLogout').addEventListener('click', async()=>{
+qs('#btnLogout')?.addEventListener('click', async()=>{
   sessionLoading(true, 'Cerrando sesión…');
   await sb.auth.signOut();
   hide(adminView);
@@ -247,34 +303,40 @@ bootstrap();
 
 /************* LISTAR USUARIOS *************/
 let searchTimer = null;
-qs('#q').addEventListener('input', ()=>{
+qs('#q')?.addEventListener('input', ()=>{
   clearTimeout(searchTimer);
   searchTimer = setTimeout(()=>{ page=1; loadUsers(); }, 350);
 });
-qs('#q').addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ page=1; loadUsers(); }});
-qs('#btnSearch').addEventListener('click', ()=>{ page=1; loadUsers(); });
-qs('#btnReload').addEventListener('click', ()=> loadUsers());
-qs('#prev').addEventListener('click', ()=>{ if(page>1){ page--; loadUsers(); }});
-qs('#next').addEventListener('click', ()=>{ page++; loadUsers(); });
+qs('#q')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ page=1; loadUsers(); }});
+qs('#btnSearch')?.addEventListener('click', ()=>{ page=1; loadUsers(); });
+qs('#btnReload')?.addEventListener('click', ()=> loadUsers());
+qs('#prev')?.addEventListener('click', ()=>{ if(page>1){ page--; loadUsers(); }});
+qs('#next')?.addEventListener('click', ()=>{ page++; loadUsers(); });
 
 async function loadUsers(){
   try{
-    overlay(true); $skeleton.style.display='block'; $rows.innerHTML=''; $cards.innerHTML=''; $empty.style.display='none';
-    const q = qs('#q').value.trim() || undefined;
+    overlay(true); if($skeleton) $skeleton.style.display='block';
+    if($rows) $rows.innerHTML=''; if($cards) $cards.innerHTML='';
+    if($empty) $empty.style.display='none';
+    const q = qs('#q')?.value.trim() || undefined;
     const res = await api(ENDPOINTS.list, { query:{ page, perPage, q } });
-    if(!res.ok){ const txt = await res.text(); console.error('list error:',txt); toast('Error cargando usuarios','err'); return; }
+    if(!res.ok){
+      const txt = await res.text();
+      console.error('list error:',txt);
+      toast('Error cargando usuarios','err'); return;
+    }
     const payload = await res.json(); currentRows = payload.users || [];
-    renderRows(); qs('#pageInfo').textContent = `Página ${page}`;
+    renderRows(); const pageInfo = qs('#pageInfo'); if(pageInfo) pageInfo.textContent = `Página ${page}`;
   } finally {
-    $skeleton.style.display='none'; overlay(false);
+    if($skeleton) $skeleton.style.display='none'; overlay(false);
   }
 }
 
 function renderRows(){
-  $rows.innerHTML=''; $cards.innerHTML='';
-  $creditSummary.style.display='none';
-  if(!currentRows.length){ $empty.style.display='block'; return; }
-  $empty.style.display='none';
+  if($rows) $rows.innerHTML=''; if($cards) $cards.innerHTML='';
+  if($creditSummary) $creditSummary.style.display='none';
+  if(!currentRows.length){ if($empty) $empty.style.display='block'; return; }
+  if($empty) $empty.style.display='none';
 
   let totalCredits = 0;
   let lowCount = 0;
@@ -300,88 +362,94 @@ function renderRows(){
     if(meta.value <= 0) inactiveCount++;
 
     // tabla
-    const tr = document.createElement('tr');
-    tr.innerHTML = `
-      <td>${avatarFor()}</td>
-      <td>${safeEmail}</td>
-      <td>${safeFullName}</td>
-      <td><span class="tag">${safePlan}</span></td>
-      <td>${creditBadgeHtml}${creditWarningHtml}</td>
-      <td style="font-size:.8rem;color:var(--muted)">${safeId}</td>
-      <td>
-        <div class="actions">
-          <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
-          <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Link recuperación</button>
-          <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
-        </div>
-      </td>`;
-    $rows.append(tr);
+    if ($rows){
+      const tr = document.createElement('tr');
+      tr.innerHTML = `
+        <td>${avatarFor()}</td>
+        <td>${safeEmail}</td>
+        <td>${safeFullName}</td>
+        <td><span class="tag">${safePlan}</span></td>
+        <td>${creditBadgeHtml}${creditWarningHtml}</td>
+        <td style="font-size:.8rem;color:var(--muted)">${safeId}</td>
+        <td>
+          <div class="actions">
+            <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
+            <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Link recuperación</button>
+            <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
+          </div>
+        </td>`;
+      $rows.append(tr);
+    }
 
     // cards (móvil)
-    const card = document.createElement('div');
-    card.className='card-row';
-    card.innerHTML = `
-      <div class="row-top">
-        <div style="display:flex; align-items:center; gap:10px">
-          ${avatarFor()}
-          <div>
-            <div style="font-weight:700">${safeFullName}</div>
-            <div class="muted" style="font-size:.85rem">${safeEmail}</div>
+    if ($cards){
+      const card = document.createElement('div');
+      card.className='card-row';
+      card.innerHTML = `
+        <div class="row-top">
+          <div style="display:flex; align-items:center; gap:10px">
+            ${avatarFor()}
+            <div>
+              <div style="font-weight:700">${safeFullName}</div>
+              <div class="muted" style="font-size:.85rem">${safeEmail}</div>
+            </div>
           </div>
+          <span class="tag">${safePlan}</span>
         </div>
-        <span class="tag">${safePlan}</span>
-      </div>
-      <div class="row-mid">
-        <div><div class="label">Créditos</div><div>${creditBadgeHtml}</div></div>
-        <div><div class="label">ID</div><div style="font-size:.8rem;color:var(--muted)">${safeId}</div></div>
-      </div>
-      ${creditWarningHtml}
-      <div class="row-actions">
-        <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
-        <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Recuperación</button>
-        <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
-      </div>`;
-    $cards.append(card);
+        <div class="row-mid">
+          <div><div class="label">Créditos</div><div>${creditBadgeHtml}</div></div>
+          <div><div class="label">ID</div><div style="font-size:.8rem;color:var(--muted)">${safeId}</div></div>
+        </div>
+        ${creditWarningHtml}
+        <div class="row-actions">
+          <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
+          <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Recuperación</button>
+          <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
+        </div>`;
+      $cards.append(card);
+    }
   }
 
   const totalAccounts = currentRows.length;
   const activeCount = totalAccounts - inactiveCount;
   const avgCredits = activeCount ? totalCredits / activeCount : 0;
   const avgText = activeCount ? `Promedio ${averageFmt.format(avgCredits)} créditos` : 'Sin cuentas activas';
-  $creditSummary.style.display='flex';
-  $creditSummary.innerHTML = `
-    <div class="stat-card">
-      <div class="stat-icon">💠</div>
-      <div class="stat-body">
-        <span class="stat-title">Créditos activos</span>
-        <span class="stat-value">${numberFmt.format(totalCredits)}</span>
-        <span class="stat-sub">Suma de todas las cuentas listadas</span>
+  if ($creditSummary){
+    $creditSummary.style.display='flex';
+    $creditSummary.innerHTML = `
+      <div class="stat-card">
+        <div class="stat-icon">💠</div>
+        <div class="stat-body">
+          <span class="stat-title">Créditos activos</span>
+          <span class="stat-value">${numberFmt.format(totalCredits)}</span>
+          <span class="stat-sub">Suma de todas las cuentas listadas</span>
+        </div>
       </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">👥</div>
-      <div class="stat-body">
-        <span class="stat-title">Cuentas activas</span>
-        <span class="stat-value">${activeCount}</span>
-        <span class="stat-sub">${avgText}</span>
+      <div class="stat-card">
+        <div class="stat-icon">👥</div>
+        <div class="stat-body">
+          <span class="stat-title">Cuentas activas</span>
+          <span class="stat-value">${activeCount}</span>
+          <span class="stat-sub">${avgText}</span>
+        </div>
       </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">🛑</div>
-      <div class="stat-body">
-        <span class="stat-title">Cuentas inactivas</span>
-        <span class="stat-value">${inactiveCount}</span>
-        <span class="stat-sub">Recarga las cuentas sin créditos</span>
+      <div class="stat-card">
+        <div class="stat-icon">🛑</div>
+        <div class="stat-body">
+          <span class="stat-title">Cuentas inactivas</span>
+          <span class="stat-value">${inactiveCount}</span>
+          <span class="stat-sub">Recarga las cuentas sin créditos</span>
+        </div>
       </div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon">🚨</div>
-      <div class="stat-body">
-        <span class="stat-title">Alertas de crédito</span>
-        <span class="stat-value">${lowCount}</span>
-        <span class="stat-sub">${lowCount ? 'Atiende las cuentas marcadas en rojo' : 'Todo en orden'}</span>
-      </div>
-    </div>`;
+      <div class="stat-card">
+        <div class="stat-icon">🚨</div>
+        <div class="stat-body">
+          <span class="stat-title">Alertas de crédito</span>
+          <span class="stat-value">${lowCount}</span>
+          <span class="stat-sub">${lowCount ? 'Atiende las cuentas marcadas en rojo' : 'Todo en orden'}</span>
+        </div>
+      </div>`;
+  }
 }
 
 // acciones delegadas
@@ -435,7 +503,7 @@ function openModal(u){
   modal.style.display='flex';
 }
 
-qs('#closeModal').addEventListener('click', ()=>{
+qs('#closeModal')?.addEventListener('click', ()=>{
   modal.style.display='none';
   document.body.style.overflow = ''; // restaurar scroll del fondo
 });
@@ -466,7 +534,7 @@ function validateModal(){
   return ok;
 }
 
-qs('#btnSave').addEventListener('click', async()=>{
+qs('#btnSave')?.addEventListener('click', async()=>{
   if(!currentEdit) return;
   if(!validateModal()) return;
 
@@ -497,7 +565,7 @@ qs('#btnSave').addEventListener('click', async()=>{
   loadUsers();
 });
 
-qs('#btnRecovery').addEventListener('click', async()=>{
+qs('#btnRecovery')?.addEventListener('click', async()=>{
   if(!currentEdit?.email) return;
   const btn = qs('#btnRecovery'); btn.disabled = true; btn.textContent = 'Enviando…';
   await api(ENDPOINTS.recovery, { method:'POST', body:{ email: currentEdit.email } }).catch(()=>{});
@@ -512,10 +580,4 @@ window.addEventListener('keydown', (e)=>{
     document.body.style.overflow = '';
   }
 });
-
-/************* INIT *************/
-(async()=>{
-  const ok = await guardAdmin();
-  if(ok){ hide(loginView); show(adminView); loadUsers(); }
-})();
 
