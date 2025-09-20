@@ -8,7 +8,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
    - Se hace toLowerCase al comparar. */
 const ADMIN_EMAILS = new Set([
   'stikmena6@gmail.com',
-  'admin2@gmail.com',
+  'admin.kevinqt@wftools.com',
   // 'otro.admin@tu-dominio.com',
 ]);
 
