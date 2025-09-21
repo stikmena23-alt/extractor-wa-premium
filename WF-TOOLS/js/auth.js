@@ -23,6 +23,10 @@
   const loginBtn = document.getElementById("loginBtn");
   const loginError = document.getElementById("loginError");
   const loginLoading = document.getElementById("loginLoading");
+  const adminPanelBtn = document.getElementById("adminPanelBtn");
+  const adminPanelBtnInline = document.getElementById("adminPanelBtnInline");
+  const accountAdminShortcut = document.getElementById("accountAdminShortcut");
+  const currentUserNameEl = document.getElementById("currentUserName");
   const logoutBtn = document.getElementById("logoutBtn");
   const appWrap = document.getElementById("appWrap");
   const planChip = document.getElementById("planChip");
@@ -45,11 +49,29 @@
   const bodyEl = document.body;
   const sessionLoading = document.getElementById("sessionLoading");
   const sessionLoadingMessage = document.getElementById("sessionLoadingMessage");
+  const registerForm = document.getElementById("registerForm");
+  const showRegisterBtn = document.getElementById("showRegisterBtn");
+  const btnBackLogin = document.getElementById("btnBackLogin");
+  const btnRegister = document.getElementById("btnRegister");
+  const registerError = document.getElementById("registerError");
+  const registerSuccess = document.getElementById("registerSuccess");
+  const registerUsernameEl = document.getElementById("registerUsername");
+  const registerUserEmailEl = document.getElementById("registerUserEmail");
+  const regNameInput = document.getElementById("reg_name");
+  const regEmailInput = document.getElementById("reg_email");
+  const regPhoneInput = document.getElementById("reg_phone");
+  const regPasswordInput = document.getElementById("reg_password");
 
   let lastCreditsValue = null;
   let maxCreditsSeen = 0;
   let toastTimeout = null;
   let pendingWelcomeEmail = null;
+  let currentSessionEmail = null;
+  let currentAuthUser = null;
+  let currentProfile = null;
+  let sessionActive = false;
+  let revalidationPromise = null;
+  const ADMIN_PREFIXES = ["admin.", "sup."];
   const creditFormatter = new Intl.NumberFormat("es-CO");
   const REMEMBER_KEY = "wf-tools.login.remembered-email";
   const STORAGE_TEST_KEY = "wf-tools.login.storage-test";
@@ -68,12 +90,59 @@
     storageAvailable = false;
   }
 
+  updateAdminAccessUI(getRememberedEmail());
+
   function toggleLoginButton(disabled) {
     if (loginBtn) loginBtn.disabled = !!disabled;
   }
 
   function toggleLogoutButton(disabled) {
     if (logoutBtn) logoutBtn.disabled = !!disabled;
+  }
+
+  function setElementVisibility(element, visible) {
+    if (!element) return;
+    if (visible) {
+      element.hidden = false;
+      element.setAttribute("aria-hidden", "false");
+    } else {
+      element.hidden = true;
+      element.setAttribute("aria-hidden", "true");
+    }
+  }
+
+  function isPrivilegedEmail(email) {
+    if (!email) return false;
+    const normalized = email.trim().toLowerCase();
+    if (!normalized) return false;
+    return ADMIN_PREFIXES.some((prefix) => normalized.startsWith(prefix));
+  }
+
+  function deriveNameFromEmail(email) {
+    if (!email) return "-";
+    const local = email.split("@")[0] || "";
+    const cleaned = local
+      .replace(/[._]+/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!cleaned) return email;
+    return cleaned.replace(/\b([a-z])/g, (match, letter) => letter.toUpperCase());
+  }
+
+  function updateAdminAccessUI(candidateEmail) {
+    const normalized = (candidateEmail || "").trim().toLowerCase();
+    const canAccessAdmin = isPrivilegedEmail(normalized);
+    setElementVisibility(adminPanelBtn, canAccessAdmin);
+
+    const sessionOnlyVisible = sessionActive && canAccessAdmin;
+    setElementVisibility(accountAdminShortcut, sessionOnlyVisible);
+    setElementVisibility(adminPanelBtnInline, sessionOnlyVisible);
+  }
+
+  function setUserDisplayName(name) {
+    if (!currentUserNameEl) return;
+    const text = (name || "").toString().trim();
+    currentUserNameEl.textContent = text ? text : "-";
   }
 
   function setSessionLoadingState(active, message) {
@@ -186,7 +255,29 @@
   });
 
   function updateUserIdentity(user) {
+    currentAuthUser = user || null;
+    currentSessionEmail = user?.email ? user.email.trim().toLowerCase() : null;
     if (userEmailEl) userEmailEl.textContent = user?.email || "-";
+
+    if (!user) {
+      setUserDisplayName(null);
+    } else if (!currentProfile) {
+      const metaName =
+        user.user_metadata?.full_name ||
+        user.user_metadata?.name ||
+        user.user_metadata?.display_name ||
+        null;
+      if (metaName) {
+        setUserDisplayName(metaName);
+      } else if (currentSessionEmail) {
+        setUserDisplayName(deriveNameFromEmail(currentSessionEmail));
+      }
+    }
+
+    const candidateEmail = sessionActive
+      ? currentSessionEmail
+      : currentSessionEmail || loginEmail?.value || getRememberedEmail();
+    updateAdminAccessUI(candidateEmail);
   }
 
   function renderCreditState(rawCredits) {
@@ -285,6 +376,15 @@
     }
   }
 
+  function getRememberedEmail() {
+    if (!storageAvailable) return "";
+    try {
+      return storage.getItem(REMEMBER_KEY) || "";
+    } catch (_err) {
+      return "";
+    }
+  }
+
   function clearRememberedEmail() {
     if (!storageAvailable) return;
     try {
@@ -297,7 +397,7 @@
   function restoreRememberedEmail() {
     if (!storageAvailable || !loginEmail) return;
     try {
-      const remembered = storage.getItem(REMEMBER_KEY);
+      const remembered = getRememberedEmail();
       if (remembered) {
         loginEmail.value = remembered;
         if (loginRemember) loginRemember.checked = true;
@@ -334,10 +434,13 @@
       logoutBtn.disabled = false;
     }
     global.AppCore?.setCreditDependentActionsEnabled(false);
+    applyProfileIdentity(null);
+    updateAdminAccessUI(currentSessionEmail || loginEmail?.value || getRememberedEmail());
   }
 
   function showLoginUI(message, state) {
     setSessionLoadingState(false);
+    sessionActive = false;
     if (appWrap) appWrap.style.display = "none";
     if (loginScreen) loginScreen.style.display = "flex";
     clearCreditsUI();
@@ -345,6 +448,7 @@
     updateUserIdentity(null);
     closeSessionModal();
     pendingWelcomeEmail = null;
+    updateAdminAccessUI(loginEmail?.value || getRememberedEmail());
     if (message) {
       setSessionStatusMessage(message, state);
     } else {
@@ -354,9 +458,11 @@
 
   function showAppUI() {
     setSessionLoadingState(false);
+    sessionActive = true;
     if (loginScreen) loginScreen.style.display = "none";
     if (appWrap) appWrap.style.display = "block";
     resetLoginForm();
+    updateAdminAccessUI(currentSessionEmail);
   }
 
   function applyCredits(profile) {
@@ -375,18 +481,349 @@
     const safeCredits = Number.isFinite(numericCredits) ? Math.max(0, Math.floor(numericCredits)) : null;
     renderCreditState(safeCredits);
     global.AppCore?.setCreditDependentActionsEnabled((safeCredits || 0) > 0);
+    applyProfileIdentity(profile);
+    updateAdminAccessUI(currentSessionEmail);
+  }
+
+  function applyProfileIdentity(profile) {
+    currentProfile = profile || null;
+    if (profile) {
+      const profileName =
+        profile.full_name ||
+        profile.display_name ||
+        profile.name ||
+        profile.owner_name ||
+        profile.contact_name ||
+        null;
+      if (profileName) {
+        setUserDisplayName(profileName);
+        return;
+      }
+    }
+
+    if (currentAuthUser) {
+      const metaName =
+        currentAuthUser.user_metadata?.full_name ||
+        currentAuthUser.user_metadata?.name ||
+        currentAuthUser.user_metadata?.display_name ||
+        null;
+      if (metaName) {
+        setUserDisplayName(metaName);
+        return;
+      }
+    }
+
+    if (currentSessionEmail) {
+      setUserDisplayName(deriveNameFromEmail(currentSessionEmail));
+    } else {
+      setUserDisplayName(null);
+    }
+  }
+
+  async function ensureActiveSession() {
+    try {
+      const { data, error } = await supabase.auth.getSession();
+      if (error) {
+        console.error("Error obteniendo la sesión", error);
+      }
+      if (data?.session) {
+        return data.session;
+      }
+    } catch (err) {
+      console.error("No se pudo verificar la sesión actual", err);
+    }
+
+    try {
+      const { data, error } = await supabase.auth.refreshSession();
+      if (error) {
+        if (error.message && !/refresh token/i.test(error.message)) {
+          console.warn("No se pudo refrescar la sesión", error);
+        }
+        return null;
+      }
+      return data?.session || null;
+    } catch (err) {
+      console.error("No se pudo refrescar la sesión", err);
+      return null;
+    }
+  }
+
+  async function revalidateSessionState() {
+    if (revalidationPromise) return revalidationPromise;
+    revalidationPromise = (async () => {
+      const session = await ensureActiveSession();
+      if (session) {
+        updateUserIdentity(session.user || null);
+        if (sessionActive) {
+          await updateCredits();
+          const email = session.user?.email || currentSessionEmail || "tu cuenta";
+          setSessionStatusMessage(activeSessionMessage(email), "active");
+        }
+      }
+      revalidationPromise = null;
+      return session;
+    })();
+    return revalidationPromise;
+  }
+
+  function slugifyClientName(value) {
+    return (value || "")
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, ".")
+      .replace(/\.\.+/g, ".")
+      .replace(/^\.+|\.+$/g, "");
+  }
+
+  function computeUsernameSeed(name, email, phone) {
+    const fallbackEmail = (email || "").split("@")[0] || "";
+    const fallbackPhone = (phone || "").replace(/\D+/g, "");
+    return (
+      slugifyClientName(name) ||
+      slugifyClientName(fallbackEmail) ||
+      (fallbackPhone ? fallbackPhone.slice(-8) : "") ||
+      Date.now().toString(36)
+    );
+  }
+
+  function buildUsernameCandidates(seed) {
+    const base = (seed || "cliente")
+      .split(".")
+      .filter(Boolean)
+      .join(".")
+      .slice(0, 28)
+      .replace(/\.\.+/g, ".")
+      .replace(/^\.+|\.+$/g, "");
+    const core = base || "cliente";
+    const root = `clien.${core}`.replace(/\.\.+/g, ".").replace(/\.+$/, "");
+    const timeSuffix = Date.now().toString(36).slice(-4);
+    const randomSuffix = Math.random().toString(36).slice(-4);
+    const variants = [root];
+    variants.push(`${root}.${timeSuffix}`);
+    variants.push(`${root}.${randomSuffix}`);
+    return Array.from(new Set(variants)).map((candidate) =>
+      candidate.replace(/\.\.+/g, ".").replace(/\.+$/, "").slice(0, 48)
+    );
+  }
+
+  function isDuplicateUserError(error) {
+    if (!error) return false;
+    const code = (error.code || "").toLowerCase();
+    if (code === "user_already_exists" || code === "email_conflict") return true;
+    const message = (error.message || "").toLowerCase();
+    return message.includes("already registered") || message.includes("already exists");
+  }
+
+  async function persistProfileExtras(userId, payload) {
+    if (!userId) return;
+    const phoneClean = (payload.phone || "").replace(/\D+/g, "");
+    const profileData = {
+      id: userId,
+      full_name: payload.name || null,
+      display_name: payload.name || null,
+      contact_email: payload.personalEmail || null,
+      phone_number: phoneClean || null,
+    };
+    const sanitized = Object.fromEntries(
+      Object.entries(profileData).filter(([, value]) => value !== null && value !== "")
+    );
+    if (Object.keys(sanitized).length <= 1) return;
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .upsert(sanitized, { onConflict: "id" });
+      if (error) {
+        console.warn("No se pudo sincronizar el perfil del nuevo usuario", error);
+      }
+    } catch (err) {
+      console.warn("No se pudo actualizar la información adicional del perfil", err);
+    }
+  }
+
+  async function createClientAccount({ name, personalEmail, phone, password }) {
+    const seed = computeUsernameSeed(name, personalEmail, phone);
+    const candidates = buildUsernameCandidates(seed);
+    let lastError = null;
+    for (const username of candidates) {
+      const wfEmail = `${username}@wftools.com`;
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: wfEmail,
+          password,
+          options: {
+            data: {
+              full_name: name,
+              personal_email: personalEmail,
+              phone_number: phone,
+            },
+          },
+        });
+        if (error) throw error;
+        await persistProfileExtras(data?.user?.id, {
+          name,
+          personalEmail,
+          phone,
+          generatedEmail: wfEmail,
+        });
+        return {
+          user: data?.user || null,
+          username,
+          email: wfEmail,
+        };
+      } catch (error) {
+        if (isDuplicateUserError(error)) {
+          lastError = error;
+          continue;
+        }
+        throw error;
+      }
+    }
+    throw lastError || new Error("No se pudo generar un usuario único.");
+  }
+
+  function toggleRegisterInputs(disabled) {
+    [regNameInput, regEmailInput, regPhoneInput, regPasswordInput].forEach((input) => {
+      if (input) input.disabled = !!disabled;
+    });
+  }
+
+  function setRegisterLoading(isLoading) {
+    if (!btnRegister) return;
+    btnRegister.disabled = !!isLoading;
+    btnRegister.classList.toggle("loading", !!isLoading);
+  }
+
+  function clearRegisterFeedback(options = {}) {
+    const { keepSuccess = false } = options;
+    if (registerError) {
+      registerError.textContent = "";
+      registerError.style.display = "none";
+    }
+    if (!keepSuccess && registerSuccess) {
+      registerSuccess.hidden = true;
+    }
+  }
+
+  function showRegisterError(message) {
+    if (!registerError) return;
+    registerError.textContent = message || "";
+    registerError.style.display = message ? "block" : "none";
+    if (message) {
+      registerError.focus?.();
+    }
+  }
+
+  function showRegisterSuccess({ username, email }) {
+    if (registerUsernameEl) registerUsernameEl.textContent = username || "-";
+    if (registerUserEmailEl) registerUserEmailEl.textContent = email || "-";
+    if (registerSuccess) registerSuccess.hidden = false;
+  }
+
+  function switchAuthView(view) {
+    if (!loginForm || !registerForm) return;
+    const showRegister = view === "register";
+    loginForm.classList.toggle("is-hidden", showRegister);
+    registerForm.classList.toggle("is-hidden", !showRegister);
+    if (showRegister) {
+      clearRegisterFeedback();
+      setRegisterLoading(false);
+      toggleRegisterInputs(false);
+      try {
+        regNameInput?.focus({ preventScroll: true });
+      } catch (_err) {
+        regNameInput?.focus();
+      }
+    } else {
+      clearRegisterFeedback();
+      setRegisterLoading(false);
+      toggleRegisterInputs(false);
+      registerForm.reset?.();
+      try {
+        loginEmail?.focus({ preventScroll: true });
+      } catch (_err) {
+        loginEmail?.focus();
+      }
+      updateAdminAccessUI(loginEmail?.value || getRememberedEmail());
+    }
   }
 
   async function updateCredits() {
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("plan, credits")
+      .select("plan, credits, full_name, display_name, name, contact_name, owner_name")
       .single();
     if (error) {
       console.error("Perfil", error);
+      applyProfileIdentity(null);
+      updateAdminAccessUI(currentSessionEmail);
       return;
     }
-    applyCredits(profile);
+    if (profile) {
+      applyCredits(profile);
+    } else {
+      applyProfileIdentity(null);
+      updateAdminAccessUI(currentSessionEmail);
+    }
+  }
+
+  async function handleRegisterSubmit(event) {
+    event.preventDefault();
+    clearRegisterFeedback();
+
+    const name = regNameInput?.value.trim();
+    const personalEmail = regEmailInput?.value.trim();
+    const rawPhone = regPhoneInput?.value || "";
+    const password = regPasswordInput?.value || "";
+    const numericPhone = rawPhone.replace(/\D+/g, "");
+
+    if (!name || name.length < 3) {
+      showRegisterError("Ingresa tu nombre completo.");
+      return;
+    }
+    if (!personalEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(personalEmail)) {
+      showRegisterError("Ingresa un correo electrónico válido.");
+      return;
+    }
+    if (!numericPhone || numericPhone.length < 7) {
+      showRegisterError("Ingresa un número de teléfono válido.");
+      return;
+    }
+    if (!password || password.length < 8) {
+      showRegisterError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    setRegisterLoading(true);
+    toggleRegisterInputs(true);
+
+    try {
+      const result = await createClientAccount({
+        name,
+        personalEmail,
+        phone: numericPhone,
+        password,
+      });
+      registerForm?.reset();
+      showRegisterSuccess(result);
+      showSessionToast("Cuenta creada exitosamente. Usa el usuario generado para iniciar sesión.", "success");
+      if (loginEmail) {
+        loginEmail.value = result.email;
+      }
+      updateAdminAccessUI(result.email);
+    } catch (error) {
+      console.error("No se pudo registrar el usuario", error);
+      let message = error?.message || "No se pudo completar el registro. Intenta nuevamente.";
+      if (isDuplicateUserError(error)) {
+        message = "No se pudo generar un usuario único. Intenta nuevamente.";
+      }
+      showRegisterError(message);
+      showSessionToast(message, "danger");
+    } finally {
+      setRegisterLoading(false);
+      toggleRegisterInputs(false);
+    }
   }
 
   async function handleLoginSubmit(event) {
@@ -446,9 +883,7 @@
   }
 
   async function spendCredit() {
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    const session = await ensureActiveSession();
 
     if (!session) {
       showSessionToast("Tu sesión expiró. Inicia sesión para continuar.", "danger");
@@ -479,6 +914,7 @@
     global.AppCore?.setCreditDependentActionsEnabled(false);
     loginForm?.addEventListener("submit", handleLoginSubmit);
     logoutBtn?.addEventListener("click", handleLogout);
+    registerForm?.addEventListener("submit", handleRegisterSubmit);
     restoreRememberedEmail();
     resetPasswordToggle();
 
@@ -493,6 +929,31 @@
       if (email && loginRemember?.checked) {
         setRememberedEmail(email);
       }
+    });
+
+    loginEmail?.addEventListener("input", () => {
+      if (!sessionActive) {
+        updateAdminAccessUI(loginEmail.value);
+      }
+    });
+
+    showRegisterBtn?.addEventListener("click", () => switchAuthView("register"));
+    btnBackLogin?.addEventListener("click", () => switchAuthView("login"));
+
+    const handleVisibility = () => {
+      if (document.visibilityState === "visible") {
+        revalidateSessionState();
+      }
+    };
+    window.addEventListener("focus", () => {
+      revalidateSessionState();
+    });
+    document.addEventListener("visibilitychange", handleVisibility);
+    window.addEventListener("online", () => {
+      showSessionToast("Conexión restaurada.", "success");
+    });
+    window.addEventListener("offline", () => {
+      showSessionToast("Sin conexión a internet. Algunas funciones estarán limitadas.", "danger");
     });
 
     loginRemember?.addEventListener("change", () => {
@@ -527,16 +988,7 @@
 
     setSessionLoadingState(true, "Verificando tu sesión...");
 
-    let session = null;
-    try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error("Error obteniendo la sesión", error);
-      }
-      session = data?.session || null;
-    } catch (err) {
-      console.error("No se pudo verificar la sesión actual", err);
-    }
+    const session = await ensureActiveSession();
 
     updateUserIdentity(session?.user || null);
 
@@ -574,5 +1026,8 @@
   global.Auth = {
     init,
     spendCredit,
+    ensureActiveSession,
+    revalidateSessionState,
+    getCurrentUserEmail: () => currentSessionEmail,
   };
 })(window);

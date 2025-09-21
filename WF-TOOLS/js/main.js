@@ -8,12 +8,32 @@ const ADMIN_EMAILS = [
   'admin2@gmail.com', // correo adicional (puedes cambiarlo)
   'admin3@example.com'  // correo adicional (puedes cambiarlo)
 ];
+const ADMIN_PREFIXES = ['admin.', 'sup.'];
 const ADMIN_PORTAL_URL = 'https://stikmena23-alt.github.io/wf-toolsadmin/';
 
+function isPrivilegedEmail(email){
+  if (!email) return false;
+  const normalized = email.trim().toLowerCase();
+  if (!normalized) return false;
+  if (ADMIN_PREFIXES.some((prefix) => normalized.startsWith(prefix))) return true;
+  return ADMIN_EMAILS.some((adm) => adm.toLowerCase() === normalized);
+}
+
+function openAdminPortal(){
+  const adminWindow = window.open(ADMIN_PORTAL_URL, '_blank');
+  if (adminWindow) {
+    adminWindow.opener = null;
+  }
+}
+
 function setupAdminAccess(){
-  const adminBtn = document.getElementById('adminAccessBtn');
-  if (!adminBtn) return;
-  adminBtn.addEventListener('click', (event) => {
+  const buttonIds = ['adminAccessBtn', 'adminPanelBtn', 'adminPanelBtnInline'];
+  const buttons = buttonIds
+    .map((id) => document.getElementById(id))
+    .filter(Boolean);
+  if (!buttons.length) return;
+
+  const handleClick = (event) => {
     // Si estamos dentro de un iframe (por ejemplo, en el index unificado),
     // delegamos la navegación al contenedor padre para evitar prompts y
     // abrir el panel de administración de forma integrada.
@@ -28,20 +48,29 @@ function setupAdminAccess(){
       // En caso de error (por ejemplo, políticas de origen), seguimos con el flujo normal
     }
 
-    // Comportamiento normal cuando se abre WF‑TOOLS de forma independiente
+    const sessionEmail = typeof window.Auth?.getCurrentUserEmail === 'function'
+      ? window.Auth.getCurrentUserEmail()
+      : null;
+
+    if (sessionEmail && isPrivilegedEmail(sessionEmail)) {
+      event.preventDefault();
+      openAdminPortal();
+      return;
+    }
+
     const input = prompt('Ingresa el correo de administrador');
     if (!input) return;
     const email = input.trim().toLowerCase();
-    // Comprobamos si el email ingresado se encuentra en la lista de admin
-    const isAdmin = ADMIN_EMAILS.some((adm) => adm.toLowerCase() === email);
-    if (isAdmin) {
-      const adminWindow = window.open(ADMIN_PORTAL_URL, '_blank');
-      if (adminWindow) {
-        adminWindow.opener = null;
-      }
+    if (isPrivilegedEmail(email)) {
+      event.preventDefault();
+      openAdminPortal();
     } else {
       alert('Correo de administrador no válido.');
     }
+  };
+
+  buttons.forEach((btn) => {
+    btn.addEventListener('click', handleClick);
   });
 }
 
