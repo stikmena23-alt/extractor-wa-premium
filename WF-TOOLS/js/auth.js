@@ -72,6 +72,7 @@
   let toastTimeout = null;
   let pendingWelcomeEmail = null;
   let currentUserId = null;
+  let currentUserEmail = null;
   const creditFormatter = new Intl.NumberFormat("es-CO");
   const REMEMBER_KEY = "wf-tools.login.remembered-email";
   const STORAGE_TEST_KEY = "wf-tools.login.storage-test";
@@ -316,6 +317,7 @@
 
   function updateUserIdentity(user) {
     currentUserId = user?.id || null;
+    currentUserEmail = user?.email || null;
     if (userEmailEl) userEmailEl.textContent = user?.email || "-";
     if (userNameEl) {
       const metadata = user?.user_metadata || {};
@@ -434,7 +436,11 @@
     restoreRememberedEmail();
     resetPasswordToggle();
     if (!loginRemember?.checked) {
-      syncAdminPortalAccess(null);
+      if (currentUserEmail) {
+        syncAdminPortalAccess(currentUserEmail);
+      } else {
+        syncAdminPortalAccess(null);
+      }
     }
   }
 
@@ -556,6 +562,7 @@
     global.AppCore?.setCreditDependentActionsEnabled(false);
     syncAdminPortalAccess(null);
     currentUserId = null;
+    currentUserEmail = null;
   }
 
   function showLoginUI(message, state) {
@@ -582,6 +589,10 @@
     if (loginScreen) loginScreen.style.display = "none";
     if (appWrap) appWrap.style.display = "block";
     resetLoginForm();
+    if (logoutBtn) {
+      logoutBtn.style.display = "inline-block";
+      logoutBtn.disabled = false;
+    }
   }
 
   function applyCredits(profile) {
@@ -610,8 +621,9 @@
 
   async function updateCredits() {
     let userId = currentUserId;
+    let email = currentUserEmail;
 
-    if (!userId) {
+    if (!userId || !email) {
       try {
         const {
           data: { session },
@@ -624,27 +636,56 @@
 
         if (session?.user) {
           userId = session.user.id;
+          email = session.user.email || email || null;
           updateUserIdentity(session.user);
         }
       } catch (err) {
         console.error("Error verificando el usuario activo para créditos", err);
-        userId = null;
       }
     }
 
-    if (!userId) {
+    if (!userId && !email) {
       console.warn("No hay usuario activo para actualizar créditos.");
+      if (logoutBtn) logoutBtn.style.display = "inline-block";
       return;
     }
 
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("plan, credits, full_name")
-      .eq("id", userId)
-      .single();
+    const fetchProfile = async (label, builder) => {
+      try {
+        let query = supabase.from("profiles").select("plan, credits, full_name, email").limit(1);
+        if (typeof builder === "function") {
+          query = builder(query);
+        }
+        const { data, error } = await query.maybeSingle();
+        if (error && error.code !== "PGRST116") {
+          console.error(`Error obteniendo perfil (${label})`, error);
+        }
+        if (data) {
+          return data;
+        }
+      } catch (err) {
+        console.error(`Fallo obteniendo perfil (${label})`, err);
+      }
+      return null;
+    };
 
-    if (error) {
-      console.error("Perfil", error);
+    let profile = null;
+    if (userId) {
+      profile = await fetchProfile("por id", (query) => query.eq("id", userId));
+    }
+    if (!profile && email) {
+      profile = await fetchProfile("por email", (query) => query.eq("email", email));
+    }
+    if (!profile) {
+      profile = await fetchProfile("general");
+    }
+
+    if (!profile) {
+      console.warn("No se encontró un perfil para la cuenta actual.");
+      renderCreditState(null);
+      if (planChip) planChip.style.display = "none";
+      if (creditsChip) creditsChip.style.display = "none";
+      if (logoutBtn) logoutBtn.style.display = "inline-block";
       return;
     }
 
