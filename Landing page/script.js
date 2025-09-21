@@ -99,6 +99,8 @@ const byCreditsRow = document.querySelector('.by-credits');
 const byAmountRow  = document.querySelector('.by-amount');
 const creditsInput = document.getElementById('creditsInput');
 const amountInput  = document.getElementById('amountInput');
+const hasCreditsMode = !!byCreditsRow && !!creditsInput;
+const hasAmountMode  = !!byAmountRow && !!amountInput;
 
 const rBase  = document.getElementById('rBase');
 const rBonus = document.getElementById('rBonus');
@@ -137,7 +139,19 @@ function planSugeridoPorCreditos(creds){
   return { candidato, siguiente };
 }
 
+function resolveMode(mode){
+  if (mode === 'amount' && !hasAmountMode) {
+    return hasCreditsMode ? 'credits' : null;
+  }
+  if (mode === 'credits' && !hasCreditsMode) {
+    return hasAmountMode ? 'amount' : null;
+  }
+  return mode;
+}
+
 function setMode(mode){
+  mode = resolveMode(mode);
+  if (!mode) return;
   modeButtons.forEach(b=>{
     const active = b.dataset.mode === mode;
     b.classList.toggle('active', active);
@@ -145,21 +159,38 @@ function setMode(mode){
     b.setAttribute('aria-pressed', String(active));
   });
   if (mode === 'credits'){
-    byCreditsRow.classList.remove('hidden'); byCreditsRow.removeAttribute('aria-hidden');
-    byAmountRow.classList.add('hidden');     byAmountRow.setAttribute('aria-hidden','true');
-    creditsInput.disabled = false; creditsInput.setAttribute('aria-disabled','false');
-    amountInput.disabled  = true;  amountInput.setAttribute('aria-disabled','true');
-    updateFromCredits();
+    byCreditsRow?.classList.remove('hidden');
+    byCreditsRow?.removeAttribute('aria-hidden');
+    byAmountRow?.classList.add('hidden');
+    byAmountRow?.setAttribute('aria-hidden','true');
+    if (creditsInput) {
+      creditsInput.disabled = false;
+      creditsInput.setAttribute('aria-disabled','false');
+    }
+    if (amountInput) {
+      amountInput.disabled  = true;
+      amountInput.setAttribute('aria-disabled','true');
+    }
+    if (hasCreditsMode) updateFromCredits();
   } else {
-    byAmountRow.classList.remove('hidden');  byAmountRow.removeAttribute('aria-hidden');
-    byCreditsRow.classList.add('hidden');    byCreditsRow.setAttribute('aria-hidden','true');
-    amountInput.disabled  = false; amountInput.setAttribute('aria-disabled','false');
-    creditsInput.disabled = true;  creditsInput.setAttribute('aria-disabled','true');
-    updateFromAmount();
+    byAmountRow?.classList.remove('hidden');
+    byAmountRow?.removeAttribute('aria-hidden');
+    byCreditsRow?.classList.add('hidden');
+    byCreditsRow?.setAttribute('aria-hidden','true');
+    if (amountInput) {
+      amountInput.disabled  = false;
+      amountInput.setAttribute('aria-disabled','false');
+    }
+    if (creditsInput) {
+      creditsInput.disabled = true;
+      creditsInput.setAttribute('aria-disabled','true');
+    }
+    if (hasAmountMode) updateFromAmount();
   }
 }
 
 const fmtNumberInput = (el)=>{
+  if (!el) return 0;
   const digits = Number((el.value||'').replace(/\D+/g,'') || 0);
   el.value = digits ? new Intl.NumberFormat('es-CO').format(digits) : '';
   // Mueve el cursor al final
@@ -168,6 +199,7 @@ const fmtNumberInput = (el)=>{
 };
 
 function updateRecommendation(baseCredits){
+  if (!recommendBox || !recText) return;
   const { candidato, siguiente } = planSugeridoPorCreditos(baseCredits);
   const bonoCandidato = calcularBonoPorCreditos(candidato.base);
   const totalCandidato = candidato.base + bonoCandidato;
@@ -185,6 +217,7 @@ function updateRecommendation(baseCredits){
 }
 
 function updateFromCredits(){
+  if (!creditsInput) return;
   const baseCredits = fmtNumberInput(creditsInput) || 0;
   const basePrice = baseCredits * CREDITO_VALOR;
   const bonus = calcularBonoPorCreditos(baseCredits);
@@ -199,15 +232,16 @@ function updateFromCredits(){
   const waMsg = encodeURIComponent(
     `Hola, quiero comprar un plan personalizado de ${fmtCOP(baseCredits)} créditos (+${fmtCOP(bonus)} de bono = ${fmtCOP(total)} créditos) por $${fmtCOP(basePrice)}.`
   );
-  document.getElementById('customBuy').href = `https://wa.me/573126461216?text=${waMsg}`;
+  if (customBuy) customBuy.href = `https://wa.me/573126461216?text=${waMsg}`;
 
   updateRecommendation(baseCredits);
 }
 
 function updateFromAmount(){
-  const amountRaw = fmtNumberInput(document.getElementById('amountInput')) || 0;
+  if (!amountInput) return;
+  const amountRaw = fmtNumberInput(amountInput) || 0;
   const normAmount = Math.floor(amountRaw / CREDITO_VALOR) * CREDITO_VALOR;
-  if (normAmount !== amountRaw) document.getElementById('amountInput').value = normAmount ? fmtCOP(normAmount) : '';
+  if (normAmount !== amountRaw) amountInput.value = normAmount ? fmtCOP(normAmount) : '';
 
   const baseCredits = Math.floor(normAmount / CREDITO_VALOR);
   const bonus = calcularBonoPorCreditos(baseCredits);
@@ -222,7 +256,7 @@ function updateFromAmount(){
   const waMsg = encodeURIComponent(
     `Hola, quiero comprar un plan personalizado por $${fmtCOP(normAmount)} (${fmtCOP(baseCredits)} créditos + ${fmtCOP(bonus)} de bono = ${fmtCOP(total)} créditos).`
   );
-  document.getElementById('customBuy').href = `https://wa.me/573126461216?text=${waMsg}`;
+  if (customBuy) customBuy.href = `https://wa.me/573126461216?text=${waMsg}`;
 
   updateRecommendation(baseCredits);
 }
@@ -233,8 +267,8 @@ document.querySelectorAll('.seg-btn').forEach(btn=>{
 });
 
 // Inputs
-document.getElementById('creditsInput')?.addEventListener('input', updateFromCredits);
-document.getElementById('amountInput')?.addEventListener('input', updateFromAmount);
+creditsInput?.addEventListener('input', updateFromCredits);
+amountInput?.addEventListener('input', updateFromAmount);
 
 // Detalles del plan personalizado
 document.getElementById('customDetails')?.addEventListener('click', ()=>{
@@ -242,10 +276,10 @@ document.getElementById('customDetails')?.addEventListener('click', ()=>{
   let baseCredits = 0, amount = 0;
 
   if (activeMode === 'credits'){
-    baseCredits = parseDigits(document.getElementById('creditsInput').value);
+    baseCredits = parseDigits(creditsInput?.value);
     amount = baseCredits * CREDITO_VALOR;
   } else {
-    amount = Math.floor(parseDigits(document.getElementById('amountInput').value) / CREDITO_VALOR) * CREDITO_VALOR;
+    amount = Math.floor(parseDigits(amountInput?.value) / CREDITO_VALOR) * CREDITO_VALOR;
     baseCredits = Math.floor(amount / CREDITO_VALOR);
   }
   const bonus = calcularBonoPorCreditos(baseCredits);
@@ -265,12 +299,20 @@ document.getElementById('customDetails')?.addEventListener('click', ()=>{
   detailsModal.showModal();
 });
 
-// Estado inicial
-setMode('credits');
-document.getElementById('creditsInput').value = new Intl.NumberFormat('es-CO').format(30);
-updateFromCredits();
+const initialMode = resolveMode('credits');
+if (initialMode) {
+  setMode(initialMode);
+}
 
-// Estado inicial (Por monto)
-setMode('amount');
-document.getElementById('amountInput').value = new Intl.NumberFormat('es-CO').format(300000);
-updateFromAmount();
+if (hasCreditsMode && creditsInput) {
+  creditsInput.value = new Intl.NumberFormat('es-CO').format(30);
+  updateFromCredits();
+}
+
+if (hasAmountMode && amountInput) {
+  amountInput.value = new Intl.NumberFormat('es-CO').format(300000);
+  updateFromAmount();
+  if (initialMode && initialMode !== 'amount') {
+    setMode(initialMode);
+  }
+}
