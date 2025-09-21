@@ -55,11 +55,6 @@
   const STORAGE_TEST_KEY = "wf-tools.login.storage-test";
   const storage = global.localStorage;
   let storageAvailable = false;
-  const PROFILE_COLUMN_CANDIDATES = [
-    "plan, credits, full_name, email",
-    "plan, credits, email",
-    "plan, credits",
-  ];
 
   try {
     if (storage) {
@@ -110,78 +105,6 @@
     if (creditCountEl) return readCreditsFromText(creditCountEl.textContent || "");
     if (userCreditsEl) return readCreditsFromText(userCreditsEl.textContent || "");
     return 0;
-  }
-
-  function isColumnMissingError(error) {
-    if (!error) return false;
-    const message = String(error.message || "").toLowerCase();
-    return message.includes("column") && message.includes("does not exist");
-  }
-
-  async function runProfileQuery(builder) {
-    if (!builder) return { data: null, error: null };
-    if (typeof builder.maybeSingle === "function") {
-      return builder.maybeSingle();
-    }
-
-    const { data, error } = await builder.limit(1);
-    if (error) return { data: null, error };
-    if (Array.isArray(data)) {
-      return { data: data[0] || null, error: null };
-    }
-    return { data: data || null, error: null };
-  }
-
-  async function fetchProfile(session) {
-    const user = session?.user || null;
-    const userId = user?.id || null;
-    const userEmail = (user?.email || "").toLowerCase() || null;
-
-    const attemptFactories = [];
-    if (userId) {
-      attemptFactories.push({
-        label: "por id",
-        disabled: false,
-        create: (select) => supabase.from("profiles").select(select).eq("id", userId),
-      });
-    }
-    if (userEmail) {
-      attemptFactories.push({
-        label: "por email",
-        disabled: false,
-        create: (select) => supabase.from("profiles").select(select).eq("email", userEmail),
-      });
-    }
-    attemptFactories.push({
-      label: "general",
-      disabled: false,
-      create: (select) => supabase.from("profiles").select(select),
-    });
-
-    for (const selectColumns of PROFILE_COLUMN_CANDIDATES) {
-      for (const attempt of attemptFactories) {
-        if (attempt.disabled) continue;
-        try {
-          const { data, error } = await runProfileQuery(attempt.create(selectColumns));
-          if (error) {
-            console.error(`Error obteniendo perfil (${attempt.label})`, error);
-            if (isColumnMissingError(error)) {
-              attempt.disabled = true;
-              continue;
-            }
-            continue;
-          }
-          if (data) {
-            return data;
-          }
-        } catch (err) {
-          console.error(`Error inesperado obteniendo perfil (${attempt.label})`, err);
-        }
-      }
-    }
-
-    console.warn("No se encontró un perfil para la cuenta actual.");
-    return null;
   }
 
   function setSessionStatusMessage(message, state) {
@@ -455,28 +378,14 @@
   }
 
   async function updateCredits() {
-    let session = null;
-    try {
-      const { data, error } = await supabase.auth.getSession();
-      if (error) {
-        console.error("Error obteniendo la sesión para actualizar créditos", error);
-      }
-      session = data?.session || null;
-    } catch (err) {
-      console.error("No se pudo obtener la sesión actual", err);
-    }
-
-    if (!session) {
-      clearCreditsUI();
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("plan, credits")
+      .single();
+    if (error) {
+      console.error("Perfil", error);
       return;
     }
-
-    const profile = await fetchProfile(session);
-    if (!profile) {
-      clearCreditsUI();
-      return;
-    }
-
     applyCredits(profile);
   }
 
@@ -667,3 +576,4 @@
     spendCredit,
   };
 })(window);
+
