@@ -16,6 +16,7 @@ const FUNCTIONS_BASE = SUPABASE_URL.replace('.supabase.co', '.functions.supabase
 
 // ✅ Ruta del LOGO (PNG) para el UI
 const LOGO_URL = './WF TOOLS.png';
+const CLIENT_APP_URL = '../WF-TOOLS/index.html';
 
 const ENDPOINTS = {
   list: 'admin-list',
@@ -61,6 +62,7 @@ const accountTotalCreditsDetailEl = qs('#accountTotalCreditsDetail');
 const accountActiveCountEl = qs('#accountActiveCount');
 const accountAlertsEl = qs('#accountAlerts');
 const accountStatusTag = qs('#accountStatusTag');
+const btnGoClient = qs('#btnGoClient');
 
 // Inyectar logo en login y header (con seguridad si no existen)
 const loginLogoEl = qs('#loginLogo');
@@ -416,6 +418,16 @@ qs('#q')?.addEventListener('input', ()=>{
 });
 qs('#q')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ page=1; loadUsers(); }});
 qs('#btnSearch')?.addEventListener('click', ()=>{ page=1; loadUsers(); });
+btnGoClient?.addEventListener('click', ()=>{
+  try{
+    const newTab = window.open(CLIENT_APP_URL, '_blank', 'noopener');
+    if(!newTab){
+      window.location.href = CLIENT_APP_URL;
+    }
+  } catch(_err){
+    window.location.href = CLIENT_APP_URL;
+  }
+});
 qs('#btnReload')?.addEventListener('click', ()=> loadUsers());
 qs('#prev')?.addEventListener('click', ()=>{ if(page>1){ page--; loadUsers(); }});
 qs('#next')?.addEventListener('click', ()=>{ page++; loadUsers(); });

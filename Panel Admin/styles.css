@@ -124,6 +124,21 @@ a{color:var(--brand)}
 .toolbar .btn{width:100%; justify-content:center; display:inline-flex; align-items:center; gap:8px; font-weight:600}
 .toolbar .icon{font-size:1rem}
 .toolbar .btn-search{background:rgba(14,165,233,.16); color:#38bdf8; border:1px solid rgba(14,165,233,.35)}
+.toolbar .btn-admin-portal{
+  background:linear-gradient(135deg, rgba(14,165,233,.24), rgba(56,189,248,.38));
+  color:#e0f2fe;
+  border:1px solid rgba(56,189,248,.45);
+  box-shadow:0 14px 32px rgba(14,165,233,.28);
+  transition:transform .12s ease, box-shadow .2s ease, background .2s ease;
+}
+.toolbar .btn-admin-portal:hover{
+  transform:translateY(-1px);
+  box-shadow:0 18px 38px rgba(14,165,233,.32);
+}
+.toolbar .btn-admin-portal:focus-visible{
+  outline:3px solid rgba(56,189,248,.45);
+  outline-offset:3px;
+}
 .toolbar .btn-reload{background:rgba(59,130,246,.15); color:#93c5fd; border:1px solid rgba(59,130,246,.35)}
 .toolbar .btn-logout{background:rgba(239,68,68,.18); color:#fca5a5; border:1px solid rgba(239,68,68,.45)}
 

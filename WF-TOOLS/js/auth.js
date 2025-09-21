@@ -14,6 +14,7 @@
 
   const supabase = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   const REGISTRATION_TABLE = "client_registrations";
+  const ADMIN_PANEL_URL = "../Panel%20Admin/index.html";
 
   const loginScreen = document.getElementById("loginScreen");
   const loginForm = document.getElementById("loginForm");
@@ -22,6 +23,7 @@
   const loginTogglePassword = document.getElementById("loginTogglePassword");
   const loginRemember = document.getElementById("loginRemember");
   const loginBtn = document.getElementById("loginBtn");
+  const adminPortalBtn = document.getElementById("adminPanelBtn");
   const loginError = document.getElementById("loginError");
   const loginLoading = document.getElementById("loginLoading");
   const showRegisterBtn = document.getElementById("showRegisterBtn");
@@ -158,6 +160,20 @@
     return { username, wfEmail };
   }
 
+  function isAdminEmail(email) {
+    if (!email) return false;
+    const local = String(email).split("@")[0]?.toLowerCase() || "";
+    return local.startsWith("admin.");
+  }
+
+  function syncAdminPortalAccess(email) {
+    if (!adminPortalBtn) return;
+    const show = isAdminEmail(email);
+    adminPortalBtn.hidden = !show;
+    adminPortalBtn.setAttribute("aria-hidden", show ? "false" : "true");
+    adminPortalBtn.disabled = !show;
+  }
+
   function setSessionLoadingState(active, message) {
     if (sessionLoadingMessage && message) {
       sessionLoadingMessage.textContent = message;
@@ -269,6 +285,7 @@
 
   function updateUserIdentity(user) {
     if (userEmailEl) userEmailEl.textContent = user?.email || "-";
+    syncAdminPortalAccess(user?.email || null);
   }
 
   function renderCreditState(rawCredits) {
@@ -368,6 +385,9 @@
     toggleLoginButton(false);
     restoreRememberedEmail();
     resetPasswordToggle();
+    if (!loginRemember?.checked) {
+      syncAdminPortalAccess(null);
+    }
   }
 
   function setRememberedEmail(value) {
@@ -453,8 +473,10 @@
       } else if (loginRemember) {
         loginRemember.checked = false;
       }
+      syncAdminPortalAccess(loginEmail.value.trim());
     } catch (err) {
       if (loginRemember) loginRemember.checked = false;
+      syncAdminPortalAccess(null);
     }
   }
 
@@ -483,6 +505,7 @@
       logoutBtn.disabled = false;
     }
     global.AppCore?.setCreditDependentActionsEnabled(false);
+    syncAdminPortalAccess(null);
   }
 
   function showLoginUI(message, state) {
@@ -654,6 +677,15 @@
       loginRemember.closest?.(".remember-option")?.classList.add("is-disabled");
     }
 
+    loginEmail?.addEventListener("input", () => {
+      const email = loginEmail.value.trim();
+      if (!email && !loginRemember?.checked) {
+        syncAdminPortalAccess(null);
+        return;
+      }
+      syncAdminPortalAccess(email);
+    });
+
     loginEmail?.addEventListener("blur", () => {
       const email = loginEmail.value.trim();
       if (email && loginRemember?.checked) {
@@ -664,11 +696,15 @@
     loginRemember?.addEventListener("change", () => {
       if (!loginRemember.checked) {
         clearRememberedEmail();
+        if (!loginEmail?.value.trim()) {
+          syncAdminPortalAccess(null);
+        }
         return;
       }
       const email = loginEmail?.value.trim();
       if (email) {
         setRememberedEmail(email);
+        syncAdminPortalAccess(email);
       }
     });
 
@@ -688,6 +724,17 @@
         } catch (_err) {
           loginPassword.focus();
         }
+      }
+    });
+
+    adminPortalBtn?.addEventListener("click", () => {
+      try {
+        const newTab = window.open(ADMIN_PANEL_URL, "_blank", "noopener");
+        if (!newTab) {
+          window.location.href = ADMIN_PANEL_URL;
+        }
+      } catch (_err) {
+        window.location.href = ADMIN_PANEL_URL;
       }
     });
 
