@@ -13,8 +13,6 @@
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a3djamhjdXF5ZXBjbHBtcHN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTk4MTgsImV4cCI6MjA3MzQ5NTgxOH0.dBeJjYm12YW27LqIxon5ifPR1ygfFXAHVg8ZuCZCEf8";
 
   const supabase = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-  const REGISTRATION_TABLE = "client_registrations";
-  const ADMIN_PANEL_URL = "../Panel%20Admin/index.html";
 
   const loginScreen = document.getElementById("loginScreen");
   const loginForm = document.getElementById("loginForm");
@@ -23,32 +21,14 @@
   const loginTogglePassword = document.getElementById("loginTogglePassword");
   const loginRemember = document.getElementById("loginRemember");
   const loginBtn = document.getElementById("loginBtn");
-  const adminPortalBtn = document.getElementById("adminPanelBtn");
-  const adminPortalInlineBtn = document.getElementById("adminPanelBtnInline");
-  const adminPortalButtons = [adminPortalBtn, adminPortalInlineBtn].filter(Boolean);
   const loginError = document.getElementById("loginError");
   const loginLoading = document.getElementById("loginLoading");
-  const showRegisterBtn = document.getElementById("showRegisterBtn");
-  const registerForm = document.getElementById("registerForm");
-  const registerError = document.getElementById("registerError");
-  const registerSuccess = document.getElementById("registerSuccess");
-  const registerUsername = document.getElementById("registerUsername");
-  const registerUserEmail = document.getElementById("registerUserEmail");
-  const btnBackLogin = document.getElementById("btnBackLogin");
-  const btnRegister = document.getElementById("btnRegister");
-  const btnRegisterSpinner = btnRegister?.querySelector(".btn-spinner");
-  const btnRegisterText = btnRegister?.querySelector(".btn-text");
-  const regNameInput = document.getElementById("reg_name");
-  const regEmailInput = document.getElementById("reg_email");
-  const regPhoneInput = document.getElementById("reg_phone");
-  const regPasswordInput = document.getElementById("reg_password");
   const logoutBtn = document.getElementById("logoutBtn");
   const appWrap = document.getElementById("appWrap");
   const planChip = document.getElementById("planChip");
   const planNameEl = document.getElementById("planName");
   const creditsChip = document.getElementById("creditsChip");
   const creditCountEl = document.getElementById("creditCount");
-  const userNameEl = document.getElementById("currentUserName");
   const userEmailEl = document.getElementById("currentUserEmail");
   const userPlanEl = document.getElementById("currentUserPlan");
   const userCreditsEl = document.getElementById("currentUserCredits");
@@ -65,14 +45,11 @@
   const bodyEl = document.body;
   const sessionLoading = document.getElementById("sessionLoading");
   const sessionLoadingMessage = document.getElementById("sessionLoadingMessage");
-  const accountAdminShortcut = document.getElementById("accountAdminShortcut");
 
   let lastCreditsValue = null;
   let maxCreditsSeen = 0;
   let toastTimeout = null;
   let pendingWelcomeEmail = null;
-  let currentUserId = null;
-  let currentUserEmail = null;
   const creditFormatter = new Intl.NumberFormat("es-CO");
   const REMEMBER_KEY = "wf-tools.login.remembered-email";
   const STORAGE_TEST_KEY = "wf-tools.login.storage-test";
@@ -97,113 +74,6 @@
 
   function toggleLogoutButton(disabled) {
     if (logoutBtn) logoutBtn.disabled = !!disabled;
-  }
-
-  function toggleRegisterLoading(isLoading) {
-    if (!btnRegister) return;
-    btnRegister.disabled = !!isLoading;
-    btnRegister.classList.toggle("loading", !!isLoading);
-    if (btnRegisterSpinner) {
-      btnRegisterSpinner.style.display = isLoading ? "inline-block" : "none";
-    }
-    if (btnRegisterText) {
-      btnRegisterText.style.opacity = isLoading ? "0.7" : "1";
-    }
-  }
-
-  function resetRegisterState(clearInputs = false) {
-    if (registerError) {
-      registerError.textContent = "";
-      registerError.style.display = "none";
-    }
-    if (registerSuccess) registerSuccess.hidden = true;
-    if (registerUsername) registerUsername.textContent = "—";
-    if (registerUserEmail) registerUserEmail.textContent = "—";
-    if (clearInputs) {
-      registerForm?.reset();
-    }
-  }
-
-  function showRegisterError(message) {
-    if (!registerError) return;
-    registerError.textContent = message || "";
-    registerError.style.display = message ? "block" : "none";
-  }
-
-  function setAuthMode(mode) {
-    const showRegister = mode === "register";
-    loginForm?.classList.toggle("is-hidden", showRegister);
-    registerForm?.classList.toggle("is-hidden", !showRegister);
-    if (showRegister) {
-      try {
-        regNameInput?.focus({ preventScroll: true });
-      } catch (_err) {
-        regNameInput?.focus();
-      }
-    } else {
-      try {
-        loginEmail?.focus({ preventScroll: true });
-      } catch (_err) {
-        loginEmail?.focus();
-      }
-    }
-  }
-
-  function generateClientCredentials(name) {
-    const normalized = (name || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .toLowerCase();
-    const sanitized = normalized
-      .replace(/[^a-z0-9]+/g, ".")
-      .replace(/\.\.+/g, ".")
-      .replace(/^\.|\.$/g, "")
-      .slice(0, 24);
-    const randomSuffix = Math.random().toString(36).slice(-4);
-    const base = sanitized || `usuario${randomSuffix}`;
-    const username = `clien.${base}`;
-    const wfEmail = `${username}@wftools.com`;
-    return { username, wfEmail };
-  }
-
-  function isAdminEmail(email) {
-    if (!email) return false;
-    const local = String(email).split("@")[0]?.toLowerCase() || "";
-    return /^(admin|sup)\./.test(local);
-  }
-
-  function toggleAdminButton(button, show) {
-    if (!button) return;
-    button.hidden = !show;
-    button.setAttribute("aria-hidden", show ? "false" : "true");
-    button.disabled = !show;
-  }
-
-  function syncAdminPortalAccess(email) {
-    const show = isAdminEmail(email);
-    adminPortalButtons.forEach((button) => toggleAdminButton(button, show));
-    if (accountAdminShortcut) {
-      accountAdminShortcut.hidden = !show;
-      accountAdminShortcut.setAttribute("aria-hidden", show ? "false" : "true");
-    }
-  }
-
-  function navigateToAdminPanel(event) {
-    if (event) {
-      if (typeof event.preventDefault === "function") event.preventDefault();
-      if (typeof event.stopPropagation === "function") event.stopPropagation();
-    }
-
-    try {
-      if (global.self !== global.top && global.parent && typeof global.parent.showFrame === "function") {
-        global.parent.showFrame("adminFrame");
-        return;
-      }
-    } catch (_err) {
-      /* ignored */
-    }
-
-    global.location.href = ADMIN_PANEL_URL;
   }
 
   function setSessionLoadingState(active, message) {
@@ -316,26 +186,7 @@
   });
 
   function updateUserIdentity(user) {
-    currentUserId = user?.id || null;
-    currentUserEmail = user?.email || null;
     if (userEmailEl) userEmailEl.textContent = user?.email || "-";
-    if (userNameEl) {
-      const metadata = user?.user_metadata || {};
-      const rawName =
-        metadata.full_name ||
-        metadata.fullName ||
-        metadata.name ||
-        metadata.display_name ||
-        null;
-      if (rawName) {
-        userNameEl.textContent = rawName;
-      } else if (user?.email) {
-        userNameEl.textContent = user.email.split("@")[0] || user.email;
-      } else {
-        userNameEl.textContent = "-";
-      }
-    }
-    syncAdminPortalAccess(user?.email || null);
   }
 
   function renderCreditState(rawCredits) {
@@ -414,20 +265,6 @@
     loginError.style.display = message ? "block" : "none";
   }
 
-  function showRegisterSuccess(username, wfEmail) {
-    if (registerUsername) registerUsername.textContent = username || "—";
-    if (registerUserEmail) registerUserEmail.textContent = wfEmail || "—";
-    if (registerSuccess) registerSuccess.hidden = false;
-    if (wfEmail && loginEmail) {
-      loginEmail.value = wfEmail;
-    }
-    if (loginRemember && loginRemember.checked && wfEmail) {
-      setRememberedEmail(wfEmail);
-    }
-    showRegisterError("");
-    showSessionToast(`Usuario creado: ${wfEmail}`, "success");
-  }
-
   function resetLoginForm() {
     loginForm?.reset();
     showError("");
@@ -435,13 +272,6 @@
     toggleLoginButton(false);
     restoreRememberedEmail();
     resetPasswordToggle();
-    if (!loginRemember?.checked) {
-      if (currentUserEmail) {
-        syncAdminPortalAccess(currentUserEmail);
-      } else {
-        syncAdminPortalAccess(null);
-      }
-    }
   }
 
   function setRememberedEmail(value) {
@@ -452,59 +282,6 @@
       }
     } catch (err) {
       console.warn("No se pudo recordar el correo", err);
-    }
-  }
-
-  async function handleRegisterSubmit(event) {
-    event?.preventDefault();
-    if (!btnRegister) return;
-    resetRegisterState(false);
-    const name = regNameInput?.value?.trim() || "";
-    const email = regEmailInput?.value?.trim() || "";
-    const phone = regPhoneInput?.value?.trim() || "";
-    const password = regPasswordInput?.value || "";
-
-    if (!name || !email || !phone || !password) {
-      showRegisterError("Completa todos los campos.");
-      return;
-    }
-
-    if (password.length < 8) {
-      showRegisterError("La contraseña debe tener mínimo 8 caracteres.");
-      return;
-    }
-
-    const { username, wfEmail } = generateClientCredentials(name);
-    toggleRegisterLoading(true);
-
-    try {
-      const payload = {
-        full_name: name,
-        personal_email: email,
-        phone_number: phone,
-        plain_password: password,
-        wf_username: username,
-        wf_email: wfEmail,
-        created_at: new Date().toISOString(),
-      };
-
-      const { error } = await supabase
-        .from(REGISTRATION_TABLE)
-        .insert([payload], { returning: "minimal" });
-
-      if (error) {
-        console.error("Error registrando cliente", error);
-        showRegisterError(error.message || "No se pudo completar el registro.");
-        return;
-      }
-
-      registerForm?.reset();
-      showRegisterSuccess(username, wfEmail);
-    } catch (err) {
-      console.error("Fallo general en registro", err);
-      showRegisterError("Ocurrió un error registrando tu cuenta.");
-    } finally {
-      toggleRegisterLoading(false);
     }
   }
 
@@ -527,10 +304,8 @@
       } else if (loginRemember) {
         loginRemember.checked = false;
       }
-      syncAdminPortalAccess(loginEmail.value.trim());
     } catch (err) {
       if (loginRemember) loginRemember.checked = false;
-      syncAdminPortalAccess(null);
     }
   }
 
@@ -551,7 +326,6 @@
       planChip.className = "chip";
     }
     if (planNameEl) planNameEl.textContent = "-";
-    if (userNameEl) userNameEl.textContent = "-";
     if (userPlanEl) userPlanEl.textContent = "-";
     if (creditsChip) creditsChip.style.display = "none";
     renderCreditState(null);
@@ -560,18 +334,12 @@
       logoutBtn.disabled = false;
     }
     global.AppCore?.setCreditDependentActionsEnabled(false);
-    syncAdminPortalAccess(null);
-    currentUserId = null;
-    currentUserEmail = null;
   }
 
   function showLoginUI(message, state) {
     setSessionLoadingState(false);
     if (appWrap) appWrap.style.display = "none";
     if (loginScreen) loginScreen.style.display = "flex";
-    setAuthMode("login");
-    resetRegisterState(true);
-    toggleRegisterLoading(false);
     clearCreditsUI();
     resetLoginForm();
     updateUserIdentity(null);
@@ -589,10 +357,6 @@
     if (loginScreen) loginScreen.style.display = "none";
     if (appWrap) appWrap.style.display = "block";
     resetLoginForm();
-    if (logoutBtn) {
-      logoutBtn.style.display = "inline-block";
-      logoutBtn.disabled = false;
-    }
   }
 
   function applyCredits(profile) {
@@ -600,12 +364,6 @@
     const planName = profile.plan || "-";
     if (planNameEl) planNameEl.textContent = planName;
     if (userPlanEl) userPlanEl.textContent = planName;
-    if (userNameEl) {
-      const fullName = profile.full_name;
-      if (fullName && typeof fullName === "string" && fullName.trim()) {
-        userNameEl.textContent = fullName.trim();
-      }
-    }
     if (planChip) {
       const planClass = planName.toLowerCase();
       planChip.className = "chip" + (planClass ? " plan-" + planClass : "");
@@ -620,75 +378,14 @@
   }
 
   async function updateCredits() {
-    let userId = currentUserId;
-    let email = currentUserEmail;
-
-    if (!userId || !email) {
-      try {
-        const {
-          data: { session },
-          error: sessionError,
-        } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          console.error("No se pudo obtener la sesión para actualizar créditos", sessionError);
-        }
-
-        if (session?.user) {
-          userId = session.user.id;
-          email = session.user.email || email || null;
-          updateUserIdentity(session.user);
-        }
-      } catch (err) {
-        console.error("Error verificando el usuario activo para créditos", err);
-      }
-    }
-
-    if (!userId && !email) {
-      console.warn("No hay usuario activo para actualizar créditos.");
-      if (logoutBtn) logoutBtn.style.display = "inline-block";
+    const { data: profile, error } = await supabase
+      .from("profiles")
+      .select("plan, credits")
+      .single();
+    if (error) {
+      console.error("Perfil", error);
       return;
     }
-
-    const fetchProfile = async (label, builder) => {
-      try {
-        let query = supabase.from("profiles").select("plan, credits, full_name, email").limit(1);
-        if (typeof builder === "function") {
-          query = builder(query);
-        }
-        const { data, error } = await query.maybeSingle();
-        if (error && error.code !== "PGRST116") {
-          console.error(`Error obteniendo perfil (${label})`, error);
-        }
-        if (data) {
-          return data;
-        }
-      } catch (err) {
-        console.error(`Fallo obteniendo perfil (${label})`, err);
-      }
-      return null;
-    };
-
-    let profile = null;
-    if (userId) {
-      profile = await fetchProfile("por id", (query) => query.eq("id", userId));
-    }
-    if (!profile && email) {
-      profile = await fetchProfile("por email", (query) => query.eq("email", email));
-    }
-    if (!profile) {
-      profile = await fetchProfile("general");
-    }
-
-    if (!profile) {
-      console.warn("No se encontró un perfil para la cuenta actual.");
-      renderCreditState(null);
-      if (planChip) planChip.style.display = "none";
-      if (creditsChip) creditsChip.style.display = "none";
-      if (logoutBtn) logoutBtn.style.display = "inline-block";
-      return;
-    }
-
     applyCredits(profile);
   }
 
@@ -780,39 +477,16 @@
 
   async function init() {
     global.AppCore?.setCreditDependentActionsEnabled(false);
-    resetRegisterState(true);
-    setAuthMode("login");
-    toggleRegisterLoading(false);
     loginForm?.addEventListener("submit", handleLoginSubmit);
-    registerForm?.addEventListener("submit", handleRegisterSubmit);
     logoutBtn?.addEventListener("click", handleLogout);
     restoreRememberedEmail();
     resetPasswordToggle();
-
-    showRegisterBtn?.addEventListener("click", () => {
-      resetRegisterState(false);
-      setAuthMode("register");
-    });
-
-    btnBackLogin?.addEventListener("click", () => {
-      setAuthMode("login");
-      showRegisterError("");
-    });
 
     if (!storageAvailable && loginRemember) {
       loginRemember.checked = false;
       loginRemember.disabled = true;
       loginRemember.closest?.(".remember-option")?.classList.add("is-disabled");
     }
-
-    loginEmail?.addEventListener("input", () => {
-      const email = loginEmail.value.trim();
-      if (!email && !loginRemember?.checked) {
-        syncAdminPortalAccess(null);
-        return;
-      }
-      syncAdminPortalAccess(email);
-    });
 
     loginEmail?.addEventListener("blur", () => {
       const email = loginEmail.value.trim();
@@ -824,15 +498,11 @@
     loginRemember?.addEventListener("change", () => {
       if (!loginRemember.checked) {
         clearRememberedEmail();
-        if (!loginEmail?.value.trim()) {
-          syncAdminPortalAccess(null);
-        }
         return;
       }
       const email = loginEmail?.value.trim();
       if (email) {
         setRememberedEmail(email);
-        syncAdminPortalAccess(email);
       }
     });
 
@@ -853,10 +523,6 @@
           loginPassword.focus();
         }
       }
-    });
-
-    adminPortalButtons.forEach((button) => {
-      button.addEventListener("click", navigateToAdminPanel);
     });
 
     setSessionLoadingState(true, "Verificando tu sesión...");
