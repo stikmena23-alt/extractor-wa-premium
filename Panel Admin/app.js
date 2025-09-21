@@ -418,16 +418,24 @@ qs('#q')?.addEventListener('input', ()=>{
 });
 qs('#q')?.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ page=1; loadUsers(); }});
 qs('#btnSearch')?.addEventListener('click', ()=>{ page=1; loadUsers(); });
-btnGoClient?.addEventListener('click', ()=>{
+function navigateToClientApp(event){
+  if(event){
+    if(typeof event.preventDefault === 'function') event.preventDefault();
+    if(typeof event.stopPropagation === 'function') event.stopPropagation();
+  }
+  sessionLoading(true, 'Conectando con WF-TOOLS…');
   try{
-    const newTab = window.open(CLIENT_APP_URL, '_blank', 'noopener');
-    if(!newTab){
-      window.location.href = CLIENT_APP_URL;
+    if(window.self !== window.top && window.parent && typeof window.parent.showFrame === 'function'){
+      window.parent.showFrame('wfFrame');
+      setTimeout(()=> sessionLoading(false), 600);
+      return;
     }
   } catch(_err){
-    window.location.href = CLIENT_APP_URL;
+    /* ignorado */
   }
-});
+  window.location.href = CLIENT_APP_URL;
+}
+btnGoClient?.addEventListener('click', navigateToClientApp);
 qs('#btnReload')?.addEventListener('click', ()=> loadUsers());
 qs('#prev')?.addEventListener('click', ()=>{ if(page>1){ page--; loadUsers(); }});
 qs('#next')?.addEventListener('click', ()=>{ page++; loadUsers(); });

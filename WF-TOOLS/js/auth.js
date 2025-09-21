@@ -48,6 +48,7 @@
   const planNameEl = document.getElementById("planName");
   const creditsChip = document.getElementById("creditsChip");
   const creditCountEl = document.getElementById("creditCount");
+  const userNameEl = document.getElementById("currentUserName");
   const userEmailEl = document.getElementById("currentUserEmail");
   const userPlanEl = document.getElementById("currentUserPlan");
   const userCreditsEl = document.getElementById("currentUserCredits");
@@ -64,6 +65,7 @@
   const bodyEl = document.body;
   const sessionLoading = document.getElementById("sessionLoading");
   const sessionLoadingMessage = document.getElementById("sessionLoadingMessage");
+  const accountAdminShortcut = document.getElementById("accountAdminShortcut");
 
   let lastCreditsValue = null;
   let maxCreditsSeen = 0;
@@ -178,6 +180,10 @@
   function syncAdminPortalAccess(email) {
     const show = isAdminEmail(email);
     adminPortalButtons.forEach((button) => toggleAdminButton(button, show));
+    if (accountAdminShortcut) {
+      accountAdminShortcut.hidden = !show;
+      accountAdminShortcut.setAttribute("aria-hidden", show ? "false" : "true");
+    }
   }
 
   function navigateToAdminPanel(event) {
@@ -309,6 +315,22 @@
 
   function updateUserIdentity(user) {
     if (userEmailEl) userEmailEl.textContent = user?.email || "-";
+    if (userNameEl) {
+      const metadata = user?.user_metadata || {};
+      const rawName =
+        metadata.full_name ||
+        metadata.fullName ||
+        metadata.name ||
+        metadata.display_name ||
+        null;
+      if (rawName) {
+        userNameEl.textContent = rawName;
+      } else if (user?.email) {
+        userNameEl.textContent = user.email.split("@")[0] || user.email;
+      } else {
+        userNameEl.textContent = "-";
+      }
+    }
     syncAdminPortalAccess(user?.email || null);
   }
 
@@ -521,6 +543,7 @@
       planChip.className = "chip";
     }
     if (planNameEl) planNameEl.textContent = "-";
+    if (userNameEl) userNameEl.textContent = "-";
     if (userPlanEl) userPlanEl.textContent = "-";
     if (creditsChip) creditsChip.style.display = "none";
     renderCreditState(null);
@@ -563,6 +586,12 @@
     const planName = profile.plan || "-";
     if (planNameEl) planNameEl.textContent = planName;
     if (userPlanEl) userPlanEl.textContent = planName;
+    if (userNameEl) {
+      const fullName = profile.full_name;
+      if (fullName && typeof fullName === "string" && fullName.trim()) {
+        userNameEl.textContent = fullName.trim();
+      }
+    }
     if (planChip) {
       const planClass = planName.toLowerCase();
       planChip.className = "chip" + (planClass ? " plan-" + planClass : "");
@@ -579,7 +608,7 @@
   async function updateCredits() {
     const { data: profile, error } = await supabase
       .from("profiles")
-      .select("plan, credits")
+      .select("plan, credits, full_name")
       .single();
     if (error) {
       console.error("Perfil", error);

@@ -1277,14 +1277,67 @@ body[data-theme="light"] .table thead th{
   align-items:stretch;
 }
 
+#accountPanel .user-overview{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+}
+
 @media (max-width: 1200px){
   #accountPanel .user-status{ grid-template-columns:1fr; }
+  #accountPanel .user-overview{ order:0; }
 }
 
 #accountPanel .user-meta{
   display:grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap:12px;
+}
+
+#accountPanel .account-admin-shortcut{
+  display:flex;
+  align-items:center;
+  gap:18px;
+  padding:16px 18px;
+  border-radius:var(--radius-sm);
+  border:1px dashed rgba(56,189,248,.45);
+  background: linear-gradient(135deg, rgba(14,165,233,.14), rgba(14,165,233,.05));
+  box-shadow: inset 0 0 0 1px rgba(14,165,233,.08);
+}
+
+#accountPanel .account-admin-shortcut[hidden]{
+  display:none !important;
+}
+
+#accountPanel .account-admin-shortcut__copy{
+  flex:1 1 200px;
+  color: var(--text-2);
+  font-size:.92rem;
+  line-height:1.45;
+}
+
+#accountPanel .account-admin-shortcut__title{
+  display:block;
+  font-weight:700;
+  color: var(--text-1);
+  margin-bottom:4px;
+}
+
+#accountPanel .account-admin-shortcut .admin-portal-btn{
+  margin-top:0;
+  max-width:260px;
+  white-space:nowrap;
+}
+
+@media (max-width: 780px){
+  #accountPanel .account-admin-shortcut{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  #accountPanel .account-admin-shortcut .admin-portal-btn{
+    max-width:none;
+    width:100%;
+  }
 }
 
 #accountPanel .meta-block{

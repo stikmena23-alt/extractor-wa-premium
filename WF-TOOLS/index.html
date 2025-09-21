@@ -162,16 +162,6 @@
         <div class="row actions one-line">
           <div class="chip" id="planChip" style="display:none;">Plan: <span id="planName">-</span></div>
           <div class="chip" id="creditsChip" style="display:none;">Créditos: <span id="creditCount">0</span></div>
-          <button
-            id="adminPanelBtnInline"
-            class="btn admin-portal-btn admin-portal-inline"
-            type="button"
-            aria-hidden="true"
-            hidden
-          >
-            <span aria-hidden="true" class="icon">🛡️</span>
-            <span>Abrir panel administrador</span>
-          </button>
           <button id="logoutBtn" class="btn danger" style="display:none;">Cerrar sesión</button>
         </div>
       </div>
@@ -183,14 +173,41 @@
         <h2>Estado de cuenta</h2>
         <p id="sessionStatusText" class="session-status">Inicia sesión para ver tu plan y tus créditos en tiempo real.</p>
         <div class="user-status">
-          <div class="user-meta">
-            <div class="meta-block">
-              <span class="meta-label">Usuario</span>
-              <span id="currentUserEmail" class="meta-value">-</span>
+          <div class="user-overview">
+            <div class="user-meta">
+              <div class="meta-block">
+                <span class="meta-label">Nombre</span>
+                <span id="currentUserName" class="meta-value">-</span>
+              </div>
+              <div class="meta-block">
+                <span class="meta-label">Usuario / correo</span>
+                <span id="currentUserEmail" class="meta-value">-</span>
+              </div>
+              <div class="meta-block">
+                <span class="meta-label">Plan</span>
+                <span id="currentUserPlan" class="meta-value">-</span>
+              </div>
             </div>
-            <div class="meta-block">
-              <span class="meta-label">Plan</span>
-              <span id="currentUserPlan" class="meta-value">-</span>
+            <div
+              id="accountAdminShortcut"
+              class="account-admin-shortcut"
+              aria-hidden="true"
+              hidden
+            >
+              <div class="account-admin-shortcut__copy">
+                <span class="account-admin-shortcut__title">Acceso administrador</span>
+                <span class="account-admin-shortcut__hint">Gestiona usuarios, créditos y reportes desde el panel dedicado.</span>
+              </div>
+              <button
+                id="adminPanelBtnInline"
+                class="btn admin-portal-btn"
+                type="button"
+                aria-hidden="true"
+                hidden
+              >
+                <span aria-hidden="true" class="icon">🛡️</span>
+                <span>Abrir panel administrador</span>
+              </button>
             </div>
           </div>
           <div class="credit-status" id="creditStatus" data-state="idle">
