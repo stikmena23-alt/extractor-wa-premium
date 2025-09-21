@@ -24,6 +24,8 @@ const ENDPOINTS = {
   setPassword: 'admin-setpassword',
 };
 
+const REGISTRATION_TABLE = 'client_registrations';
+
 /************* STATE *************/
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let page = 1; const perPage = 10; let currentRows = []; let currentEdit = null;
@@ -38,6 +40,21 @@ const rememberCheck = qs('#rememberUser');
 const togglePasswordBtn = qs('#togglePassword');
 const togglePasswordText = togglePasswordBtn?.querySelector('.toggle-text');
 const togglePasswordIcon = togglePasswordBtn?.querySelector('.icon');
+const registerView = qs('#registerView');
+const registerForm = qs('#registerForm');
+const registerError = qs('#registerError');
+const registerSuccess = qs('#registerSuccess');
+const registerUsername = qs('#registerUsername');
+const registerUserEmail = qs('#registerUserEmail');
+const btnShowRegister = qs('#btnShowRegister');
+const btnBackLogin = qs('#btnBackLogin');
+const btnRegister = qs('#btnRegister');
+const btnRegisterText = btnRegister?.querySelector('.btn-text');
+const btnRegisterSpinner = btnRegister?.querySelector('.btn-spinner');
+const regNameInput = qs('#reg_name');
+const regEmailInput = qs('#reg_email');
+const regPhoneInput = qs('#reg_phone');
+const regPasswordInput = qs('#reg_password');
 const $overlay = qs('#overlay');
 const $creditSummary = qs('#creditSummary');
 const sessionOverlay = qs('#sessionOverlay');
@@ -50,12 +67,23 @@ const REMEMBER_KEY = 'wf-toolsadmin:remembered-email';
 const cuBox = qs('#currentUserBox');
 const cuName = qs('#cuName');
 const cuEmail = qs('#cuEmail');
+const accountPanel = qs('#accountPanel');
+const accountAvatar = qs('#accountAvatar');
+const accountUserName = qs('#accountUserName');
+const accountUserEmail = qs('#accountUserEmail');
+const accountTotalCreditsEl = qs('#accountTotalCredits');
+const accountActiveCountEl = qs('#accountActiveCount');
+const accountAlertsEl = qs('#accountAlerts');
+const accountStatusTag = qs('#accountStatusTag');
 
 // Inyectar logo en login y header (con seguridad si no existen)
 const loginLogoEl = qs('#loginLogo');
 if (loginLogoEl) loginLogoEl.src = LOGO_URL;
 const headerLogoEl = qs('#headerLogo');
 if (headerLogoEl) headerLogoEl.src = LOGO_URL;
+const registerLogoEl = qs('#registerLogo');
+if (registerLogoEl) registerLogoEl.src = LOGO_URL;
+if (accountAvatar) accountAvatar.src = LOGO_URL;
 
 function rememberEmail(value){
   try {
@@ -83,6 +111,19 @@ function loadRememberedEmail(){
   }
 }
 
+function resetRegisterState(clearInputs = false){
+  if(registerError){
+    registerError.textContent = '';
+    registerError.style.display = 'none';
+  }
+  if(registerSuccess) registerSuccess.style.display = 'none';
+  if(registerUsername) registerUsername.textContent = '—';
+  if(registerUserEmail) registerUserEmail.textContent = '—';
+  if(clearInputs && registerForm){
+    registerForm.reset();
+  }
+}
+
 /************* UI HELPERS *************/
 function show(v){
   if(!v) return;
@@ -103,6 +144,21 @@ function hide(v){
     v.style.display='none';
   }
 }
+
+function setAuthView(mode){
+  const showRegister = mode === 'register';
+  if(showRegister){
+    resetRegisterState(false);
+    if(loginView) hide(loginView);
+    if(registerView) show(registerView);
+    if(loginError) loginError.style.display = 'none';
+  } else {
+    if(registerView) hide(registerView);
+    if(loginView) show(loginView);
+    resetRegisterState(true);
+  }
+}
+
 function overlay(on){ $overlay?.classList.toggle('show', !!on); }
 function sessionLoading(on, text='Gestionando sesión…'){
   if(!sessionOverlay) return;
@@ -133,6 +189,57 @@ function escapeHTML(str){
   const map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
   return String(str).replace(/[&<>"']/g, ch => map[ch] || ch);
 }
+
+function generateClientCredentials(name){
+  const normalized = (name || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+  const sanitized = normalized
+    .replace(/[^a-z0-9]+/g, '.')
+    .replace(/\.\.+/g, '.')
+    .replace(/^\.|\.$/g, '')
+    .slice(0, 24);
+  const randomSuffix = Math.random().toString(36).slice(-4);
+  const base = sanitized || `usuario${randomSuffix}`;
+  const username = `clien.${base}`;
+  const wfEmail = `${username}@wftools.com`;
+  return { username, wfEmail };
+}
+
+function updateAccountSummary({ totalCredits = 0, activeCount = 0, lowCount = 0 } = {}){
+  if(accountTotalCreditsEl) accountTotalCreditsEl.textContent = numberFmt.format(totalCredits);
+  if(accountActiveCountEl) accountActiveCountEl.textContent = numberFmt.format(activeCount);
+  if(accountAlertsEl) accountAlertsEl.textContent = numberFmt.format(lowCount);
+  if(accountStatusTag){
+    accountStatusTag.classList.remove('warn', 'danger');
+    if(totalCredits <= 0){
+      accountStatusTag.textContent = 'Sin créditos';
+      accountStatusTag.classList.add('danger');
+    } else if(lowCount > 0){
+      accountStatusTag.textContent = 'Revisar alertas';
+      accountStatusTag.classList.add('warn');
+    } else {
+      accountStatusTag.textContent = 'Activo';
+    }
+  }
+  if(accountPanel && cuBox && cuBox.style.display !== 'none'){
+    accountPanel.style.display = 'block';
+  }
+}
+
+function resetAccountPanel(){
+  if(accountUserName) accountUserName.textContent = '—';
+  if(accountUserEmail) accountUserEmail.textContent = '—';
+  if(accountTotalCreditsEl) accountTotalCreditsEl.textContent = '0';
+  if(accountActiveCountEl) accountActiveCountEl.textContent = '0';
+  if(accountAlertsEl) accountAlertsEl.textContent = '0';
+  if(accountStatusTag){
+    accountStatusTag.textContent = 'Sin sesión';
+    accountStatusTag.classList.remove('warn', 'danger');
+  }
+  if(accountPanel) accountPanel.style.display = 'none';
+}
 function creditMeta(rawCredits){
   const value = Number(rawCredits ?? 0);
   if(!Number.isFinite(value) || value <= 0) return { value:0, level:'low', text:'Sin créditos', recommend:true };
@@ -158,7 +265,10 @@ async function api(path, { method='GET', headers={}, body=null, query=null } = {
   if(res.status===401){
     toast('Sesión expirada o no autorizada', 'warn');
     await sb.auth.signOut();
-    hide(adminView); show(loginView); sessionLoading(false);
+    hide(adminView);
+    setAuthView('login');
+    resetAccountPanel();
+    sessionLoading(false);
   }
   return res;
 }
@@ -181,12 +291,16 @@ async function guardAdmin(){
   const { data } = await sb.auth.getUser();
   const user = data?.user;
   if(!user){
-    hide(adminView); show(loginView);
+    hide(adminView);
+    setAuthView('login');
+    resetAccountPanel();
     return false;
   }
   if(!isAdminUser(user)){
     await sb.auth.signOut();
-    hide(adminView); show(loginView);
+    hide(adminView);
+    setAuthView('login');
+    resetAccountPanel();
     if (loginError){
       loginError.style.display='block';
       loginError.textContent='No eres administrador.';
@@ -204,6 +318,7 @@ async function fillCurrentUserBox(){
     const u = data?.user;
     if(!u){
       cuBox.style.display = 'none';
+      resetAccountPanel();
       return;
     }
     const name =
@@ -215,13 +330,98 @@ async function fillCurrentUserBox(){
     cuName.textContent = String(name);
     cuEmail.textContent = u.email || '—';
     cuBox.style.display = 'flex';
+    if(accountUserName) accountUserName.textContent = String(name);
+    if(accountUserEmail) accountUserEmail.textContent = u.email || '—';
+    if(accountPanel) accountPanel.style.display = 'block';
   } catch(err){
     console.warn('No se pudo obtener el usuario actual', err);
     cuBox.style.display = 'none';
+    resetAccountPanel();
   }
 }
 
 /************* AUTH FLOW *************/
+btnShowRegister?.addEventListener('click', ()=>{
+  setAuthView('register');
+  regNameInput?.focus();
+});
+btnBackLogin?.addEventListener('click', ()=>{
+  setAuthView('login');
+  emailInput?.focus();
+});
+registerForm?.addEventListener('submit', handleRegister);
+
+async function handleRegister(ev){
+  ev?.preventDefault();
+  if(!btnRegister || !btnRegisterText || !btnRegisterSpinner) return;
+  if(registerError) registerError.style.display = 'none';
+  if(registerSuccess) registerSuccess.style.display = 'none';
+
+  const name = regNameInput?.value?.trim();
+  const email = regEmailInput?.value?.trim();
+  const phone = regPhoneInput?.value?.trim();
+  const password = regPasswordInput?.value || '';
+
+  if(!name || !email || !phone || !password){
+    if(registerError){
+      registerError.textContent = 'Completa todos los campos.';
+      registerError.style.display = 'block';
+    }
+    return;
+  }
+  if(password.length < 8){
+    if(registerError){
+      registerError.textContent = 'La contraseña debe tener mínimo 8 caracteres.';
+      registerError.style.display = 'block';
+    }
+    return;
+  }
+
+  const { username, wfEmail } = generateClientCredentials(name);
+
+  btnRegister.disabled = true;
+  btnRegisterText.style.display = 'none';
+  btnRegisterSpinner.style.display = 'inline';
+
+  try{
+    const payload = {
+      full_name: name,
+      personal_email: email,
+      phone_number: phone,
+      plain_password: password,
+      wf_username: username,
+      wf_email: wfEmail,
+      created_at: new Date().toISOString(),
+    };
+    const { error } = await sb
+      .from(REGISTRATION_TABLE)
+      .insert([payload], { returning: 'minimal' });
+    if(error){
+      console.error('Error registrando cliente', error);
+      if(registerError){
+        registerError.textContent = error.message || 'No se pudo completar el registro.';
+        registerError.style.display = 'block';
+      }
+      return;
+    }
+    if(registerUsername) registerUsername.textContent = username;
+    if(registerUserEmail) registerUserEmail.textContent = wfEmail;
+    if(registerSuccess) registerSuccess.style.display = 'block';
+    if(registerForm) registerForm.reset();
+    toast('Registro creado correctamente');
+  } catch(err){
+    console.error('Fallo general en registro', err);
+    if(registerError){
+      registerError.textContent = 'Ocurrió un error registrando tu cuenta.';
+      registerError.style.display = 'block';
+    }
+  } finally {
+    btnRegister.disabled = false;
+    btnRegisterText.style.display = 'inline';
+    btnRegisterSpinner.style.display = 'none';
+  }
+}
+
 qs('#btnLogin')?.addEventListener('click', async()=>{
   if (!btnLoginText || !btnLoginSpinner) return;
   if (loginError) loginError.style.display='none';
@@ -250,6 +450,7 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
   const ok = await guardAdmin();
   if(ok){
     hide(loginView);
+    if(registerView) hide(registerView);
     show(adminView);
     await fillCurrentUserBox();   // ✅ mostrar datos del admin
     loadUsers();
@@ -270,7 +471,8 @@ qs('#btnLogout')?.addEventListener('click', async()=>{
   sessionLoading(true, 'Cerrando sesión…');
   await sb.auth.signOut();
   hide(adminView);
-  show(loginView);
+  setAuthView('login');
+  resetAccountPanel();
   if(passwordInput) passwordInput.value='';
   /* ✅ limpiar banda */
   if(cuBox){ cuBox.style.display = 'none'; }
@@ -278,10 +480,11 @@ qs('#btnLogout')?.addEventListener('click', async()=>{
 sb.auth.onAuthStateChange((_, s)=>{
   if(!s){
     hide(adminView);
-    show(loginView);
+    setAuthView('login');
     setTimeout(()=>sessionLoading(false), 250);
     /* ✅ ocultar banda si no hay sesión */
     if(cuBox){ cuBox.style.display = 'none'; }
+    resetAccountPanel();
   }
 });
 
@@ -318,6 +521,7 @@ async function bootstrap(){
       const ok = await guardAdmin();
       if(ok){
         hide(loginView);
+        if(registerView) hide(registerView);
         show(adminView);
         await fillCurrentUserBox(); // ✅ también al reingresar con sesión viva
         await loadUsers();
@@ -325,11 +529,13 @@ async function bootstrap(){
       }
     }
     hide(adminView);
-    show(loginView);
+    setAuthView('login');
+    resetAccountPanel();
   } catch(err){
     console.error('Error verificando sesión', err);
     hide(adminView);
-    show(loginView);
+    setAuthView('login');
+    resetAccountPanel();
   } finally {
     setTimeout(()=>sessionLoading(false), 220);
   }
@@ -371,7 +577,11 @@ async function loadUsers(){
 function renderRows(){
   if($rows) $rows.innerHTML=''; if($cards) $cards.innerHTML='';
   if($creditSummary) $creditSummary.style.display='none';
-  if(!currentRows.length){ if($empty) $empty.style.display='block'; return; }
+  if(!currentRows.length){
+    updateAccountSummary({ totalCredits: 0, activeCount: 0, lowCount: 0 });
+    if($empty) $empty.style.display='block';
+    return;
+  }
   if($empty) $empty.style.display='none';
 
   let totalCredits = 0;
@@ -450,6 +660,7 @@ function renderRows(){
   const activeCount = totalAccounts - inactiveCount;
   const avgCredits = activeCount ? totalCredits / activeCount : 0;
   const avgText = activeCount ? `Promedio ${averageFmt.format(avgCredits)} créditos` : 'Sin cuentas activas';
+  updateAccountSummary({ totalCredits, activeCount, lowCount });
   if ($creditSummary){
     $creditSummary.style.display='flex';
     $creditSummary.innerHTML = `
