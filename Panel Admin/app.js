@@ -426,14 +426,14 @@ function navigateToClientApp(event){
   sessionLoading(true, 'Conectando con WF-TOOLS…');
   try{
     if(window.self !== window.top && window.parent && typeof window.parent.showFrame === 'function'){
-      window.parent.showFrame('wfFrame');
-      setTimeout(()=> sessionLoading(false), 600);
+      window.parent.showFrame('wfFrame', { reload:true });
+      setTimeout(()=> sessionLoading(false), 900);
       return;
     }
   } catch(_err){
     /* ignorado */
   }
-  window.location.href = CLIENT_APP_URL;
+  window.location.replace(CLIENT_APP_URL);
 }
 btnGoClient?.addEventListener('click', navigateToClientApp);
 qs('#btnReload')?.addEventListener('click', ()=> loadUsers());

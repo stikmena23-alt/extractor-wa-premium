@@ -560,7 +560,9 @@
       }
 
       /* ===== Alterna vista activa y controla widgets ===== */
-      function showFrame(frameId) {
+      function showFrame(frameId, options) {
+        const opts = options || {};
+        const shouldReload = !!opts.reload;
         showLoading();
 
         const frames = ['wfFrame', 'adminFrame', 'landingFrame'];
@@ -594,7 +596,32 @@
               try { setupAdminIntercept(); } catch (_) {}
             }
 
-            setTimeout(() => hideLoading(), 500);
+            if (shouldReload) {
+              let fallbackTimer = null;
+              const handleLoad = () => {
+                if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+                frame.removeEventListener('load', handleLoad);
+                hideLoading();
+              };
+              fallbackTimer = setTimeout(() => {
+                frame.removeEventListener('load', handleLoad);
+                hideLoading();
+              }, 2600);
+              frame.addEventListener('load', handleLoad, { once: true });
+              try {
+                if (frame.contentWindow && typeof frame.contentWindow.location.reload === 'function') {
+                  frame.contentWindow.location.reload();
+                } else {
+                  const src = frame.getAttribute('src');
+                  if (src) frame.setAttribute('src', src);
+                }
+              } catch (_err) {
+                const src = frame.getAttribute('src');
+                if (src) frame.setAttribute('src', src);
+              }
+            } else {
+              setTimeout(() => hideLoading(), 500);
+            }
           } else {
             frame.classList.remove('active');
           }

@@ -167,7 +167,7 @@
   function isAdminEmail(email) {
     if (!email) return false;
     const local = String(email).split("@")[0]?.toLowerCase() || "";
-    return local.startsWith("admin.");
+    return /^(admin|sup)\./.test(local);
   }
 
   function toggleAdminButton(button, show) {
