@@ -6,6 +6,13 @@
 
     <title>WF-TOOLS</title>
 
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
     <!-- Favicon principal -->
     <link rel="icon" type="image/png" sizes="32x32" href="WF-TOOLS/WF%20TOOLS%202.png" />
 
@@ -33,7 +40,7 @@
         overflow: hidden; /* Evita scroll del contenedor unificado */
         background: #000;
         color: var(--text);
-        font-family: ui-sans-serif, system-ui, "Segoe UI", Roboto, Ubuntu, Cantarell, Arial;
+        font-family: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', 'Helvetica Neue', Arial;
         -webkit-font-smoothing: antialiased;
         -moz-osx-font-smoothing: grayscale;
         text-rendering: optimizeLegibility;
@@ -290,6 +297,7 @@
       .boot-title{
         margin:0 0 12px 0; display:flex; align-items:center; gap:12px;
         font-weight:800; font-size:22px; letter-spacing:.4px; line-height:1.15;
+        font-family: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', 'Helvetica Neue', Arial;
         background: linear-gradient(90deg, var(--brand-a), var(--brand-b));
         -webkit-background-clip: text; background-clip:text; color: transparent;
         text-shadow: 0 0 18px rgba(33,228,255,.18);
@@ -613,15 +621,23 @@
         try {
           const wfFrame = document.getElementById('wfFrame');
           const wfDoc   = wfFrame.contentDocument || wfFrame.contentWindow.document;
-          const adminBtn = wfDoc && wfDoc.getElementById('adminAccessBtn');
-          if (!adminBtn) return;
+          if (!wfDoc) return;
 
-          adminBtn.onclick = function (e) {
+          const intercept = function (e) {
+            if (!e) return;
             e.preventDefault();
-            e.stopPropagation();
+            if (typeof e.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
             showFrame('adminFrame');
             return false;
           };
+
+          ['adminAccessBtn', 'adminPanelBtn', 'adminPanelBtnInline'].forEach((id) => {
+            const button = wfDoc.getElementById(id);
+            if (!button || button.dataset.wfAdminIntercept === 'true') return;
+            button.addEventListener('click', intercept, true);
+            button.dataset.wfAdminIntercept = 'true';
+          });
         } catch (err) {
           console.error('No se pudo interceptar el botón de administrador:', err);
         }

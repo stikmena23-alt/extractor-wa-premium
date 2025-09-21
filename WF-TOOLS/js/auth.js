@@ -24,6 +24,8 @@
   const loginRemember = document.getElementById("loginRemember");
   const loginBtn = document.getElementById("loginBtn");
   const adminPortalBtn = document.getElementById("adminPanelBtn");
+  const adminPortalInlineBtn = document.getElementById("adminPanelBtnInline");
+  const adminPortalButtons = [adminPortalBtn, adminPortalInlineBtn].filter(Boolean);
   const loginError = document.getElementById("loginError");
   const loginLoading = document.getElementById("loginLoading");
   const showRegisterBtn = document.getElementById("showRegisterBtn");
@@ -166,12 +168,34 @@
     return local.startsWith("admin.");
   }
 
+  function toggleAdminButton(button, show) {
+    if (!button) return;
+    button.hidden = !show;
+    button.setAttribute("aria-hidden", show ? "false" : "true");
+    button.disabled = !show;
+  }
+
   function syncAdminPortalAccess(email) {
-    if (!adminPortalBtn) return;
     const show = isAdminEmail(email);
-    adminPortalBtn.hidden = !show;
-    adminPortalBtn.setAttribute("aria-hidden", show ? "false" : "true");
-    adminPortalBtn.disabled = !show;
+    adminPortalButtons.forEach((button) => toggleAdminButton(button, show));
+  }
+
+  function navigateToAdminPanel(event) {
+    if (event) {
+      if (typeof event.preventDefault === "function") event.preventDefault();
+      if (typeof event.stopPropagation === "function") event.stopPropagation();
+    }
+
+    try {
+      if (global.self !== global.top && global.parent && typeof global.parent.showFrame === "function") {
+        global.parent.showFrame("adminFrame");
+        return;
+      }
+    } catch (_err) {
+      /* ignored */
+    }
+
+    global.location.href = ADMIN_PANEL_URL;
   }
 
   function setSessionLoadingState(active, message) {
@@ -727,15 +751,8 @@
       }
     });
 
-    adminPortalBtn?.addEventListener("click", () => {
-      try {
-        const newTab = window.open(ADMIN_PANEL_URL, "_blank", "noopener");
-        if (!newTab) {
-          window.location.href = ADMIN_PANEL_URL;
-        }
-      } catch (_err) {
-        window.location.href = ADMIN_PANEL_URL;
-      }
+    adminPortalButtons.forEach((button) => {
+      button.addEventListener("click", navigateToAdminPanel);
     });
 
     setSessionLoadingState(true, "Verificando tu sesión...");

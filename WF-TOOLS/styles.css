@@ -2158,6 +2158,24 @@ html[data-theme="light"] .admin-portal-btn{
   box-shadow:0 14px 30px rgba(14,165,233,.18);
 }
 
+.admin-portal-inline{
+  margin-top:0;
+  width:auto;
+  min-width:0;
+  padding:0 18px;
+  white-space:nowrap;
+}
+
+.topbar .actions.one-line .admin-portal-inline{
+  flex-shrink:0;
+}
+
+@media (max-width:720px){
+  .row.actions.one-line .admin-portal-inline{
+    width:100%;
+  }
+}
+
 .login-buy{
   border:1px solid var(--border);
   background: rgba(255,255,255,.05);
