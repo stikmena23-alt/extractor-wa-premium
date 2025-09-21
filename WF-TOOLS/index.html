@@ -25,38 +25,82 @@
   </div>
   <!-- Pantalla de inicio de sesión -->
   <div id="loginScreen" class="login-screen">
-    <form id="loginForm" class="login-card">
-      <h2 class="title-heading">
-         <img class="title-logo" src="WF%20TOOLS.png" alt="WF TOOLS">
-        <span class="title-text">Bienvenido a WF-TOOLS</span>
-          </h2>
-      <label class="field">
-        <span>Correo/usuario</span>
-        <input type="email" id="loginEmail" placeholder="usuario@correo.com" autocomplete="username" autofocus required />
-      </label>
-      <label class="field password-field">
-        <span>Contraseña</span>
-        <div class="input-affix">
-          <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password" required />
-          <button type="button" id="loginTogglePassword" class="input-affix__action" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
-        </div>
-      </label>
-      <div class="login-extras">
-        <label class="remember-option" for="loginRemember">
-          <input type="checkbox" id="loginRemember" />
-          <span class="remember-option__decor" aria-hidden="true"></span>
-          <span class="remember-option__label">Recordar usuario</span>
+    <div class="login-card-stack">
+      <form id="loginForm" class="login-card" data-view="login">
+        <h2 class="title-heading">
+          <img class="title-logo" src="WF%20TOOLS.png" alt="WF TOOLS">
+          <span class="title-text">Bienvenido a WF-TOOLS</span>
+        </h2>
+        <label class="field">
+          <span>Correo/usuario</span>
+          <input type="email" id="loginEmail" placeholder="usuario@correo.com" autocomplete="username" autofocus required />
         </label>
-      </div>
-      <button id="loginBtn" class="btn login-primary">Entrar</button>
-      <!-- Eliminamos el botón de compra y el texto de WhatsApp.  En su lugar mostramos
-           un mensaje que indica al usuario que utilice el botón flotante de recarga
-           ubicado en la esquina inferior izquierda. -->
-      <p class="buy-info">Para recargar tu cuenta, utiliza el botón en la esquina inferior izquierda.</p>
-      <button id="adminAccessBtn" type="button" class="admin-access-link">Ingreso administrado🔒</button>
-      <p id="loginLoading" class="loading-msg">Iniciando sesión...</p>
-      <p id="loginError" class="error-msg"></p>
-    </form>
+        <label class="field password-field">
+          <span>Contraseña</span>
+          <div class="input-affix">
+            <input type="password" id="loginPassword" placeholder="Contraseña" autocomplete="current-password" required />
+            <button type="button" id="loginTogglePassword" class="input-affix__action" aria-label="Mostrar contraseña" aria-pressed="false">Mostrar</button>
+          </div>
+        </label>
+        <div class="login-extras">
+          <label class="remember-option" for="loginRemember">
+            <input type="checkbox" id="loginRemember" />
+            <span class="remember-option__decor" aria-hidden="true"></span>
+            <span class="remember-option__label">Recordar usuario</span>
+          </label>
+        </div>
+        <button id="loginBtn" class="btn login-primary">Entrar</button>
+        <!-- Eliminamos el botón de compra y el texto de WhatsApp.  En su lugar mostramos
+             un mensaje que indica al usuario que utilice el botón flotante de recarga
+             ubicado en la esquina inferior izquierda. -->
+        <p class="buy-info">Para recargar tu cuenta, utiliza el botón en la esquina inferior izquierda.</p>
+        <div class="login-links">
+          <button type="button" id="showRegisterBtn" class="link-button">Registrarme</button>
+          <button id="adminAccessBtn" type="button" class="admin-access-link">Ingreso administrado🔒</button>
+        </div>
+        <p id="loginLoading" class="loading-msg">Iniciando sesión...</p>
+        <p id="loginError" class="error-msg"></p>
+      </form>
+
+      <form id="registerForm" class="login-card is-hidden" data-view="register" novalidate>
+        <h2 class="title-heading">
+          <img class="title-logo" src="WF%20TOOLS.png" alt="WF TOOLS">
+          <span class="title-text">Crea tu acceso</span>
+        </h2>
+        <p class="register-intro">Registra tus datos para generar tu usuario WF TOOLS. Recibirás un usuario automático con el formato <strong>clien.&lt;nombre&gt;@wftools.com</strong>.</p>
+        <label class="field">
+          <span>Nombre completo</span>
+          <input type="text" id="reg_name" placeholder="Ej. Maria Fernanda" autocomplete="name" required />
+        </label>
+        <label class="field">
+          <span>Correo electrónico</span>
+          <input type="email" id="reg_email" placeholder="correo@personal.com" autocomplete="email" required />
+        </label>
+        <label class="field">
+          <span>Número de teléfono</span>
+          <input type="tel" id="reg_phone" placeholder="3001234567" autocomplete="tel" required />
+        </label>
+        <label class="field">
+          <span>Contraseña</span>
+          <input type="password" id="reg_password" placeholder="Mínimo 8 caracteres" autocomplete="new-password" required />
+        </label>
+        <p id="registerError" class="error-msg" role="alert"></p>
+        <div id="registerSuccess" class="register-success" hidden>
+          <h3>Registro completado</h3>
+          <p>Tu usuario para WF TOOLS es:</p>
+          <div class="register-credentials">
+            <div><span>Usuario:</span> <strong id="registerUsername">—</strong></div>
+            <div><span>Correo:</span> <strong id="registerUserEmail">—</strong></div>
+          </div>
+          <p class="muted small-note">Usa estas credenciales junto con la contraseña creada.</p>
+        </div>
+        <button id="btnRegister" class="btn login-primary" type="submit">
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="btn-text">Registrar cuenta</span>
+        </button>
+        <button type="button" id="btnBackLogin" class="link-button">Volver al inicio de sesión</button>
+      </form>
+    </div>
   </div>
 
   <div id="sessionToast" class="session-toast" role="status" aria-live="polite" aria-hidden="true"></div>
@@ -120,6 +164,31 @@
     </section>
 
     <main class="grid">
+      <!-- Panel de estado de usuario -->
+      <section class="card panel span-12" id="accountPanel">
+        <h2>Estado de cuenta</h2>
+        <p id="sessionStatusText" class="session-status">Inicia sesión para ver tu plan y tus créditos en tiempo real.</p>
+        <div class="user-status">
+          <div class="user-meta">
+            <div class="meta-block">
+              <span class="meta-label">Usuario</span>
+              <span id="currentUserEmail" class="meta-value">-</span>
+            </div>
+            <div class="meta-block">
+              <span class="meta-label">Plan</span>
+              <span id="currentUserPlan" class="meta-value">-</span>
+            </div>
+          </div>
+          <div class="credit-status" id="creditStatus" data-state="idle">
+            <div class="credit-count">Créditos disponibles: <strong id="currentUserCredits">0</strong></div>
+            <div class="credit-bar" id="creditBar" role="progressbar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
+              <div id="creditBarFill" class="credit-bar-fill"></div>
+            </div>
+            <p id="creditAlertMsg" class="credit-alert muted">Inicia sesión para visualizar tu saldo.</p>
+          </div>
+        </div>
+      </section>
+
       <!-- Panel entrada -->
       <section class="card panel span-7" id="dropZone">
         <h2>Entrada</h2>
@@ -191,31 +260,6 @@
             <span class="slider"></span><span class="lbl">JSON</span>
           </label>
           <button id="downloadBtn" class="btn" disabled>Descargar (Actual)</button>
-        </div>
-      </section>
-
-      <!-- Panel de estado de usuario -->
-      <section class="card panel span-12" id="accountPanel">
-        <h2>Estado de cuenta</h2>
-        <p id="sessionStatusText" class="session-status">Inicia sesión para ver tu plan y tus créditos en tiempo real.</p>
-        <div class="user-status">
-          <div class="user-meta">
-            <div class="meta-block">
-              <span class="meta-label">Usuario</span>
-              <span id="currentUserEmail" class="meta-value">-</span>
-            </div>
-            <div class="meta-block">
-              <span class="meta-label">Plan</span>
-              <span id="currentUserPlan" class="meta-value">-</span>
-            </div>
-          </div>
-          <div class="credit-status" id="creditStatus" data-state="idle">
-            <div class="credit-count">Créditos disponibles: <strong id="currentUserCredits">0</strong></div>
-            <div class="credit-bar" id="creditBar" role="progressbar" aria-valuemin="0" aria-valuemax="0" aria-valuenow="0">
-              <div id="creditBarFill" class="credit-bar-fill"></div>
-            </div>
-            <p id="creditAlertMsg" class="credit-alert muted">Inicia sesión para visualizar tu saldo.</p>
-          </div>
         </div>
       </section>
 

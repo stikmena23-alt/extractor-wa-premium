@@ -1792,6 +1792,22 @@ body[data-theme="light"] .session-modal-icon{
   box-shadow:0 16px 32px rgba(16,185,129,.18);
 }
 
+.login-card-stack{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:clamp(18px, 3vw, 26px);
+  width:min(92vw, 440px);
+}
+
+.login-card-stack .login-card{
+  width:100%;
+}
+
+.login-card.is-hidden{
+  display:none;
+}
+
 .login-screen{
   position:fixed;
   inset:0;
@@ -1842,6 +1858,100 @@ body[data-theme="light"] .session-modal-icon{
 .login-card .field span{
   font-weight:700;
   color: var(--text-2);
+}
+
+.login-links{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  align-items:center;
+}
+
+.link-button{
+  background:none;
+  border:none;
+  color:var(--pri);
+  font-weight:700;
+  cursor:pointer;
+  text-decoration:underline;
+  padding:6px 8px;
+  font-size:1rem;
+}
+
+.link-button:focus-visible{
+  outline:2px solid var(--pri);
+  outline-offset:3px;
+}
+
+[data-theme="light"] .link-button{
+  color:var(--sec);
+}
+
+.register-intro{
+  margin:0;
+  line-height:1.45;
+  color:var(--text-2);
+}
+
+.register-success{
+  border:1px solid rgba(34,197,94,.35);
+  background:rgba(34,197,94,.08);
+  border-radius:16px;
+  padding:14px 16px;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+
+[data-theme="light"] .register-success{
+  background:rgba(34,197,94,.12);
+  border-color:rgba(22,163,74,.32);
+}
+
+.register-success h3{
+  margin:0;
+  font-size:1.05rem;
+  color:var(--success);
+}
+
+.register-success p{
+  margin:0;
+}
+
+.register-credentials{
+  display:grid;
+  gap:6px;
+  font-size:0.95rem;
+}
+
+.register-credentials span{
+  color:var(--text-2);
+  font-weight:600;
+  margin-right:4px;
+}
+
+.register-success[hidden]{
+  display:none;
+}
+
+.btn-spinner{
+  width:16px;
+  height:16px;
+  border-radius:50%;
+  border:2px solid rgba(14,165,233,.25);
+  border-top-color:var(--pri);
+  border-right-color:var(--pri);
+  display:none;
+  margin-right:10px;
+  animation:spin .8s linear infinite;
+}
+
+.btn.login-primary.loading .btn-spinner{
+  display:inline-block;
+}
+
+.btn.login-primary.loading .btn-text{
+  opacity:.65;
 }
 
 #loginEmail,
@@ -2271,4 +2381,9 @@ body[data-theme="light"] .title-logo{
   width: 40px;
   height: 40px;
   margin-bottom: 6px;
+}
+
+@keyframes spin{
+  0%{ transform:rotate(0deg); }
+  100%{ transform:rotate(360deg); }
 }
