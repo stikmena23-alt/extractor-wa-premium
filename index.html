@@ -560,13 +560,40 @@
       }
 
       /* ===== Alterna vista activa y controla widgets ===== */
+      const FRAME_IDS = ['wfFrame', 'adminFrame', 'landingFrame'];
+      const FRAME_STORAGE_KEY = 'wf-tools.activeFrame';
+
+      function rememberFrame(frameId) {
+        if (!FRAME_IDS.includes(frameId)) return;
+        try {
+          localStorage.setItem(FRAME_STORAGE_KEY, frameId);
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      function getRememberedFrame() {
+        try {
+          const stored = localStorage.getItem(FRAME_STORAGE_KEY);
+          return FRAME_IDS.includes(stored) ? stored : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
       function showFrame(frameId, options) {
+        if (!FRAME_IDS.includes(frameId)) return;
         const opts = options || {};
         const shouldReload = !!opts.reload;
-        showLoading();
 
-        const frames = ['wfFrame', 'adminFrame', 'landingFrame'];
-        frames.forEach((id) => {
+        const currentActive = document.querySelector('.frame-container iframe.active');
+        const alreadyActive = currentActive && currentActive.id === frameId && !shouldReload;
+        if (!alreadyActive) {
+          showLoading();
+        }
+        rememberFrame(frameId);
+
+        FRAME_IDS.forEach((id) => {
           const frame = document.getElementById(id);
           if (!frame) return;
 
@@ -695,6 +722,11 @@
         const wa = document.getElementById('waSupport');
         if (wa) wa.style.display = 'block';
       })();
+
+      const initialFrame = getRememberedFrame() || 'wfFrame';
+      if (FRAME_IDS.includes(initialFrame)) {
+        showFrame(initialFrame);
+      }
     </script>
   </body>
 </html>
