@@ -71,6 +71,7 @@
   let maxCreditsSeen = 0;
   let toastTimeout = null;
   let pendingWelcomeEmail = null;
+  let currentUserId = null;
   const creditFormatter = new Intl.NumberFormat("es-CO");
   const REMEMBER_KEY = "wf-tools.login.remembered-email";
   const STORAGE_TEST_KEY = "wf-tools.login.storage-test";
@@ -314,6 +315,7 @@
   });
 
   function updateUserIdentity(user) {
+    currentUserId = user?.id || null;
     if (userEmailEl) userEmailEl.textContent = user?.email || "-";
     if (userNameEl) {
       const metadata = user?.user_metadata || {};
@@ -553,6 +555,7 @@
     }
     global.AppCore?.setCreditDependentActionsEnabled(false);
     syncAdminPortalAccess(null);
+    currentUserId = null;
   }
 
   function showLoginUI(message, state) {
@@ -606,14 +609,45 @@
   }
 
   async function updateCredits() {
+    let userId = currentUserId;
+
+    if (!userId) {
+      try {
+        const {
+          data: { session },
+          error: sessionError,
+        } = await supabase.auth.getSession();
+
+        if (sessionError) {
+          console.error("No se pudo obtener la sesión para actualizar créditos", sessionError);
+        }
+
+        if (session?.user) {
+          userId = session.user.id;
+          updateUserIdentity(session.user);
+        }
+      } catch (err) {
+        console.error("Error verificando el usuario activo para créditos", err);
+        userId = null;
+      }
+    }
+
+    if (!userId) {
+      console.warn("No hay usuario activo para actualizar créditos.");
+      return;
+    }
+
     const { data: profile, error } = await supabase
       .from("profiles")
       .select("plan, credits, full_name")
+      .eq("id", userId)
       .single();
+
     if (error) {
       console.error("Perfil", error);
       return;
     }
+
     applyCredits(profile);
   }
 
