@@ -24,11 +24,10 @@ const ENDPOINTS = {
   setPassword: 'admin-setpassword',
 };
 
-const REGISTRATION_TABLE = 'client_registrations';
-
 /************* STATE *************/
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let page = 1; const perPage = 10; let currentRows = []; let currentEdit = null;
+let lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0 };
 
 const qs = sel => document.querySelector(sel);
 const $rows = qs('#rows'), $cards = qs('#cards'), $empty = qs('#empty'), $skeleton = qs('#skeleton');
@@ -40,38 +39,25 @@ const rememberCheck = qs('#rememberUser');
 const togglePasswordBtn = qs('#togglePassword');
 const togglePasswordText = togglePasswordBtn?.querySelector('.toggle-text');
 const togglePasswordIcon = togglePasswordBtn?.querySelector('.icon');
-const registerView = qs('#registerView');
-const registerForm = qs('#registerForm');
-const registerError = qs('#registerError');
-const registerSuccess = qs('#registerSuccess');
-const registerUsername = qs('#registerUsername');
-const registerUserEmail = qs('#registerUserEmail');
-const btnShowRegister = qs('#btnShowRegister');
-const btnBackLogin = qs('#btnBackLogin');
-const btnRegister = qs('#btnRegister');
-const btnRegisterText = btnRegister?.querySelector('.btn-text');
-const btnRegisterSpinner = btnRegister?.querySelector('.btn-spinner');
-const regNameInput = qs('#reg_name');
-const regEmailInput = qs('#reg_email');
-const regPhoneInput = qs('#reg_phone');
-const regPasswordInput = qs('#reg_password');
 const $overlay = qs('#overlay');
 const $creditSummary = qs('#creditSummary');
 const sessionOverlay = qs('#sessionOverlay');
 const sessionMessage = sessionOverlay?.querySelector('.session-message');
 const numberFmt = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 0 });
 const averageFmt = new Intl.NumberFormat('es-CO', { maximumFractionDigits: 1 });
+const currencyFmt = new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 });
 const REMEMBER_KEY = 'wf-toolsadmin:remembered-email';
+const CREDIT_VALUE = 10000;
 
 /* ✅ NUEVO: refs de la banda de usuario conectado */
 const cuBox = qs('#currentUserBox');
 const cuName = qs('#cuName');
 const cuEmail = qs('#cuEmail');
 const accountPanel = qs('#accountPanel');
-const accountAvatar = qs('#accountAvatar');
 const accountUserName = qs('#accountUserName');
 const accountUserEmail = qs('#accountUserEmail');
 const accountTotalCreditsEl = qs('#accountTotalCredits');
+const accountTotalCreditsDetailEl = qs('#accountTotalCreditsDetail');
 const accountActiveCountEl = qs('#accountActiveCount');
 const accountAlertsEl = qs('#accountAlerts');
 const accountStatusTag = qs('#accountStatusTag');
@@ -81,9 +67,6 @@ const loginLogoEl = qs('#loginLogo');
 if (loginLogoEl) loginLogoEl.src = LOGO_URL;
 const headerLogoEl = qs('#headerLogo');
 if (headerLogoEl) headerLogoEl.src = LOGO_URL;
-const registerLogoEl = qs('#registerLogo');
-if (registerLogoEl) registerLogoEl.src = LOGO_URL;
-if (accountAvatar) accountAvatar.src = LOGO_URL;
 
 function rememberEmail(value){
   try {
@@ -111,19 +94,6 @@ function loadRememberedEmail(){
   }
 }
 
-function resetRegisterState(clearInputs = false){
-  if(registerError){
-    registerError.textContent = '';
-    registerError.style.display = 'none';
-  }
-  if(registerSuccess) registerSuccess.style.display = 'none';
-  if(registerUsername) registerUsername.textContent = '—';
-  if(registerUserEmail) registerUserEmail.textContent = '—';
-  if(clearInputs && registerForm){
-    registerForm.reset();
-  }
-}
-
 /************* UI HELPERS *************/
 function show(v){
   if(!v) return;
@@ -142,20 +112,6 @@ function hide(v){
     setTimeout(()=>{ v.style.display='none'; }, 220);
   } else {
     v.style.display='none';
-  }
-}
-
-function setAuthView(mode){
-  const showRegister = mode === 'register';
-  if(showRegister){
-    resetRegisterState(false);
-    if(loginView) hide(loginView);
-    if(registerView) show(registerView);
-    if(loginError) loginError.style.display = 'none';
-  } else {
-    if(registerView) hide(registerView);
-    if(loginView) show(loginView);
-    resetRegisterState(true);
   }
 }
 
@@ -190,30 +146,21 @@ function escapeHTML(str){
   return String(str).replace(/[&<>"']/g, ch => map[ch] || ch);
 }
 
-function generateClientCredentials(name){
-  const normalized = (name || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-  const sanitized = normalized
-    .replace(/[^a-z0-9]+/g, '.')
-    .replace(/\.\.+/g, '.')
-    .replace(/^\.|\.$/g, '')
-    .slice(0, 24);
-  const randomSuffix = Math.random().toString(36).slice(-4);
-  const base = sanitized || `usuario${randomSuffix}`;
-  const username = `clien.${base}`;
-  const wfEmail = `${username}@wftools.com`;
-  return { username, wfEmail };
+function isExcludedFromReport(email){
+  if(!email) return false;
+  const local = String(email).split('@')[0]?.toLowerCase() || '';
+  return local.startsWith('admin.') || local.startsWith('sup.');
 }
 
-function updateAccountSummary({ totalCredits = 0, activeCount = 0, lowCount = 0 } = {}){
-  if(accountTotalCreditsEl) accountTotalCreditsEl.textContent = numberFmt.format(totalCredits);
+function updateAccountSummary({ creditCount = 0, activeCount = 0, lowCount = 0 } = {}){
+  const totalValue = creditCount * CREDIT_VALUE;
+  if(accountTotalCreditsEl) accountTotalCreditsEl.textContent = currencyFmt.format(totalValue);
+  if(accountTotalCreditsDetailEl) accountTotalCreditsDetailEl.textContent = `${numberFmt.format(creditCount)} créditos clientes`;
   if(accountActiveCountEl) accountActiveCountEl.textContent = numberFmt.format(activeCount);
   if(accountAlertsEl) accountAlertsEl.textContent = numberFmt.format(lowCount);
   if(accountStatusTag){
     accountStatusTag.classList.remove('warn', 'danger');
-    if(totalCredits <= 0){
+    if(creditCount <= 0){
       accountStatusTag.textContent = 'Sin créditos';
       accountStatusTag.classList.add('danger');
     } else if(lowCount > 0){
@@ -231,7 +178,8 @@ function updateAccountSummary({ totalCredits = 0, activeCount = 0, lowCount = 0 
 function resetAccountPanel(){
   if(accountUserName) accountUserName.textContent = '—';
   if(accountUserEmail) accountUserEmail.textContent = '—';
-  if(accountTotalCreditsEl) accountTotalCreditsEl.textContent = '0';
+  if(accountTotalCreditsEl) accountTotalCreditsEl.textContent = currencyFmt.format(0);
+  if(accountTotalCreditsDetailEl) accountTotalCreditsDetailEl.textContent = '0 créditos clientes';
   if(accountActiveCountEl) accountActiveCountEl.textContent = '0';
   if(accountAlertsEl) accountAlertsEl.textContent = '0';
   if(accountStatusTag){
@@ -266,7 +214,7 @@ async function api(path, { method='GET', headers={}, body=null, query=null } = {
     toast('Sesión expirada o no autorizada', 'warn');
     await sb.auth.signOut();
     hide(adminView);
-    setAuthView('login');
+    show(loginView);
     resetAccountPanel();
     sessionLoading(false);
   }
@@ -292,14 +240,14 @@ async function guardAdmin(){
   const user = data?.user;
   if(!user){
     hide(adminView);
-    setAuthView('login');
+    show(loginView);
     resetAccountPanel();
     return false;
   }
   if(!isAdminUser(user)){
     await sb.auth.signOut();
     hide(adminView);
-    setAuthView('login');
+    show(loginView);
     resetAccountPanel();
     if (loginError){
       loginError.style.display='block';
@@ -341,87 +289,6 @@ async function fillCurrentUserBox(){
 }
 
 /************* AUTH FLOW *************/
-btnShowRegister?.addEventListener('click', ()=>{
-  setAuthView('register');
-  regNameInput?.focus();
-});
-btnBackLogin?.addEventListener('click', ()=>{
-  setAuthView('login');
-  emailInput?.focus();
-});
-registerForm?.addEventListener('submit', handleRegister);
-
-async function handleRegister(ev){
-  ev?.preventDefault();
-  if(!btnRegister || !btnRegisterText || !btnRegisterSpinner) return;
-  if(registerError) registerError.style.display = 'none';
-  if(registerSuccess) registerSuccess.style.display = 'none';
-
-  const name = regNameInput?.value?.trim();
-  const email = regEmailInput?.value?.trim();
-  const phone = regPhoneInput?.value?.trim();
-  const password = regPasswordInput?.value || '';
-
-  if(!name || !email || !phone || !password){
-    if(registerError){
-      registerError.textContent = 'Completa todos los campos.';
-      registerError.style.display = 'block';
-    }
-    return;
-  }
-  if(password.length < 8){
-    if(registerError){
-      registerError.textContent = 'La contraseña debe tener mínimo 8 caracteres.';
-      registerError.style.display = 'block';
-    }
-    return;
-  }
-
-  const { username, wfEmail } = generateClientCredentials(name);
-
-  btnRegister.disabled = true;
-  btnRegisterText.style.display = 'none';
-  btnRegisterSpinner.style.display = 'inline';
-
-  try{
-    const payload = {
-      full_name: name,
-      personal_email: email,
-      phone_number: phone,
-      plain_password: password,
-      wf_username: username,
-      wf_email: wfEmail,
-      created_at: new Date().toISOString(),
-    };
-    const { error } = await sb
-      .from(REGISTRATION_TABLE)
-      .insert([payload], { returning: 'minimal' });
-    if(error){
-      console.error('Error registrando cliente', error);
-      if(registerError){
-        registerError.textContent = error.message || 'No se pudo completar el registro.';
-        registerError.style.display = 'block';
-      }
-      return;
-    }
-    if(registerUsername) registerUsername.textContent = username;
-    if(registerUserEmail) registerUserEmail.textContent = wfEmail;
-    if(registerSuccess) registerSuccess.style.display = 'block';
-    if(registerForm) registerForm.reset();
-    toast('Registro creado correctamente');
-  } catch(err){
-    console.error('Fallo general en registro', err);
-    if(registerError){
-      registerError.textContent = 'Ocurrió un error registrando tu cuenta.';
-      registerError.style.display = 'block';
-    }
-  } finally {
-    btnRegister.disabled = false;
-    btnRegisterText.style.display = 'inline';
-    btnRegisterSpinner.style.display = 'none';
-  }
-}
-
 qs('#btnLogin')?.addEventListener('click', async()=>{
   if (!btnLoginText || !btnLoginSpinner) return;
   if (loginError) loginError.style.display='none';
@@ -450,7 +317,6 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
   const ok = await guardAdmin();
   if(ok){
     hide(loginView);
-    if(registerView) hide(registerView);
     show(adminView);
     await fillCurrentUserBox();   // ✅ mostrar datos del admin
     loadUsers();
@@ -471,7 +337,7 @@ qs('#btnLogout')?.addEventListener('click', async()=>{
   sessionLoading(true, 'Cerrando sesión…');
   await sb.auth.signOut();
   hide(adminView);
-  setAuthView('login');
+  show(loginView);
   resetAccountPanel();
   if(passwordInput) passwordInput.value='';
   /* ✅ limpiar banda */
@@ -480,7 +346,7 @@ qs('#btnLogout')?.addEventListener('click', async()=>{
 sb.auth.onAuthStateChange((_, s)=>{
   if(!s){
     hide(adminView);
-    setAuthView('login');
+    show(loginView);
     setTimeout(()=>sessionLoading(false), 250);
     /* ✅ ocultar banda si no hay sesión */
     if(cuBox){ cuBox.style.display = 'none'; }
@@ -521,7 +387,6 @@ async function bootstrap(){
       const ok = await guardAdmin();
       if(ok){
         hide(loginView);
-        if(registerView) hide(registerView);
         show(adminView);
         await fillCurrentUserBox(); // ✅ también al reingresar con sesión viva
         await loadUsers();
@@ -529,12 +394,12 @@ async function bootstrap(){
       }
     }
     hide(adminView);
-    setAuthView('login');
+    show(loginView);
     resetAccountPanel();
   } catch(err){
     console.error('Error verificando sesión', err);
     hide(adminView);
-    setAuthView('login');
+    show(loginView);
     resetAccountPanel();
   } finally {
     setTimeout(()=>sessionLoading(false), 220);
@@ -554,6 +419,17 @@ qs('#btnSearch')?.addEventListener('click', ()=>{ page=1; loadUsers(); });
 qs('#btnReload')?.addEventListener('click', ()=> loadUsers());
 qs('#prev')?.addEventListener('click', ()=>{ if(page>1){ page--; loadUsers(); }});
 qs('#next')?.addEventListener('click', ()=>{ page++; loadUsers(); });
+btnReviewAlerts?.addEventListener('click', ()=>{
+  const warning = document.querySelector('.credit-warning');
+  if(warning){
+    warning.classList.add('highlight-alert');
+    warning.scrollIntoView({ behavior:'smooth', block:'center' });
+    setTimeout(()=> warning.classList.remove('highlight-alert'), 2200);
+  } else {
+    toast('Sin alertas de crédito pendientes');
+  }
+});
+btnDownloadReport?.addEventListener('click', downloadReport);
 
 async function loadUsers(){
   try{
@@ -578,15 +454,18 @@ function renderRows(){
   if($rows) $rows.innerHTML=''; if($cards) $cards.innerHTML='';
   if($creditSummary) $creditSummary.style.display='none';
   if(!currentRows.length){
-    updateAccountSummary({ totalCredits: 0, activeCount: 0, lowCount: 0 });
+    lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0 };
+    updateAccountSummary({ creditCount: 0, activeCount: 0, lowCount: 0 });
     if($empty) $empty.style.display='block';
     return;
   }
   if($empty) $empty.style.display='none';
 
-  let totalCredits = 0;
-  let lowCount = 0;
-  let inactiveCount = 0;
+  let reportingCreditCount = 0;
+  let reportingLowCount = 0;
+  let reportingInactiveCount = 0;
+  let reportingActiveCount = 0;
+  let reportingCount = 0;
 
   for(const u of currentRows){
     const meta = creditMeta(u.credits);
@@ -602,10 +481,18 @@ function renderRows(){
     const safeFullName = fullName ? escapeHTML(fullName) : '—';
     const safePlan = escapeHTML(plan);
     const safeId = escapeHTML(id);
+    const excluded = isExcludedFromReport(email);
 
-    totalCredits += meta.value;
-    if(meta.recommend) lowCount++;
-    if(meta.value <= 0) inactiveCount++;
+    if(!excluded){
+      reportingCreditCount += meta.value;
+      if(meta.recommend) reportingLowCount++;
+      if(meta.value <= 0){
+        reportingInactiveCount++;
+      } else {
+        reportingActiveCount++;
+      }
+      reportingCount++;
+    }
 
     // tabla
     if ($rows){
@@ -624,6 +511,7 @@ function renderRows(){
             <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
           </div>
         </td>`;
+      if(meta.recommend) tr.classList.add('row-alert');
       $rows.append(tr);
     }
 
@@ -652,51 +540,111 @@ function renderRows(){
           <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Recuperación</button>
           <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
         </div>`;
+      if(meta.recommend) card.classList.add('row-alert');
       $cards.append(card);
     }
   }
 
-  const totalAccounts = currentRows.length;
-  const activeCount = totalAccounts - inactiveCount;
-  const avgCredits = activeCount ? totalCredits / activeCount : 0;
-  const avgText = activeCount ? `Promedio ${averageFmt.format(avgCredits)} créditos` : 'Sin cuentas activas';
-  updateAccountSummary({ totalCredits, activeCount, lowCount });
+  const avgCredits = reportingActiveCount ? reportingCreditCount / reportingActiveCount : 0;
+  const avgText = reportingActiveCount
+    ? `Promedio ${currencyFmt.format(avgCredits * CREDIT_VALUE)} (${averageFmt.format(avgCredits)} créditos)`
+    : 'Sin cuentas activas de clientes';
+
+  updateAccountSummary({ creditCount: reportingCreditCount, activeCount: reportingActiveCount, lowCount: reportingLowCount });
+
+  lastSummary = {
+    creditCount: reportingCreditCount,
+    activeCount: reportingActiveCount,
+    inactiveCount: reportingInactiveCount,
+    lowCount: reportingLowCount,
+    reportingCount,
+    totalRows: currentRows.length,
+  };
+
   if ($creditSummary){
     $creditSummary.style.display='flex';
     $creditSummary.innerHTML = `
       <div class="stat-card">
-        <div class="stat-icon">💠</div>
+        <div class="stat-icon">💰</div>
         <div class="stat-body">
-          <span class="stat-title">Créditos activos</span>
-          <span class="stat-value">${numberFmt.format(totalCredits)}</span>
-          <span class="stat-sub">Suma de todas las cuentas listadas</span>
+          <span class="stat-title">Valor total de créditos (clientes)</span>
+          <span class="stat-value">${currencyFmt.format(reportingCreditCount * CREDIT_VALUE)}</span>
+          <span class="stat-sub">${numberFmt.format(reportingCreditCount)} créditos disponibles</span>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon">👥</div>
         <div class="stat-body">
-          <span class="stat-title">Cuentas activas</span>
-          <span class="stat-value">${activeCount}</span>
+          <span class="stat-title">Cuentas activas de clientes</span>
+          <span class="stat-value">${numberFmt.format(reportingActiveCount)}</span>
           <span class="stat-sub">${avgText}</span>
         </div>
       </div>
       <div class="stat-card">
-        <div class="stat-icon">🛑</div>
+        <div class="stat-icon">📉</div>
         <div class="stat-body">
-          <span class="stat-title">Cuentas inactivas</span>
-          <span class="stat-value">${inactiveCount}</span>
-          <span class="stat-sub">Recarga las cuentas sin créditos</span>
+          <span class="stat-title">Cuentas sin crédito</span>
+          <span class="stat-value">${numberFmt.format(reportingInactiveCount)}</span>
+          <span class="stat-sub">Clientes analizados: ${numberFmt.format(reportingCount)}</span>
         </div>
       </div>
       <div class="stat-card">
         <div class="stat-icon">🚨</div>
         <div class="stat-body">
-          <span class="stat-title">Alertas de crédito</span>
-          <span class="stat-value">${lowCount}</span>
-          <span class="stat-sub">${lowCount ? 'Atiende las cuentas marcadas en rojo' : 'Todo en orden'}</span>
+          <span class="stat-title">Alertas críticas</span>
+          <span class="stat-value">${numberFmt.format(reportingLowCount)}</span>
+          <span class="stat-sub">${reportingLowCount ? 'Revisa las cuentas marcadas' : 'Todo en orden'}</span>
         </div>
       </div>`;
   }
+}
+
+function downloadReport(){
+  if(!currentRows.length){
+    toast('No hay usuarios para exportar', 'warn');
+    return;
+  }
+  if(typeof window.XLSX === 'undefined'){
+    toast('Biblioteca de reportes no disponible', 'err');
+    return;
+  }
+
+  const summaryRows = [
+    ['Métrica', 'Valor'],
+    ['Usuarios listados', numberFmt.format(lastSummary.totalRows)],
+    ['Clientes analizados', numberFmt.format(lastSummary.reportingCount)],
+    ['Créditos clientes', numberFmt.format(lastSummary.creditCount)],
+    ['Valor créditos (COP)', currencyFmt.format(lastSummary.creditCount * CREDIT_VALUE)],
+    ['Cuentas activas', numberFmt.format(lastSummary.activeCount)],
+    ['Cuentas sin crédito', numberFmt.format(lastSummary.inactiveCount)],
+    ['Alertas críticas', numberFmt.format(lastSummary.lowCount)],
+  ];
+
+  const summarySheet = window.XLSX.utils.aoa_to_sheet(summaryRows);
+  const userData = currentRows.map((u)=>{
+    const email = u.email || '';
+    const meta = creditMeta(u.credits);
+    const excluded = isExcludedFromReport(email);
+    return {
+      'Correo': email || '—',
+      'Nombre': u.full_name || '',
+      'Plan': u.plan || '—',
+      'Créditos': meta.value,
+      'Valor créditos (COP)': currencyFmt.format(meta.value * CREDIT_VALUE),
+      'Estado': meta.value > 0 ? 'Activa' : 'Sin créditos',
+      'Alerta': meta.recommend ? 'Sí' : 'No',
+      'Tipo de cuenta': excluded ? 'Administrativa' : 'Cliente',
+      'ID': u.id || '',
+    };
+  });
+  const usersSheet = window.XLSX.utils.json_to_sheet(userData);
+  const wb = window.XLSX.utils.book_new();
+  window.XLSX.utils.book_append_sheet(wb, summarySheet, 'Resumen');
+  window.XLSX.utils.book_append_sheet(wb, usersSheet, 'Usuarios');
+  const now = new Date();
+  const stamp = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  window.XLSX.writeFile(wb, `wf-tools-usuarios-${stamp}.xlsx`);
+  toast('Reporte XLSX generado');
 }
 
 // acciones delegadas

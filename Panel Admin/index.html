@@ -20,6 +20,7 @@
   <link rel="stylesheet" href="styles.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
   <script src="app.js" defer></script>
 </head>
 <body>
@@ -74,69 +75,7 @@
         <button id="btnRecover" class="btn btn-ghost">Olvidé mi contraseña</button>
         <span id="loginHint" class="hint">Zona de administradores WF-TOOLS</span>
       </div>
-      <button id="btnShowRegister" class="btn btn-ghost btn-alt" type="button">Registrarme</button>
       <div id="loginError" class="error" style="display:none"></div>
-    </section>
-
-    <!-- REGISTER VIEW -->
-    <section id="registerView" class="card view" data-display="flex" style="display:none">
-      <div class="brand">
-        <div class="logo">
-          <img id="registerLogo" alt="WF TOOLS logo" />
-        </div>
-        <h1>Crear cuenta WF-TOOLS</h1>
-        <div class="muted">Completa el formulario para recibir tu usuario de acceso</div>
-      </div>
-      <form id="registerForm" class="register-form">
-        <div class="field">
-          <label for="reg_name">Nombre completo</label>
-          <input id="reg_name" class="input" type="text" placeholder="Tu nombre" autocomplete="name" required />
-        </div>
-        <div class="field">
-          <label for="reg_email">Correo electrónico</label>
-          <input
-            id="reg_email"
-            class="input"
-            type="email"
-            placeholder="correo@ejemplo.com"
-            autocomplete="email"
-            required
-          />
-        </div>
-        <div class="field">
-          <label for="reg_phone">Número de teléfono</label>
-          <input
-            id="reg_phone"
-            class="input"
-            type="tel"
-            placeholder="300 000 0000"
-            autocomplete="tel"
-            required
-          />
-        </div>
-        <div class="field">
-          <label for="reg_password">Contraseña</label>
-          <input
-            id="reg_password"
-            class="input"
-            type="password"
-            placeholder="Mínimo 8 caracteres"
-            autocomplete="new-password"
-            required
-          />
-        </div>
-        <div id="registerError" class="error" style="display:none"></div>
-        <div id="registerSuccess" class="register-success" style="display:none">
-          <div class="register-success__title">¡Registro exitoso!</div>
-          <p>Tu usuario WF TOOLS es <strong id="registerUsername">—</strong> y el correo generado es <strong id="registerUserEmail">—</strong>.</p>
-          <p class="muted">Utiliza estos datos junto con tu contraseña para ingresar a WF TOOLS.</p>
-        </div>
-        <button id="btnRegister" class="btn btn-primary" type="submit">
-          <span class="btn-text">Crear cuenta</span>
-          <span class="btn-spinner" style="display:none">⏳ Registrando…</span>
-        </button>
-      </form>
-      <button id="btnBackLogin" class="btn btn-ghost btn-alt" type="button">Ya tengo una cuenta</button>
     </section>
 
     <!-- ADMIN VIEW -->
@@ -181,9 +120,7 @@
           </div>
           <div class="account-card__body">
             <div class="account-user">
-              <div class="account-user__avatar">
-                <img id="accountAvatar" alt="Avatar WF TOOLS" />
-              </div>
+              <div class="account-user__icon" aria-hidden="true">🛡️</div>
               <div class="account-user__info">
                 <div id="accountUserName" class="account-user__name">—</div>
                 <div id="accountUserEmail" class="account-user__email">—</div>
@@ -191,8 +128,9 @@
             </div>
             <div class="account-metrics">
               <div class="account-metric">
-                <span class="label">Créditos totales</span>
-                <strong id="accountTotalCredits">0</strong>
+                <span class="label">Valor créditos (COP)</span>
+                <strong id="accountTotalCredits">$0</strong>
+                <span id="accountTotalCreditsDetail" class="sub">0 créditos clientes</span>
               </div>
               <div class="account-metric">
                 <span class="label">Cuentas activas</span>
@@ -202,6 +140,16 @@
                 <span class="label">Alertas</span>
                 <strong id="accountAlerts">0</strong>
               </div>
+            </div>
+            <div class="account-actions">
+              <button id="btnReviewAlerts" class="btn btn-ghost btn-sm account-action">
+                <span class="icon" aria-hidden="true">⚠️</span>
+                <span>Revisar alertas</span>
+              </button>
+              <button id="btnDownloadReport" class="btn btn-primary btn-sm account-action">
+                <span class="icon" aria-hidden="true">📊</span>
+                <span>Generar reporte XLSX</span>
+              </button>
             </div>
           </div>
         </div>

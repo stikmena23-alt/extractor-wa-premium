@@ -87,16 +87,6 @@ a{color:var(--brand)}
 .btn-sm{padding:8px 10px; font-size:.86rem; border-radius:12px}
 .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 
-#registerView{
-  max-width:560px; padding:32px; position:relative; text-align:center;
-  display:flex; flex-direction:column; align-items:center; gap:12px
-}
-#registerView .register-form{width:100%; display:grid; gap:6px}
-#registerView .btn{width:100%}
-.register-success{border:1px solid rgba(34,197,94,.45); background:rgba(34,197,94,.12); color:#bbf7d0; padding:14px 16px; border-radius:14px; text-align:left; margin:6px 0 4px; box-shadow:0 8px 16px rgba(34,197,94,.12)}
-.register-success__title{font-weight:700; font-size:1rem; margin-bottom:4px; color:#22c55e}
-.register-success strong{color:#fef9c3}
-
 .hint{margin-top:8px; color:var(--muted); font-size:.86rem}
 .error{color:var(--danger); font-size:.9rem; margin-top:6px}
 
@@ -174,20 +164,24 @@ a{color:var(--brand)}
 .account-card__tag.danger{background:rgba(239,68,68,.18); color:#fecaca; border-color:rgba(239,68,68,.45)}
 .account-card__body{display:flex; flex-wrap:wrap; gap:20px; align-items:center; justify-content:space-between}
 .account-user{display:flex; align-items:center; gap:12px; min-width:220px}
-.account-user__avatar{width:64px; height:64px; border-radius:18px; overflow:hidden; border:1px solid var(--border); background:rgba(14,165,233,.1); display:grid; place-items:center}
-.account-user__avatar img{width:100%; height:100%; object-fit:contain}
+.account-user__icon{width:64px; height:64px; border-radius:18px; border:1px solid var(--border); background:rgba(59,130,246,.18); display:grid; place-items:center; font-size:2rem}
 .account-user__info{display:grid; gap:4px}
 .account-user__name{font-size:1.05rem; font-weight:700}
 .account-user__email{color:#8fbfe6; font-size:.9rem; word-break:break-all}
 .account-metrics{display:flex; gap:18px; flex-wrap:wrap; justify-content:flex-end}
-.account-metric{min-width:120px; background:rgba(15,18,26,.85); border:1px solid var(--border); border-radius:14px; padding:14px 16px; display:grid; gap:6px; text-align:left}
+.account-metric{min-width:160px; background:rgba(15,18,26,.85); border:1px solid var(--border); border-radius:14px; padding:14px 16px; display:grid; gap:6px; text-align:left}
 .account-metric .label{font-size:.8rem; color:var(--muted)}
 .account-metric strong{font-size:1.1rem}
+.account-metric .sub{font-size:.78rem; color:#8fbfe6}
+.account-actions{display:flex; gap:12px; flex-wrap:wrap; margin-top:16px; width:100%; justify-content:flex-end}
+.account-action{display:inline-flex; align-items:center; gap:8px; font-weight:600}
+.account-action .icon{font-size:1.1rem}
 
 @media (max-width:768px){
   .account-card__body{flex-direction:column; align-items:flex-start}
   .account-metrics{width:100%; justify-content:flex-start}
   .account-metric{width:100%}
+  .account-actions{justify-content:flex-start}
 }
 .stats{display:flex; gap:16px; flex-wrap:wrap; margin-bottom:18px; justify-content:center}
 .stat-card{flex:1 1 280px; min-width:260px; display:flex; align-items:center; gap:12px; background:var(--card); border:1px solid var(--border); border-radius:14px; padding:18px; box-shadow:var(--shadow)}
@@ -247,6 +241,15 @@ tbody tr td{border-top:1px solid rgba(255,255,255,.03); border-bottom:1px solid 
 .credit-high{background:rgba(34,197,94,.15); color:#bbf7d0; border-color:rgba(34,197,94,.35)}
 .credit-high .dot{background:var(--ok)}
 .credit-warning{margin-top:6px; padding:8px 10px; border-radius:12px; font-size:.78rem; background:rgba(239,68,68,.1); border:1px solid rgba(239,68,68,.3); color:#fecaca}
+.credit-warning.highlight-alert{box-shadow:0 0 0 3px rgba(239,68,68,.35); animation:pulse-alert 1.2s ease-in-out 0s 2}
+.table-wrap tr.row-alert{position:relative}
+.table-wrap tr.row-alert::after{content:''; position:absolute; inset:0; border-left:3px solid rgba(239,68,68,.6); border-radius:6px; pointer-events:none}
+.card-row.row-alert{border:1px solid rgba(239,68,68,.35)}
+
+@keyframes pulse-alert{
+  0%,100%{transform:scale(1);}
+  50%{transform:scale(1.02);}
+}
 .pager{display:flex; gap:10px; align-items:center; justify-content:flex-end; margin-top:10px}
 
 .view{opacity:0; transform:translateY(14px); transition:opacity .28s ease, transform .28s ease; pointer-events:none}
