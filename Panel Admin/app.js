@@ -8,6 +8,7 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const ADMIN_EMAILS = new Set([
   'stikmena6@gmail.com',
   'admin.kevinqt@wftools.com',
+  'admin.devinsonmq@wftools.com',
   // 'otro.admin@tu-dominio.com',
 ]);
 
