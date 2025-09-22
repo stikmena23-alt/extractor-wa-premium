@@ -658,10 +658,11 @@
         if (!FRAME_IDS.includes(frameId)) return;
         const opts = options || {};
         const shouldReload = !!opts.reload;
+        const skipOverlay = !!opts.skipOverlay;
 
         const currentActive = document.querySelector('.frame-container iframe.active');
         const alreadyActive = currentActive && currentActive.id === frameId && !shouldReload;
-        if (!alreadyActive) {
+        if (!alreadyActive && !skipOverlay) {
           showLoading();
         }
         rememberFrame(frameId);

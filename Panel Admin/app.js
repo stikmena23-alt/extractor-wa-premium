@@ -466,7 +466,7 @@ function navigateToClientApp(event){
   sessionLoading(true, 'Conectando con WF-TOOLS…');
   try{
     if(window.self !== window.top && window.parent && typeof window.parent.showFrame === 'function'){
-      window.parent.showFrame('wfFrame', { reload:true });
+      window.parent.showFrame('wfFrame', { reload:true, skipOverlay:true });
       setTimeout(()=> sessionLoading(false), 900);
       return;
     }
