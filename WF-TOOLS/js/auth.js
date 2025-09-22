@@ -589,22 +589,58 @@
     return revalidationPromise;
   }
 
-  function slugifyClientName(value) {
+  function normalizeNameTokens(value) {
     return (value || "")
       .toString()
       .normalize("NFD")
       .replace(/[\u0300-\u036f]/g, "")
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, ".")
+      .replace(/[^a-z0-9\s]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
+  function slugifyClientName(value) {
+    return normalizeNameTokens(value)
+      .join(".")
       .replace(/\.\.+/g, ".")
       .replace(/^\.+|\.+$/g, "");
   }
 
+  function pickSecondSurnameLetter(primary, secondary) {
+    if (secondary) {
+      return secondary[0] || "";
+    }
+    if (!primary) return "";
+    const consonants = primary.slice(1).replace(/[aeiou]/g, "");
+    if (consonants) return consonants[0];
+    const remainder = primary.slice(1).replace(/[^a-z0-9]/g, "");
+    return remainder[0] || "";
+  }
+
+  function computePreferredUsernameCore(name) {
+    const tokens = normalizeNameTokens(name);
+    if (!tokens.length) return "";
+    const firstName = tokens[0];
+    const surnameTokens = tokens.slice(1);
+    if (!surnameTokens.length) return firstName;
+    const lastTwo = surnameTokens.slice(-2);
+    const primarySurname = lastTwo[0] || "";
+    const secondarySurname = lastTwo[1] || "";
+    const firstLetter = primarySurname[0] || "";
+    const secondLetter = pickSecondSurnameLetter(primarySurname, secondarySurname);
+    const combined = (firstName + firstLetter + secondLetter).replace(/[^a-z0-9]/g, "");
+    return combined;
+  }
+
   function computeUsernameSeed(name, email, phone) {
+    const preferred = computePreferredUsernameCore(name);
+    if (preferred && preferred.length >= 4) return preferred.slice(0, 28);
     const fallbackEmail = (email || "").split("@")[0] || "";
     const fallbackPhone = (phone || "").replace(/\D+/g, "");
     return (
-      slugifyClientName(name) ||
+      slugifyClientName(preferred || name) ||
       slugifyClientName(fallbackEmail) ||
       (fallbackPhone ? fallbackPhone.slice(-8) : "") ||
       Date.now().toString(36)
@@ -613,12 +649,11 @@
 
   function buildUsernameCandidates(seed) {
     const base = (seed || "cliente")
-      .split(".")
-      .filter(Boolean)
-      .join(".")
-      .slice(0, 28)
+      .toString()
+      .replace(/[^a-z0-9.]+/g, "")
       .replace(/\.\.+/g, ".")
-      .replace(/^\.+|\.+$/g, "");
+      .replace(/^\.+|\.+$/g, "")
+      .slice(0, 28);
     const core = base || "cliente";
     const root = `client.${core}`.replace(/\.\.+/g, ".").replace(/\.+$/, "");
     const timeSuffix = Date.now().toString(36).slice(-4);
