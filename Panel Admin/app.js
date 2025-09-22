@@ -332,13 +332,56 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
 
 qs('#btnLogout')?.addEventListener('click', async()=>{
   sessionLoading(true, 'Cerrando sesión…');
-  await sb.auth.signOut();
-  hide(adminView);
-  show(loginView);
-  resetAccountPanel();
-  if(passwordInput) passwordInput.value='';
-  /* ✅ limpiar banda */
-  if(cuBox){ cuBox.style.display = 'none'; }
+  let closed = false;
+  let noSession = false;
+  let hadError = false;
+  try {
+    const helper = window.WFSessionHelper;
+    if(helper && typeof helper.ensureLogout === 'function'){
+      const res = await helper.ensureLogout(sb);
+      closed = !!res?.ok;
+      noSession = res?.reason === 'no-session';
+      if(noSession){
+        toast('No hay sesión activa para cerrar', 'warn');
+      } else if(res && res.error){
+        hadError = true;
+        console.error('Error cerrando sesión', res.error);
+        toast('No se pudo cerrar sesión. Intenta nuevamente.', 'err');
+      }
+    } else {
+      const { data } = await sb.auth.getSession();
+      if(data?.session){
+        const { error } = await sb.auth.signOut();
+        if(error){
+          hadError = true;
+          console.error('Error cerrando sesión', error);
+          toast('No se pudo cerrar sesión. Intenta nuevamente.', 'err');
+        } else {
+          closed = true;
+        }
+      } else {
+        noSession = true;
+        toast('No hay sesión activa para cerrar', 'warn');
+      }
+    }
+
+    if(!hadError && (closed || noSession)){
+      hide(adminView);
+      show(loginView);
+      resetAccountPanel();
+      if(passwordInput) passwordInput.value='';
+      if(cuBox){ cuBox.style.display = 'none'; }
+    }
+    if(closed && !hadError){
+      toast('Sesión cerrada correctamente');
+    }
+  } catch(err){
+    hadError = true;
+    console.error('Fallo inesperado al cerrar sesión', err);
+    toast('No se pudo cerrar sesión. Revisa la consola.', 'err');
+  } finally {
+    setTimeout(()=>sessionLoading(false), 220);
+  }
 });
 sb.auth.onAuthStateChange((_, s)=>{
   if(!s){
@@ -418,6 +461,8 @@ function navigateToClientApp(event){
     if(typeof event.preventDefault === 'function') event.preventDefault();
     if(typeof event.stopPropagation === 'function') event.stopPropagation();
   }
+  overlay(false);
+  if($skeleton) $skeleton.style.display='none';
   sessionLoading(true, 'Conectando con WF-TOOLS…');
   try{
     if(window.self !== window.top && window.parent && typeof window.parent.showFrame === 'function'){

@@ -737,19 +737,43 @@ function renderPreview(){
   statDup.textContent = String(currentCounts.duplicates || 0);
 
   const filtered = applyFilterAndSort(currentContacts);
-  const list = (showAllEl.checked ? filtered : filtered.slice(0, 1000));
+  const countsMap = currentCounts.countsMap || {};
+  const baseList = showAllEl.checked ? filtered : filtered.slice(0, 1000);
+  const rows = [];
+  if(showAllEl.checked){
+    baseList.forEach((value)=>{
+      const total = Math.max(1, countsMap[value] || 1);
+      for(let occ = 1; occ <= total; occ += 1){
+        rows.push({ value, total, occurrence: occ });
+      }
+    });
+  } else {
+    baseList.forEach((value)=>{
+      const total = Math.max(1, countsMap[value] || 1);
+      rows.push({ value, total, occurrence: 1 });
+    });
+  }
+
   contactsList.innerHTML = "";
-  list.forEach((c, i) => {
-    const row = document.createElement("div");
-    row.className = "rowline" + ((currentCounts.countsMap[c] > 1) ? " dup" : "");
-    const b = document.createElement("span");
-    b.className = "badge"; b.textContent = String(i+1).padStart(3, "0");
-    const v = document.createElement("span");
-    v.textContent = anonymize(c);
-    row.appendChild(b); row.appendChild(v);
+  rows.forEach((entry, index) => {
+    const row = document.createElement('div');
+    row.className = 'rowline' + (entry.total > 1 ? ' dup' : '');
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+    badge.textContent = String(index + 1).padStart(3, '0');
+    const valueEl = document.createElement('span');
+    valueEl.textContent = anonymize(entry.value);
+    row.appendChild(badge);
+    row.appendChild(valueEl);
+    if(showAllEl.checked && entry.total > 1){
+      const occEl = document.createElement('span');
+      occEl.className = 'occurrence';
+      occEl.textContent = `${entry.occurrence}/${entry.total}`;
+      row.appendChild(occEl);
+    }
     contactsList.appendChild(row);
   });
-  buildPrefixDash(list);
+  buildPrefixDash(showAllEl.checked ? filtered : baseList);
   updateRelBtn();
   downloadBtn.disabled = currentContacts.length === 0;
   renderRelations();

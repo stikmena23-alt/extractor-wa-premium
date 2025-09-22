@@ -915,21 +915,49 @@
 
   async function handleLogout() {
     toggleLogoutButton(true);
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
+    try {
+      const helper = global.WFSessionHelper;
+      let hasSession = false;
+      if (helper && typeof helper.hasActiveSession === "function") {
+        hasSession = await helper.hasActiveSession(supabase);
+      } else {
+        const { data } = await supabase.auth.getSession();
+        hasSession = !!data?.session;
+      }
 
-    if (!session) {
-      toggleLogoutButton(false);
-      showSessionToast("No hay una sesión activa para cerrar.", "info");
-      showLoginUI();
-      return;
-    }
+      if (!hasSession) {
+        showSessionToast("No hay una sesión activa para cerrar.", "info");
+        showLoginUI();
+        return;
+      }
 
-    const { error } = await supabase.auth.signOut();
-    toggleLogoutButton(false);
-    if (error) {
+      let ok = false;
+      if (helper && typeof helper.logout === "function") {
+        const res = await helper.logout(supabase);
+        ok = !!res?.ok && !res.error;
+        if (res && res.error) {
+          console.error("Fallo cerrando sesión", res.error);
+        }
+      } else {
+        const { error } = await supabase.auth.signOut();
+        ok = !error;
+        if (error) {
+          console.error("Fallo cerrando sesión", error);
+        }
+      }
+
+      if (!ok) {
+        showSessionToast("No se pudo cerrar sesión. Intenta nuevamente.", "danger");
+        return;
+      }
+
+      showSessionToast("Sesión cerrada correctamente.", "success");
+      showLoginUI("Sesión cerrada correctamente.", "closed");
+    } catch (error) {
+      console.error("Error inesperado al cerrar sesión", error);
       showSessionToast("No se pudo cerrar sesión. Intenta nuevamente.", "danger");
+    } finally {
+      toggleLogoutButton(false);
     }
   }
 
