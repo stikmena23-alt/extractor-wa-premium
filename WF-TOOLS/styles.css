@@ -1845,34 +1845,34 @@ body[data-theme="light"] .graph-refresh{ color:#0a223d; }
   background: linear-gradient(140deg, var(--bg1), var(--bg2));
   z-index:1000;
   padding:clamp(18px, 3vw, 32px);
-  display:flex;
-  flex-direction:column;
-  gap:var(--gap);
+  display:grid;
+  grid-template-columns:minmax(320px, clamp(360px, 32vw, 520px)) minmax(0, 1fr);
+  grid-template-rows:auto minmax(0, 1fr);
+  grid-template-areas:
+    "top top"
+    "actions graph";
+  gap:clamp(14px, 2vw, 24px);
+  align-items:stretch;
   overflow:hidden;
 }
 
 #graphPanel.fullscreen .graph-top{
-  flex-direction:column;
-  align-items:stretch;
-  gap:clamp(12px, 2vh, 24px);
-  margin-bottom:clamp(8px, 2vh, 16px);
-}
-
-#graphPanel.fullscreen .graph-controls{
-  align-items:flex-start;
-  justify-content:space-between;
-  gap:clamp(12px, 3vw, 28px);
+  grid-area:top;
+  flex-direction:row;
+  align-items:flex-end;
+  gap:clamp(10px, 2vw, 24px);
+  margin-bottom:0;
 }
 
 #graphPanel.fullscreen h2{
-  font-size:clamp(24px, 3vw, 28px);
+  font-size:clamp(22px, 2.4vw, 30px);
 }
 
-#graphPanel.fullscreen #graph{
-  flex:1 1 auto;
-  height:100%;
-  min-height:0;
-  max-height:none;
+#graphPanel.fullscreen .graph-controls{
+  align-items:center;
+  justify-content:flex-start;
+  gap:clamp(10px, 2vw, 28px);
+  flex-wrap:wrap;
 }
 
 #graphPanel.fullscreen .graph-fullscreen-btn{
@@ -1888,17 +1888,48 @@ body[data-theme="light"] .graph-refresh{ color:#0a223d; }
 }
 
 #graphPanel.fullscreen .graph-actions{
-  flex-direction:row;
-  align-items:flex-start;
+  grid-area:actions;
+  flex-direction:column;
+  align-items:stretch;
+  justify-content:flex-start;
+  overflow:auto;
+  padding-right:clamp(4px, 1vw, 12px);
+  max-height:100%;
 }
 
 #graphPanel.fullscreen .graph-selection{
-  flex:2 1 480px;
+  flex:0 0 auto;
 }
 
 #graphPanel.fullscreen .graph-export{
-  flex:1 1 280px;
+  flex:0 0 auto;
   justify-content:flex-start;
+}
+
+#graphPanel.fullscreen .graph-selection,
+#graphPanel.fullscreen .graph-export{
+  box-shadow:0 16px 40px rgba(15,23,42,.35);
+}
+
+#graphPanel.fullscreen .graph-selection__buttons .btn{ flex:1 1 160px; }
+
+#graphPanel.fullscreen .graph-selection__controls{ gap:16px; }
+
+#graphPanel.fullscreen .graph-selection__label{ font-size:1.05rem; }
+
+#graphPanel.fullscreen .graph-selection textarea,
+#graphPanel.fullscreen .graph-selection input{ font-size:1rem; }
+
+#graphPanel.fullscreen .graph-selection__buttons{ gap:14px; }
+
+#graphPanel.fullscreen .graph-export .btn{ flex:1 1 200px; }
+
+#graphPanel.fullscreen #graph{
+  grid-area:graph;
+  width:100%;
+  height:100%;
+  min-height:0;
+  max-height:none;
 }
 
 .graph-fullscreen-btn.is-close{
@@ -1911,7 +1942,26 @@ body[data-theme="light"] .graph-refresh{ color:#0a223d; }
 .graph-fullscreen-btn.is-close .icon::before{ content:'\2715'; }
 
 .graph-fullscreen-btn.is-close:focus-visible{
-  box-shadow:0 0 0 3px rgba(239,68,68,.35);
+  box-shadow:0 0 0 3px rgba(248,113,113,.55);
+}
+
+@media (max-width: 1024px){
+  #graphPanel.fullscreen{
+    display:flex;
+    flex-direction:column;
+    overflow:auto;
+  }
+  #graphPanel.fullscreen .graph-top{
+    flex-direction:column;
+    align-items:stretch;
+  }
+  #graphPanel.fullscreen .graph-actions{
+    overflow:visible;
+    padding-right:0;
+  }
+  #graphPanel.fullscreen #graph{
+    min-height:clamp(360px, 55vh, 620px);
+  }
 }
 
 .color-controls{ display:none; gap:8px; flex-wrap:wrap; margin-bottom:0; }

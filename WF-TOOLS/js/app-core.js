@@ -2017,23 +2017,93 @@ function refreshGraphDimensions({ fit = true } = {}){
   }
 }
 
+function getFullscreenElement(){
+  if (typeof document === 'undefined') return null;
+  return document.fullscreenElement
+    || document.webkitFullscreenElement
+    || document.mozFullScreenElement
+    || document.msFullscreenElement
+    || null;
+}
+
+function isGraphFullscreenActive(){
+  const fullscreenEl = getFullscreenElement();
+  if (fullscreenEl){
+    return fullscreenEl === graphPanel;
+  }
+  return !!graphPanel?.classList.contains('fullscreen');
+}
+
+function applyGraphFullscreenState(isFull){
+  if (!graphPanel) return;
+  graphPanel.classList.toggle('fullscreen', isFull);
+  if (document?.body){
+    document.body.classList.toggle('graph-fullscreen-open', isFull);
+  }
+  updateFullscreenButtonState(isFull);
+  if (graphNetwork){
+    requestAnimationFrame(() => refreshGraphDimensions({ fit: true }));
+  }
+}
+
+function requestGraphFullscreen(){
+  if (!graphPanel) return Promise.resolve();
+  try {
+    if (graphPanel.requestFullscreen){
+      return graphPanel.requestFullscreen({ navigationUI: 'hide' });
+    }
+    if (graphPanel.webkitRequestFullscreen){
+      graphPanel.webkitRequestFullscreen();
+    } else if (graphPanel.mozRequestFullScreen){
+      graphPanel.mozRequestFullScreen();
+    } else if (graphPanel.msRequestFullscreen){
+      graphPanel.msRequestFullscreen();
+    }
+  } catch (error) {
+    console.warn('No se pudo activar el modo de pantalla completa del navegador.', error);
+  }
+  return Promise.resolve();
+}
+
+function exitGraphFullscreen(){
+  if (typeof document === 'undefined') return Promise.resolve();
+  try {
+    if (document.exitFullscreen){
+      return document.exitFullscreen();
+    }
+    if (document.webkitExitFullscreen){
+      document.webkitExitFullscreen();
+    } else if (document.mozCancelFullScreen){
+      document.mozCancelFullScreen();
+    } else if (document.msExitFullscreen){
+      document.msExitFullscreen();
+    }
+  } catch (error) {
+    console.warn('No se pudo salir del modo de pantalla completa del navegador.', error);
+  }
+  return Promise.resolve();
+}
+
 function setGraphFullscreen(isFull){
   if (!graphPanel) return;
   const targetState = !!isFull;
-  const currentState = graphPanel.classList.contains('fullscreen');
-  if (currentState !== targetState){
-    graphPanel.classList.toggle('fullscreen', targetState);
-    if (document?.body){
-      document.body.classList.toggle('graph-fullscreen-open', targetState);
-    }
-  } else if (targetState && document?.body && !document.body.classList.contains('graph-fullscreen-open')){
-    document.body.classList.add('graph-fullscreen-open');
-  } else if (!targetState && document?.body && document.body.classList.contains('graph-fullscreen-open')){
-    document.body.classList.remove('graph-fullscreen-open');
+  const currentlyFullscreen = isGraphFullscreenActive();
+  if (targetState === currentlyFullscreen){
+    applyGraphFullscreenState(currentlyFullscreen);
+    return;
   }
-  updateFullscreenButtonState(targetState);
-  if (graphNetwork){
-    setTimeout(() => refreshGraphDimensions({ fit: true }), 80);
+  if (targetState){
+    applyGraphFullscreenState(true);
+    const req = requestGraphFullscreen();
+    if (req && typeof req.catch === 'function'){
+      req.catch(() => {});
+    }
+  } else {
+    const exitPromise = exitGraphFullscreen();
+    if (exitPromise && typeof exitPromise.catch === 'function'){
+      exitPromise.catch(() => {});
+    }
+    applyGraphFullscreenState(false);
   }
 }
 
@@ -2360,26 +2430,35 @@ async function exportGraphToPdf(){
       alert('La vista del gráfico no tiene dimensiones válidas para exportar.');
       return;
     }
+    const pixelRatio = (typeof window !== 'undefined' && window.devicePixelRatio) ? window.devicePixelRatio : 1;
+    const scaleHint = Math.min(4, Math.max(2, Math.ceil(pixelRatio * 2)));
     const exportCanvas = document.createElement('canvas');
-    exportCanvas.width = canvasWidth;
-    exportCanvas.height = canvasHeight;
+    exportCanvas.width = Math.max(canvasWidth * scaleHint, canvasWidth);
+    exportCanvas.height = Math.max(canvasHeight * scaleHint, canvasHeight);
     const ctx = exportCanvas.getContext('2d');
     if (!ctx){
       alert('No se pudo preparar el lienzo para exportar.');
       return;
     }
-    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.clearRect(0, 0, exportCanvas.width, exportCanvas.height);
+    const scaleX = exportCanvas.width / canvasWidth;
+    const scaleY = exportCanvas.height / canvasHeight;
+    ctx.save();
+    ctx.scale(scaleX, scaleY);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(sourceCanvas, 0, 0, canvasWidth, canvasHeight);
+    ctx.restore();
 
     const bgColor = window.getComputedStyle(graphEl).getPropertyValue('background-color');
     const parsedBg = parseRgbColor(bgColor);
     if (parsedBg){
       try {
-        const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+        const imageData = ctx.getImageData(0, 0, exportCanvas.width, exportCanvas.height);
         const data = imageData.data;
         const { r, g, b } = parsedBg;
         for (let i = 0; i < data.length; i += 4){
-          if (data[i] === r && data[i + 1] === g && data[i + 2] === b){
+          if (Math.abs(data[i] - r) <= 1 && Math.abs(data[i + 1] - g) <= 1 && Math.abs(data[i + 2] - b) <= 1){
             data[i + 3] = 0;
           }
         }
@@ -2391,12 +2470,14 @@ async function exportGraphToPdf(){
     const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const ratio = Math.min(pageWidth / canvasWidth, pageHeight / canvasHeight);
-    const imgWidth = canvasWidth * ratio;
-    const imgHeight = canvasHeight * ratio;
+    const exportWidth = exportCanvas.width;
+    const exportHeight = exportCanvas.height;
+    const ratio = Math.min(pageWidth / exportWidth, pageHeight / exportHeight);
+    const imgWidth = exportWidth * ratio;
+    const imgHeight = exportHeight * ratio;
     const offsetX = (pageWidth - imgWidth) / 2;
     const offsetY = (pageHeight - imgHeight) / 2;
-    pdf.addImage(imgData, 'PNG', offsetX, offsetY, imgWidth, imgHeight, undefined, 'FAST');
+    pdf.addImage(imgData, 'PNG', offsetX, offsetY, imgWidth, imgHeight, undefined, 'SLOW');
     pdf.save(`wf-tools_grafico_${nowStamp()}.pdf`);
   } catch (error) {
     console.error('Error exportando gráfico a PDF', error);
@@ -2483,15 +2564,25 @@ function updateFullscreenButtonState(isFull){
   relBtn.classList.toggle('is-close', isFull);
 }
 
+const fullscreenEvents = ['fullscreenchange','webkitfullscreenchange','mozfullscreenchange','MSFullscreenChange'];
+fullscreenEvents.forEach(evt => {
+  if (typeof document !== 'undefined'){
+    document.addEventListener(evt, () => {
+      const active = isGraphFullscreenActive();
+      applyGraphFullscreenState(active);
+    });
+  }
+});
+
 if (relBtn){
-  const initialFullscreen = graphPanel?.classList.contains('fullscreen') || false;
+  const initialFullscreen = isGraphFullscreenActive();
   if (document?.body){
     document.body.classList.toggle('graph-fullscreen-open', initialFullscreen);
   }
   updateFullscreenButtonState(initialFullscreen);
   relBtn.addEventListener('click', ()=>{
     if(!graphPanel) return;
-    const isCurrentlyFull = graphPanel.classList.contains('fullscreen');
+    const isCurrentlyFull = isGraphFullscreenActive();
     setGraphFullscreen(!isCurrentlyFull);
   });
 }
