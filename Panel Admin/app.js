@@ -13,6 +13,7 @@ const ADMIN_EMAILS = new Set([
 ]);
 
 const FUNCTIONS_BASE = SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co');
+const SESSION_CACHE_KEY = 'wf-tools.supabase.session';
 
 // ✅ Ruta del LOGO (PNG) para el UI
 const LOGO_URL = './WF TOOLS.png';
@@ -26,7 +27,17 @@ const ENDPOINTS = {
 };
 
 /************* STATE *************/
-const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const sb = window.supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY,
+  {
+    auth: {
+      persistSession: true,
+      autoRefreshToken: true,
+      detectSessionInUrl: false,
+    },
+  }
+);
 let page = 1; const perPage = 10; let currentRows = []; let currentEdit = null;
 let lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0 };
 
@@ -82,6 +93,71 @@ function rememberEmail(value){
   } catch(err){
     console.warn('No se pudo recordar el correo', err);
   }
+}
+
+function clearCachedSession(){
+  try {
+    localStorage.removeItem(SESSION_CACHE_KEY);
+  } catch(_err) {
+    /* ignore */
+  }
+}
+
+function cacheSession(session){
+  if(!session) return;
+  const access = session.access_token;
+  const refresh = session.refresh_token;
+  if(!access || !refresh) return;
+  try {
+    localStorage.setItem(SESSION_CACHE_KEY, JSON.stringify({
+      access_token: access,
+      refresh_token: refresh,
+      expires_at: session.expires_at || null,
+    }));
+  } catch(err){
+    console.debug('No se pudo guardar la sesión local', err);
+  }
+}
+
+function readCachedSession(){
+  try {
+    const raw = localStorage.getItem(SESSION_CACHE_KEY);
+    if(!raw) return null;
+    const parsed = JSON.parse(raw);
+    if(!parsed?.access_token || !parsed?.refresh_token){
+      clearCachedSession();
+      return null;
+    }
+    return parsed;
+  } catch(err){
+    console.debug('No se pudo leer la sesión guardada', err);
+    clearCachedSession();
+    return null;
+  }
+}
+
+async function restoreCachedSession(){
+  const cached = readCachedSession();
+  if(!cached) return null;
+  try {
+    const { data, error } = await sb.auth.setSession({
+      access_token: cached.access_token,
+      refresh_token: cached.refresh_token,
+    });
+    if(error){
+      console.warn('No se pudo restaurar la sesión guardada', error);
+      clearCachedSession();
+      return null;
+    }
+    if(data?.session){
+      cacheSession(data.session);
+      return data.session;
+    }
+  } catch(err){
+    console.warn('No se pudo restaurar la sesión guardada', err);
+  }
+  clearCachedSession();
+  return null;
 }
 
 function loadRememberedEmail(){
@@ -216,6 +292,7 @@ async function api(path, { method='GET', headers={}, body=null, query=null } = {
   if(res.status===401){
     toast('Sesión expirada o no autorizada', 'warn');
     await sb.auth.signOut();
+    clearCachedSession();
     hide(adminView);
     show(loginView);
     resetAccountPanel();
@@ -249,6 +326,7 @@ async function guardAdmin(){
   }
   if(!isAdminUser(user)){
     await sb.auth.signOut();
+    clearCachedSession();
     hide(adminView);
     show(loginView);
     resetAccountPanel();
@@ -332,16 +410,28 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
 
 qs('#btnLogout')?.addEventListener('click', async()=>{
   sessionLoading(true, 'Cerrando sesión…');
-  await sb.auth.signOut();
-  hide(adminView);
-  show(loginView);
-  resetAccountPanel();
-  if(passwordInput) passwordInput.value='';
-  /* ✅ limpiar banda */
-  if(cuBox){ cuBox.style.display = 'none'; }
+  try{
+    const { error } = await sb.auth.signOut();
+    if(error) throw error;
+  } catch(err){
+    console.error('No se pudo cerrar sesión', err);
+    toast('No se pudo cerrar sesión. Intenta nuevamente.', 'err');
+  } finally {
+    clearCachedSession();
+    hide(adminView);
+    show(loginView);
+    resetAccountPanel();
+    sessionLoading(false);
+    if(passwordInput) passwordInput.value='';
+    /* ✅ limpiar banda */
+    if(cuBox){ cuBox.style.display = 'none'; }
+  }
 });
-sb.auth.onAuthStateChange((_, s)=>{
-  if(!s){
+sb.auth.onAuthStateChange((event, s)=>{
+  if(s){
+    cacheSession(s);
+  } else {
+    clearCachedSession();
     hide(adminView);
     show(loginView);
     setTimeout(()=>sessionLoading(false), 250);
@@ -379,8 +469,12 @@ async function bootstrap(){
   loadRememberedEmail();
   sessionLoading(true, 'Verificando sesión…');
   try{
-    const { data } = await sb.auth.getSession();
-    if(data?.session){
+    let { data } = await sb.auth.getSession();
+    let session = data?.session;
+    if(!session){
+      session = await restoreCachedSession();
+    }
+    if(session){
       const ok = await guardAdmin();
       if(ok){
         hide(loginView);

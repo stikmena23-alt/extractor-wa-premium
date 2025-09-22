@@ -12,7 +12,17 @@
   const SUPABASE_ANON_KEY =
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a3djamhjdXF5ZXBjbHBtcHN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTk4MTgsImV4cCI6MjA3MzQ5NTgxOH0.dBeJjYm12YW27LqIxon5ifPR1ygfFXAHVg8ZuCZCEf8";
 
-  const supabase = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const supabase = global.supabase.createClient(
+    SUPABASE_URL,
+    SUPABASE_ANON_KEY,
+    {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false,
+      },
+    }
+  );
   const normalizedSupabaseUrl = SUPABASE_URL.replace(/\/+$/, "");
   const functionsHost = normalizedSupabaseUrl.replace(
     /https:\/\/([^/]+)\.supabase\.co$/,
@@ -81,10 +91,12 @@
   let currentProfile = null;
   let sessionActive = false;
   let revalidationPromise = null;
+  let manualLogoutPending = false;
   const ADMIN_PREFIXES = ["admin.", "sup."];
   const creditFormatter = new Intl.NumberFormat("es-CO");
   const REMEMBER_KEY = "wf-tools.login.remembered-email";
   const STORAGE_TEST_KEY = "wf-tools.login.storage-test";
+  const SESSION_CACHE_KEY = "wf-tools.supabase.session";
   const storage = global.localStorage;
   let storageAvailable = false;
 
@@ -98,6 +110,74 @@
     }
   } catch (_err) {
     storageAvailable = false;
+  }
+
+  function clearCachedSession() {
+    if (!storageAvailable) return;
+    try {
+      storage.removeItem(SESSION_CACHE_KEY);
+    } catch (_err) {
+      /* ignore */
+    }
+  }
+
+  function cacheSession(session) {
+    if (!storageAvailable || !session) return;
+    const accessToken = session.access_token;
+    const refreshToken = session.refresh_token;
+    if (!accessToken || !refreshToken) return;
+    const payload = {
+      access_token: accessToken,
+      refresh_token: refreshToken,
+      expires_at: session.expires_at || null,
+    };
+    try {
+      storage.setItem(SESSION_CACHE_KEY, JSON.stringify(payload));
+    } catch (err) {
+      console.debug("No se pudo guardar la sesión local", err);
+    }
+  }
+
+  function readCachedSession() {
+    if (!storageAvailable) return null;
+    try {
+      const raw = storage.getItem(SESSION_CACHE_KEY);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!parsed?.access_token || !parsed?.refresh_token) {
+        clearCachedSession();
+        return null;
+      }
+      return parsed;
+    } catch (err) {
+      console.debug("No se pudo leer la sesión almacenada", err);
+      clearCachedSession();
+      return null;
+    }
+  }
+
+  async function restoreCachedSession() {
+    const cached = readCachedSession();
+    if (!cached) return null;
+    try {
+      const { data, error } = await supabase.auth.setSession({
+        access_token: cached.access_token,
+        refresh_token: cached.refresh_token,
+      });
+      if (error) {
+        console.warn("No se pudo restaurar la sesión guardada", error);
+        clearCachedSession();
+        return null;
+      }
+      if (data?.session) {
+        cacheSession(data.session);
+        return data.session;
+      }
+    } catch (err) {
+      console.warn("No se pudo restaurar la sesión guardada", err);
+    }
+    clearCachedSession();
+    return null;
   }
 
   updateAdminAccessUI(getRememberedEmail());
@@ -545,10 +625,16 @@
         console.error("Error obteniendo la sesión", error);
       }
       if (data?.session) {
+        cacheSession(data.session);
         return data.session;
       }
     } catch (err) {
       console.error("No se pudo verificar la sesión actual", err);
+    }
+
+    const restored = await restoreCachedSession();
+    if (restored) {
+      return restored;
     }
 
     try {
@@ -558,17 +644,27 @@
         if (message && !/refresh token/i.test(message) && !/session missing/i.test(message)) {
           console.warn("No se pudo refrescar la sesión", error);
         }
+        if (isSessionMissingError(error)) {
+          clearCachedSession();
+        }
         return null;
       }
-      return data?.session || null;
+      if (data?.session) {
+        cacheSession(data.session);
+        return data.session;
+      }
     } catch (err) {
       if (isSessionMissingError(err)) {
         console.debug("No hay sesión activa para refrescar.");
+        clearCachedSession();
         return null;
       }
       console.error("No se pudo refrescar la sesión", err);
       return null;
     }
+
+    clearCachedSession();
+    return null;
   }
 
   async function revalidateSessionState() {
@@ -1020,21 +1116,19 @@
 
   async function handleLogout() {
     toggleLogoutButton(true);
-    const {
-      data: { session },
-    } = await supabase.auth.getSession();
-
-    if (!session) {
-      toggleLogoutButton(false);
-      showSessionToast("No hay una sesión activa para cerrar.", "info");
-      showLoginUI();
-      return;
-    }
-
-    const { error } = await supabase.auth.signOut();
-    toggleLogoutButton(false);
-    if (error) {
+    manualLogoutPending = true;
+    try {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+      clearCachedSession();
+      showSessionToast("Sesión cerrada correctamente. ¡Hasta pronto!", "info");
+      showLoginUI("Sesión cerrada. ¡Hasta pronto!", "closed");
+    } catch (error) {
+      manualLogoutPending = false;
+      console.error("No se pudo cerrar sesión", error);
       showSessionToast("No se pudo cerrar sesión. Intenta nuevamente.", "danger");
+    } finally {
+      toggleLogoutButton(false);
     }
   }
 
@@ -1159,6 +1253,7 @@
     supabase.auth.onAuthStateChange(async (event, session) => {
       updateUserIdentity(session?.user || null);
       if (session) {
+        cacheSession(session);
         showAppUI();
         await updateCredits();
         const email = session.user?.email || pendingWelcomeEmail || "tu cuenta";
@@ -1168,12 +1263,17 @@
           pendingWelcomeEmail = null;
         }
       } else {
+        clearCachedSession();
         const message = event === "SIGNED_OUT"
           ? "Sesión cerrada. ¡Hasta pronto!"
           : "Inicia sesión para ver tu plan y tus créditos en tiempo real.";
         showLoginUI(message, event === "SIGNED_OUT" ? "closed" : undefined);
         if (event === "SIGNED_OUT") {
-          showSessionToast("Sesión cerrada correctamente. ¡Hasta pronto!", "info");
+          if (manualLogoutPending) {
+            manualLogoutPending = false;
+          } else {
+            showSessionToast("Sesión cerrada correctamente. ¡Hasta pronto!", "info");
+          }
         }
       }
     });
