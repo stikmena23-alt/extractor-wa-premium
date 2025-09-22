@@ -144,6 +144,10 @@ function setMode(mode){
     b.setAttribute('aria-selected', String(active));
     b.setAttribute('aria-pressed', String(active));
   });
+  if(!byCreditsRow || !byAmountRow || !creditsInput || !amountInput){
+    console.warn('setMode: faltan elementos de personalización');
+    return;
+  }
   if (mode === 'credits'){
     byCreditsRow.classList.remove('hidden'); byCreditsRow.removeAttribute('aria-hidden');
     byAmountRow.classList.add('hidden');     byAmountRow.setAttribute('aria-hidden','true');

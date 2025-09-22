@@ -214,16 +214,33 @@ async function api(path, { method='GET', headers={}, body=null, query=null } = {
   const url = new URL(`${FUNCTIONS_BASE}/${path}`);
   if(query) Object.entries(query).forEach(([k,v])=> v!=null && url.searchParams.set(k,String(v)));
   const auth = await authHeaderAsync();
-  const res = await fetch(url, { method, headers:{ 'Content-Type':'application/json', ...auth, ...headers }, body: body? JSON.stringify(body): null });
-  if(res.status===401){
-    toast('Sesión expirada o no autorizada', 'warn');
-    await sb.auth.signOut();
-    hide(adminView);
-    show(loginView);
-    resetAccountPanel();
-    sessionLoading(false);
+  const requestInit = {
+    method,
+    headers: { 'Content-Type':'application/json', apikey: SUPABASE_ANON_KEY, ...auth, ...headers },
+    body: body != null ? JSON.stringify(body) : null,
+  };
+  if(requestInit.body === null) delete requestInit.body;
+  try {
+    const res = await fetch(url, requestInit);
+    if(res.status===401){
+      toast('Sesión expirada o no autorizada', 'warn');
+      await sb.auth.signOut();
+      hide(adminView);
+      show(loginView);
+      resetAccountPanel();
+      sessionLoading(false);
+    }
+    return res;
+  } catch(error){
+    console.error('Error al llamar función', error);
+    return {
+      ok: false,
+      status: 0,
+      networkError: true,
+      json: async ()=>null,
+      text: async ()=> error?.message || 'Error de red',
+    };
   }
-  return res;
 }
 
 /* ✅ Soporte multi-admin:
@@ -501,6 +518,10 @@ async function loadUsers(){
     if($empty) $empty.style.display='none';
     const q = qs('#q')?.value.trim() || undefined;
     const res = await api(ENDPOINTS.list, { query:{ page, perPage, q } });
+    if(res.networkError){
+      toast('No se pudo conectar con el servicio', 'err');
+      return;
+    }
     if(!res.ok){
       const txt = await res.text();
       console.error('list error:',txt);
@@ -732,6 +753,10 @@ document.addEventListener('click', async (e)=>{
     btn.disabled = true;
     const res = await api(ENDPOINTS.setPassword, { method:'POST', body:{ userId:id, password:pwd } });
     btn.disabled = false;
+    if(res?.networkError){
+      toast('No se pudo conectar con el servicio','err');
+      return;
+    }
     if(res.ok) toast('Contraseña actualizada'); else toast('No se pudo cambiar','err');
   }
 
@@ -754,11 +779,19 @@ document.addEventListener('click', async (e)=>{
       }
       hours = Math.ceil(numeric);
     }
+    let res;
     btn.disabled = true;
     btn.textContent = 'Bloqueando…';
-    const res = await api(ENDPOINTS.block, { method:'POST', body:{ userId:id, hours } });
-    btn.disabled = false;
-    btn.textContent = 'Bloquear';
+    try {
+      res = await api(ENDPOINTS.block, { method:'POST', body:{ userId:id, hours } });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Bloquear';
+    }
+    if(!res || res.networkError){
+      toast('No se pudo conectar con el servicio','err');
+      return;
+    }
     if(res.ok){
       const durationText = hours % 24 === 0 ? `${hours / 24} días` : `${hours} horas`;
       toast(`Usuario bloqueado por ${durationText}`);
@@ -776,11 +809,19 @@ document.addEventListener('click', async (e)=>{
     const email = btn.dataset.email || 'este usuario';
     const confirmed = confirm(`¿Eliminar definitivamente a ${email}? Esta acción no se puede deshacer.`);
     if(!confirmed) return;
+    let res;
     btn.disabled = true;
     btn.textContent = 'Eliminando…';
-    const res = await api(ENDPOINTS.remove, { method:'POST', body:{ userId:id } });
-    btn.disabled = false;
-    btn.textContent = 'Eliminar';
+    try {
+      res = await api(ENDPOINTS.remove, { method:'POST', body:{ userId:id } });
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Eliminar';
+    }
+    if(!res || res.networkError){
+      toast('No se pudo conectar con el servicio','err');
+      return;
+    }
     if(res.ok){
       toast('Usuario eliminado');
       loadUsers();
@@ -867,6 +908,11 @@ qs('#btnSave')?.addEventListener('click', async()=>{
 
   const btn = qs('#btnSave'); btn.disabled = true; btn.textContent = 'Guardando…';
   const res = await api(ENDPOINTS.update, { method:'POST', body: payload });
+  if(res?.networkError){
+    btn.disabled = false; btn.textContent = 'Guardar cambios';
+    toast('No se pudo conectar con el servicio','err');
+    return;
+  }
   const txt = await res.text();
   btn.disabled = false; btn.textContent = 'Guardar cambios';
 
