@@ -270,11 +270,29 @@ document.getElementById('customDetails')?.addEventListener('click', ()=>{
 });
 
 // Estado inicial
-setMode('credits');
-document.getElementById('creditsInput').value = new Intl.NumberFormat('es-CO').format(30);
-updateFromCredits();
+if (
+  modeButtons.length &&
+  byCreditsRow &&
+  byAmountRow &&
+  creditsInput &&
+  amountInput
+) {
+  setMode('credits');
+  creditsInput.value = new Intl.NumberFormat('es-CO').format(30);
+  updateFromCredits();
 
-// Estado inicial (Por monto)
-setMode('amount');
-document.getElementById('amountInput').value = new Intl.NumberFormat('es-CO').format(300000);
-updateFromAmount();
+  // Estado inicial (Por monto)
+  setMode('amount');
+  amountInput.value = new Intl.NumberFormat('es-CO').format(300000);
+  updateFromAmount();
+} else {
+  // Fallback: rellena los campos si existen sin depender del modo
+  if (creditsInput) {
+    creditsInput.value = new Intl.NumberFormat('es-CO').format(30);
+    updateFromCredits();
+  }
+  if (amountInput) {
+    amountInput.value = new Intl.NumberFormat('es-CO').format(300000);
+    updateFromAmount();
+  }
+}

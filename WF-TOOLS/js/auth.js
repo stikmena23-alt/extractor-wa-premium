@@ -521,20 +521,34 @@
   }
 
   async function ensureActiveSession() {
+    let cachedSession = null;
     try {
       const { data, error } = await supabase.auth.getSession();
       if (error) {
         console.error("Error obteniendo la sesión", error);
       }
       if (data?.session) {
-        return data.session;
+        cachedSession = data.session;
+        const expiresAt = cachedSession.expires_at
+          ? cachedSession.expires_at * 1000
+          : 0;
+        if (!expiresAt || expiresAt - Date.now() > 60_000) {
+          return cachedSession;
+        }
       }
     } catch (err) {
       console.error("No se pudo verificar la sesión actual", err);
     }
 
+    const refreshToken = cachedSession?.refresh_token || null;
+    if (!refreshToken) {
+      return null;
+    }
+
     try {
-      const { data, error } = await supabase.auth.refreshSession();
+      const { data, error } = await supabase.auth.refreshSession({
+        refresh_token: refreshToken,
+      });
       if (error) {
         if (error.message && !/refresh token/i.test(error.message)) {
           console.warn("No se pudo refrescar la sesión", error);

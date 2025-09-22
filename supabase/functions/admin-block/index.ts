@@ -47,30 +47,85 @@ async function handlePost(request: Request) {
     return jsonResponse({ error: 'userId is required' }, { status: 400 });
   }
 
+  const supabase = createSupabaseClient();
+
+  const { data: currentUser, error: fetchError } = await supabase.auth.admin.getUserById(
+    userId,
+  );
+
+  if (fetchError || !currentUser?.user) {
+    console.error('admin-block fetch error:', fetchError);
+    return jsonResponse({ error: 'User not found' }, { status: 404 });
+  }
+
+  const baseUserMeta = { ...(currentUser.user.user_metadata ?? {}) } as Record<string, unknown>;
+  const baseAppMeta = { ...(currentUser.user.app_metadata ?? {}) } as Record<string, unknown>;
+
   if (unblock) {
-    const supabase = createSupabaseClient();
+    const clearedUserMeta: Record<string, unknown> = {
+      ...baseUserMeta,
+      status: 'active',
+      is_banned: false,
+      ban_duration: null,
+      ban_expires: null,
+      banned_until: null,
+    };
+    const clearedAppMeta: Record<string, unknown> = {
+      ...baseAppMeta,
+      status: 'active',
+      is_banned: false,
+      ban_duration: null,
+      ban_expires: null,
+      banned_until: null,
+    };
+
     const { error } = await supabase.auth.admin.updateUserById(userId, {
       ban_duration: 'none',
+      user_metadata: clearedUserMeta,
+      app_metadata: clearedAppMeta,
     });
 
     if (error) {
       console.error('admin-unblock error:', error);
-      return jsonResponse({ error: 'Failed to unblock user', details: error.message }, { status: 500 });
+      return jsonResponse(
+        { error: 'Failed to unblock user', details: error.message },
+        { status: 500 },
+      );
     }
 
-    return jsonResponse({ success: true, unblocked: true });
+    return jsonResponse({ success: true, unblocked: true, ban_duration: 'none' });
   }
 
   if (!Number.isFinite(hours) || hours <= 0) {
     return jsonResponse({ error: 'hours must be a positive number' }, { status: 400 });
   }
 
-  const supabase = createSupabaseClient();
+  const durationHours = Math.ceil(hours);
+  const banDuration = `${durationHours}h`;
+  const banExpires = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
 
-  const banDuration = `${Math.ceil(hours)}h`;
+  const updatedUserMeta: Record<string, unknown> = {
+    ...baseUserMeta,
+    status: 'banned',
+    is_banned: true,
+    ban_duration: banDuration,
+    ban_expires: banExpires,
+    banned_until: banExpires,
+  };
+
+  const updatedAppMeta: Record<string, unknown> = {
+    ...baseAppMeta,
+    status: 'banned',
+    is_banned: true,
+    ban_duration: banDuration,
+    ban_expires: banExpires,
+    banned_until: banExpires,
+  };
 
   const { error } = await supabase.auth.admin.updateUserById(userId, {
     ban_duration: banDuration,
+    user_metadata: updatedUserMeta,
+    app_metadata: updatedAppMeta,
   });
 
   if (error) {
@@ -78,7 +133,7 @@ async function handlePost(request: Request) {
     return jsonResponse({ error: 'Failed to block user', details: error.message }, { status: 500 });
   }
 
-  return jsonResponse({ success: true, ban_duration: banDuration });
+  return jsonResponse({ success: true, ban_duration: banDuration, ban_expires: banExpires });
 }
 
 Deno.serve(async (request: Request) => {
