@@ -289,6 +289,64 @@ async function processZipFile(file){
   }
 }
 
+function getServiceIpLabel(service){
+  if (!service) return null;
+  const ip = service.lastIP;
+  if (!ip || ip === 'No encontrado') return null;
+  const port = service.lastPort;
+  if (port !== null && port !== undefined && port !== '' && port !== 'No encontrado'){
+    return `${ip}:${port}`;
+  }
+  return ip;
+}
+
+function formatIpInfo(ipInfo){
+  if (!ipInfo) return null;
+  const { ip, port } = ipInfo;
+  if (!ip) return null;
+  if (port !== null && port !== undefined) return `${ip}:${port}`;
+  return ip;
+}
+
+function parseRgbColor(colorStr){
+  if (!colorStr) return null;
+  const normalized = colorStr.trim();
+  if (!normalized || normalized.toLowerCase() === 'transparent') return null;
+  const ctx = parseRgbColor._ctx || (parseRgbColor._ctx = document?.createElement?.('canvas')?.getContext?.('2d') || null);
+  if (!ctx) return null;
+  try {
+    ctx.fillStyle = normalized;
+  } catch {
+    return null;
+  }
+  const value = ctx.fillStyle;
+  if (!value) return null;
+  if (value.startsWith('#')){
+    const hex = value.slice(1);
+    if (hex.length === 3){
+      const r = parseInt(hex[0] + hex[0], 16);
+      const g = parseInt(hex[1] + hex[1], 16);
+      const b = parseInt(hex[2] + hex[2], 16);
+      return { r, g, b };
+    }
+    if (hex.length === 6){
+      const r = parseInt(hex.slice(0,2), 16);
+      const g = parseInt(hex.slice(2,4), 16);
+      const b = parseInt(hex.slice(4,6), 16);
+      return { r, g, b };
+    }
+  }
+  const match = value.match(/^rgba?\((\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+  if (match){
+    return {
+      r: parseInt(match[1], 10),
+      g: parseInt(match[2], 10),
+      b: parseInt(match[3], 10)
+    };
+  }
+  return null;
+}
+
 function renderUploadStatuses(){
   if (!uploadStatusList) return;
   uploadStatusList.innerHTML = '';
@@ -344,9 +402,10 @@ function renderUploadStatuses(){
 
     const ipBadge = document.createElement('span');
     ipBadge.className = 'upload-item__badge';
-    if (item.ip){
+    const ipLabel = item.ip || getServiceIpLabel(item.service);
+    if (ipLabel){
       ipBadge.classList.add('is-ok');
-      ipBadge.textContent = `🌐 ${item.ip}`;
+      ipBadge.textContent = `🌐 ${ipLabel}`;
     } else if (item.status !== 'processing') {
       ipBadge.classList.add('is-empty');
       ipBadge.textContent = '🌐 Sin IP';
@@ -383,7 +442,8 @@ function addUploadStatusEntry(file){
     contactCount: null,
     duplicates: null,
     ip: null,
-    message: ''
+    message: '',
+    service: null
   };
   uploadStatusItems.push(entry);
   if (uploadStatusItems.length > MAX_UPLOAD_FILES){
@@ -402,6 +462,62 @@ function updateUploadStatusEntry(entry, patch){
 function resetUploadTracking(){
   uploadStatusItems = [];
   renderUploadStatuses();
+}
+
+function cloneServiceSnapshot(service){
+  if (!service) return null;
+  try {
+    return JSON.parse(JSON.stringify(service));
+  } catch {
+    return null;
+  }
+}
+
+function normalizeContactsForBatch(list){
+  const arr = Array.from(new Set((list || []).map(n => stripCountry57(normalizeNumber(n)))));
+  return arr.filter(Boolean);
+}
+
+function addContactsToBatchEntry({ contacts, objective, caseId, service, sourceName, color }){
+  const normalized = normalizeContactsForBatch(contacts);
+  if (!normalized.length) return null;
+
+  const normalizedObjective = objective ? stripCountry57(normalizeNumber(objective)) : '';
+  const trimmedCase = (caseId || '').trim();
+
+  let entry = null;
+  if (normalizedObjective){
+    entry = batch.find(item => item.objective === normalizedObjective && item.caseId === trimmedCase);
+  } else if (trimmedCase){
+    entry = batch.find(item => !item.objective && item.caseId === trimmedCase);
+  }
+
+  if (!entry){
+    entry = {
+      id: `batch-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      objective: normalizedObjective,
+      caseId: trimmedCase,
+      contacts: new Set(),
+      service: null,
+      color: color || randomColor(),
+      sources: []
+    };
+    batch.push(entry);
+  }
+
+  normalized.forEach(c => entry.contacts.add(c));
+
+  if (service){
+    entry.service = cloneServiceSnapshot(service);
+  }
+
+  if (sourceName){
+    entry.sources = Array.isArray(entry.sources) ? entry.sources : [];
+    if (!entry.sources.includes(sourceName)) entry.sources.push(sourceName);
+  }
+
+  renderBatch();
+  return entry;
 }
 
 async function processSingleUploadedFile(file){
@@ -442,7 +558,7 @@ function finalizeProcessedUpload(raw, accountId, name){
 }
 
 function applyProcessedUpload(result){
-  if (!result) return;
+  if (!result) return { serviceSnapshot: null };
   inputText.value = result.raw || '';
   if (result.accountId){
     accountIdEl.value = stripCountry57(normalizeNumber(result.accountId));
@@ -451,6 +567,7 @@ function applyProcessedUpload(result){
   currentCounts = result.counts || { read:0, duplicates:0, countsMap:{} };
   renderPreview();
   extractServiceInfoFromSource(result.raw);
+  return { serviceSnapshot: cloneServiceSnapshot(currentServiceInfo) };
 }
 
 async function handleDroppedFiles(fileList){
@@ -503,16 +620,28 @@ async function handleDroppedFiles(fileList){
           });
           continue;
         }
-        applyProcessedUpload(result);
+        const { serviceSnapshot } = applyProcessedUpload(result) || {};
+        const objectiveForBatch = result.accountId || accountIdEl?.value || '';
+        const caseIdValue = caseIdEl?.value || '';
+        const batchEntry = addContactsToBatchEntry({
+          contacts: result.contacts,
+          objective: objectiveForBatch,
+          caseId: caseIdValue,
+          service: serviceSnapshot || currentServiceInfo,
+          sourceName: result.name
+        });
         anySuccess = true;
         lastSuccessful = result;
+        const ipBadgeValue = getServiceIpLabel(serviceSnapshot) || formatIpInfo(result.ipInfo) || null;
+        const addedMsg = (batchEntry && result.contacts.length) ? ' Añadido al lote.' : '';
         updateUploadStatusEntry(entry, {
           status: 'done',
           contactCount: result.contacts.length,
           duplicates: result.counts.duplicates || 0,
-          ip: result.ipShown || null,
+          ip: ipBadgeValue,
+          service: serviceSnapshot || (batchEntry?.service ?? null),
           message: result.contacts.length
-            ? `Contactos únicos: ${result.contacts.length}. Duplicados: ${result.counts.duplicates || 0}.`
+            ? `Contactos únicos: ${result.contacts.length}. Duplicados: ${result.counts.duplicates || 0}.${addedMsg}`
             : 'Sin contactos válidos.'
         });
       } catch (error) {
@@ -579,9 +708,8 @@ function updateRelBtn(){
   if(!relBtn) return;
   const disable = (batch.length === 0 && currentContacts.length === 0);
   relBtn.disabled = disable;
-  if(disable && graphPanel){
-    graphPanel.classList.remove('fullscreen');
-    relBtn.textContent='Pantalla completa';
+  if(disable){
+    setGraphFullscreen(false);
   }
 }
 function renderPreview(){
@@ -740,18 +868,15 @@ addToBatchBtn.addEventListener("click", () => {
   const objective = stripCountry57(normalizeNumber((accountIdEl.value || "").trim()));
   const caseId = (caseIdEl.value || '').trim();
 
-  // Guardar snapshot de servicio en el lote
-  const serviceSnapshot = JSON.parse(JSON.stringify(currentServiceInfo));
-
-  batch.push({
-    id: Date.now()+"-"+Math.random(),
+  const entry = addContactsToBatchEntry({
+    contacts: currentContacts,
     objective,
     caseId,
-    contacts: new Set(currentContacts),
-    service: serviceSnapshot,
-    color: randomColor()
+    service: currentServiceInfo,
+    sourceName: 'Manual'
   });
-  renderBatch();
+  if (!entry) return;
+
   inputText.value="";
   currentContacts=[];
   currentCounts={ read:0,duplicates:0,countsMap:{} };
@@ -1877,6 +2002,38 @@ function renderGraphNetwork(nodeArr, edges){
   }
 }
 
+function refreshGraphDimensions({ fit = true } = {}){
+  if (!graphEl || !graphNetwork) return;
+  const rect = graphEl.getBoundingClientRect();
+  if (rect.width > 0 && rect.height > 0){
+    try { graphNetwork.setSize(`${rect.width}px`, `${rect.height}px`); } catch {}
+  }
+  try { graphNetwork.redraw(); } catch {}
+  if (fit){
+    try { graphNetwork.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } }); } catch {}
+  }
+}
+
+function setGraphFullscreen(isFull){
+  if (!graphPanel) return;
+  const targetState = !!isFull;
+  const currentState = graphPanel.classList.contains('fullscreen');
+  if (currentState !== targetState){
+    graphPanel.classList.toggle('fullscreen', targetState);
+    if (document?.body){
+      document.body.classList.toggle('graph-fullscreen-open', targetState);
+    }
+  } else if (targetState && document?.body && !document.body.classList.contains('graph-fullscreen-open')){
+    document.body.classList.add('graph-fullscreen-open');
+  } else if (!targetState && document?.body && document.body.classList.contains('graph-fullscreen-open')){
+    document.body.classList.remove('graph-fullscreen-open');
+  }
+  updateFullscreenButtonState(targetState);
+  if (graphNetwork){
+    setTimeout(() => refreshGraphDimensions({ fit: true }), 80);
+  }
+}
+
 function renderGraph(numbers){
   if (!graphEl) return;
   graphActiveMode = 'current';
@@ -2177,26 +2334,66 @@ async function exportGraphToPdf(){
     alert('No hay datos para exportar.');
     return;
   }
-  if (!window.html2canvas || !window.jspdf?.jsPDF){
-    alert('Las bibliotecas de exportación no están disponibles.');
+  if (!window.jspdf?.jsPDF){
+    alert('La biblioteca de exportación a PDF no está disponible.');
     return;
   }
-  const target = graphPanel || graphEl;
-  if (!target) return;
+  if (!graphEl) return;
   try {
-    const styles = window.getComputedStyle(document.body);
-    const bg = styles.getPropertyValue('background-color') || '#ffffff';
-    const canvas = await window.html2canvas(target, { backgroundColor: bg, useCORS: true, scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
+    if (graphNetwork){
+      refreshGraphDimensions({ fit: false });
+    }
+    let sourceCanvas = graphEl.querySelector('canvas');
+    if (!sourceCanvas && window.html2canvas){
+      sourceCanvas = await window.html2canvas(graphEl, { backgroundColor: null, useCORS: true, scale: 2 });
+    }
+    if (!sourceCanvas){
+      alert('No se pudo obtener la vista del gráfico para exportar.');
+      return;
+    }
+    const canvasWidth = sourceCanvas.width;
+    const canvasHeight = sourceCanvas.height;
+    if (!canvasWidth || !canvasHeight){
+      alert('La vista del gráfico no tiene dimensiones válidas para exportar.');
+      return;
+    }
+    const exportCanvas = document.createElement('canvas');
+    exportCanvas.width = canvasWidth;
+    exportCanvas.height = canvasHeight;
+    const ctx = exportCanvas.getContext('2d');
+    if (!ctx){
+      alert('No se pudo preparar el lienzo para exportar.');
+      return;
+    }
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+    ctx.drawImage(sourceCanvas, 0, 0, canvasWidth, canvasHeight);
+
+    const bgColor = window.getComputedStyle(graphEl).getPropertyValue('background-color');
+    const parsedBg = parseRgbColor(bgColor);
+    if (parsedBg){
+      try {
+        const imageData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+        const data = imageData.data;
+        const { r, g, b } = parsedBg;
+        for (let i = 0; i < data.length; i += 4){
+          if (data[i] === r && data[i + 1] === g && data[i + 2] === b){
+            data[i + 3] = 0;
+          }
+        }
+        ctx.putImageData(imageData, 0, 0);
+      } catch {}
+    }
+
+    const imgData = exportCanvas.toDataURL('image/png');
     const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
     const pageWidth = pdf.internal.pageSize.getWidth();
     const pageHeight = pdf.internal.pageSize.getHeight();
-    const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
-    const imgWidth = canvas.width * ratio;
-    const imgHeight = canvas.height * ratio;
+    const ratio = Math.min(pageWidth / canvasWidth, pageHeight / canvasHeight);
+    const imgWidth = canvasWidth * ratio;
+    const imgHeight = canvasHeight * ratio;
     const offsetX = (pageWidth - imgWidth) / 2;
     const offsetY = (pageHeight - imgHeight) / 2;
-    pdf.addImage(imgData, 'PNG', offsetX, offsetY, imgWidth, imgHeight);
+    pdf.addImage(imgData, 'PNG', offsetX, offsetY, imgWidth, imgHeight, undefined, 'FAST');
     pdf.save(`wf-tools_grafico_${nowStamp()}.pdf`);
   } catch (error) {
     console.error('Error exportando gráfico a PDF', error);
@@ -2284,17 +2481,15 @@ function updateFullscreenButtonState(isFull){
 }
 
 if (relBtn){
-  updateFullscreenButtonState(graphPanel?.classList.contains('fullscreen'));
+  const initialFullscreen = graphPanel?.classList.contains('fullscreen') || false;
+  if (document?.body){
+    document.body.classList.toggle('graph-fullscreen-open', initialFullscreen);
+  }
+  updateFullscreenButtonState(initialFullscreen);
   relBtn.addEventListener('click', ()=>{
     if(!graphPanel) return;
-    const isFull = graphPanel.classList.toggle('fullscreen');
-    updateFullscreenButtonState(isFull);
-    if(graphNetwork){
-      graphNetwork.redraw();
-      setTimeout(() => {
-        try { graphNetwork.fit({ animation: { duration: 400, easingFunction: 'easeInOutQuad' } }); } catch {}
-      }, 100);
-    }
+    const isCurrentlyFull = graphPanel.classList.contains('fullscreen');
+    setGraphFullscreen(!isCurrentlyFull);
   });
 }
 
@@ -2329,14 +2524,11 @@ graphExportXlsxBtn?.addEventListener('click', exportGraphToXlsx);
 let graphResizeTimer = null;
 if (typeof window !== 'undefined'){
   window.addEventListener('resize', () => {
-    if (!graphNetwork) return;
+    if (!graphNetwork || !graphEl) return;
     if (graphResizeTimer) clearTimeout(graphResizeTimer);
     graphResizeTimer = setTimeout(() => {
       graphResizeTimer = null;
-      try {
-        graphNetwork.redraw();
-        graphNetwork.fit({ animation: { duration: 300, easingFunction: 'easeInOutQuad' } });
-      } catch {}
+      refreshGraphDimensions({ fit: true });
     }, 160);
   });
 }

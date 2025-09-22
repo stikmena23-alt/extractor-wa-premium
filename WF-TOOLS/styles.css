@@ -161,6 +161,8 @@ body{
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
+
+body.graph-fullscreen-open{ overflow:hidden; }
 body.is-checking-session{
   overflow: hidden;
 }
@@ -1834,13 +1836,14 @@ body[data-theme="light"] .graph-refresh{ color:#0a223d; }
   position:fixed;
   inset:0;
   width:100vw;
-  height:100vh;
+  height:100dvh;
   background: linear-gradient(140deg, var(--bg1), var(--bg2));
   z-index:1000;
   padding:clamp(18px, 3vw, 32px);
   display:flex;
   flex-direction:column;
   gap:var(--gap);
+  overflow:hidden;
 }
 
 #graphPanel.fullscreen .graph-top{
@@ -1855,7 +1858,8 @@ body[data-theme="light"] .graph-refresh{ color:#0a223d; }
 #graphPanel.fullscreen #graph{
   flex:1 1 auto;
   height:100%;
-  min-height:clamp(480px, 70vh, 820px);
+  min-height:0;
+  max-height:none;
 }
 
 #graphPanel.fullscreen .graph-fullscreen-btn{
