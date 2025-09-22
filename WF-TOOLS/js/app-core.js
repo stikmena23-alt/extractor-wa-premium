@@ -66,6 +66,9 @@ const chatSend = document.getElementById("chatSend");
 const chatLog = document.getElementById("chatLog");
 const graphEl = document.getElementById("graph");
 const graphPanel = document.getElementById("graphPanel");
+const graphLegends = document.getElementById("graphLegends");
+const graphStage = document.getElementById("graphStage");
+const graphLoading = document.getElementById("graphLoading");
 const colorControls = document.getElementById("colorControls");
 const relBtn = document.getElementById("relBtn");
 const graphLayoutSelect = document.getElementById("graphLayoutSelect");
@@ -156,6 +159,16 @@ function escapeHTML(value){
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+function setGraphLoading(isLoading){
+  if (!graphLoading || !graphEl) return;
+  const busy = !!isLoading;
+  graphLoading.hidden = !busy;
+  graphEl.setAttribute('aria-busy', busy ? 'true' : 'false');
+  if (graphStage){
+    graphStage.classList.toggle('is-loading', busy);
+  }
 }
 function removeNumberAndUniq(arr, numToRemove){
   if (!numToRemove) return Array.from(new Set(arr));
@@ -773,11 +786,19 @@ function renderBatch(){
 function renderColorControls(){
   if(!colorControls) return;
   colorControls.innerHTML="";
+  const hasItems = batch.length > 0;
+  if (graphLegends){
+    graphLegends.hidden = !hasItems;
+  }
+  colorControls.hidden = !hasItems;
+  if (!hasItems) return;
   batch.forEach(item=>{
     const wrap=document.createElement('div');
     wrap.className='color-item';
     const label=document.createElement('span');
-    label.textContent=item.objective||'—';
+    const legendLabel = item.objective || '—';
+    label.textContent = legendLabel;
+    label.title = legendLabel;
     const inp=document.createElement('input');
     inp.type='color';
     const val=item.color||randomColor();
@@ -1969,6 +1990,7 @@ function storeGraphDataset(nodeArr, edges){
 
 function renderGraphNetwork(nodeArr, edges){
   if (!graphEl) return;
+  setGraphLoading(true);
   storeGraphDataset(nodeArr, edges);
   const options = getGraphOptions();
   const data = {
@@ -1979,22 +2001,43 @@ function renderGraphNetwork(nodeArr, edges){
     graphNetwork.destroy();
     graphNetwork = null;
   }
-  graphNetwork = new vis.Network(graphEl, data, options);
+  try {
+    graphNetwork = new vis.Network(graphEl, data, options);
+  } catch (error) {
+    setGraphLoading(false);
+    console.error('No se pudo inicializar el grafo.', error);
+    throw error;
+  }
   graphNetwork.on('selectNode', handleGraphNodeSelect);
   graphNetwork.on('deselectNode', handleGraphNodeDeselect);
+  let loadingResolved = false;
+  const finalizeLoading = () => {
+    if (loadingResolved) return;
+    loadingResolved = true;
+    setGraphLoading(false);
+  };
+  const loadingFallback = setTimeout(finalizeLoading, 1800);
   if (options.physics && options.physics.enabled){
     graphNetwork.once('stabilizationIterationsDone', () => {
       graphNetwork.setOptions({ physics: false });
       requestAnimationFrame(() => {
         try { graphNetwork.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } }); } catch {}
       });
+      clearTimeout(loadingFallback);
+      finalizeLoading();
     });
   } else {
     setTimeout(() => {
       if (!graphNetwork) return;
       try { graphNetwork.fit({ animation: { duration: 500, easingFunction: 'easeInOutQuad' } }); } catch {}
+      clearTimeout(loadingFallback);
+      finalizeLoading();
     }, 80);
   }
+  graphNetwork.once('afterDrawing', () => {
+    clearTimeout(loadingFallback);
+    finalizeLoading();
+  });
   attachNumberLabels(graphNetwork, nodeArr);
   const desiredContact = graphPendingSelection || (selectedGraphNode?.contact || null);
   graphPendingSelection = null;
@@ -2116,6 +2159,7 @@ function renderGraph(numbers){
     storeGraphDataset([], []);
     if (graphNetwork) { graphNetwork.destroy(); graphNetwork = null; }
     if (graphEl) graphEl.innerHTML = '<div class="muted">Sin contactos para graficar</div>';
+    setGraphLoading(false);
     clearGraphSelection(true);
     updateGraphSelectionUI();
     return false;
@@ -2195,6 +2239,7 @@ function renderBatchGraph(){
     storeGraphDataset([], []);
     if (graphNetwork) { graphNetwork.destroy(); graphNetwork = null; }
     graphEl.innerHTML = '<div class="muted">Sin datos en el lote</div>';
+    setGraphLoading(false);
     clearGraphSelection(true);
     updateGraphSelectionUI();
     return false;
