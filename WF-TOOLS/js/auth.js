@@ -23,6 +23,18 @@
   const loginBtn = document.getElementById("loginBtn");
   const loginError = document.getElementById("loginError");
   const loginLoading = document.getElementById("loginLoading");
+  const registerForm = document.getElementById("registerForm");
+  const registerNameInput = document.getElementById("reg_name");
+  const registerEmailInput = document.getElementById("reg_email");
+  const registerPhoneInput = document.getElementById("reg_phone");
+  const registerPasswordInput = document.getElementById("reg_password");
+  const registerError = document.getElementById("registerError");
+  const registerSuccess = document.getElementById("registerSuccess");
+  const registerUsername = document.getElementById("registerUsername");
+  const registerUserEmail = document.getElementById("registerUserEmail");
+  const registerSubmitBtn = document.getElementById("btnRegister");
+  const showRegisterBtn = document.getElementById("showRegisterBtn");
+  const backToLoginBtn = document.getElementById("btnBackLogin");
   const logoutBtn = document.getElementById("logoutBtn");
   const appWrap = document.getElementById("appWrap");
   const planChip = document.getElementById("planChip");
@@ -74,6 +86,159 @@
 
   function toggleLogoutButton(disabled) {
     if (logoutBtn) logoutBtn.disabled = !!disabled;
+  }
+
+  function switchAuthView(view) {
+    const showRegister = view === "register";
+    if (registerForm) {
+      registerForm.classList.toggle("is-hidden", !showRegister);
+      registerForm.setAttribute("aria-hidden", showRegister ? "false" : "true");
+    }
+    if (loginForm) {
+      loginForm.classList.toggle("is-hidden", showRegister);
+      loginForm.setAttribute("aria-hidden", showRegister ? "true" : "false");
+    }
+  }
+
+  function resetRegisterFeedback() {
+    if (registerError) {
+      registerError.textContent = "";
+      registerError.style.display = "none";
+    }
+    if (registerSuccess) {
+      registerSuccess.hidden = true;
+    }
+  }
+
+  function setRegisterLoading(loading) {
+    if (!registerSubmitBtn) return;
+    registerSubmitBtn.disabled = !!loading;
+    registerSubmitBtn.classList.toggle("loading", !!loading);
+  }
+
+  function setRegisterError(message) {
+    if (!registerError) return;
+    registerError.textContent = message || "";
+    registerError.style.display = message ? "block" : "none";
+  }
+
+  function slugifyForClient(value) {
+    if (!value) return "";
+    const normalized = value
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase();
+    return normalized
+      .replace(/[^a-z0-9]+/g, ".")
+      .replace(/\.\.+/g, ".")
+      .replace(/^\.|\.$/g, "");
+  }
+
+  function buildClientCredentials(fullName, contactEmail) {
+    const baseFromName = slugifyForClient(fullName);
+    const emailLocal = contactEmail?.split?.("@")?.[0] || "";
+    const baseFromEmail = slugifyForClient(emailLocal);
+    const base = baseFromName || baseFromEmail || "usuario";
+    const randomSuffix = String(Math.floor(Math.random() * 9000) + 1000);
+    const compactBase = base.replace(/\./g, "").slice(0, 14);
+    const identifier = `${compactBase}${randomSuffix}`;
+    const username = `clien.${identifier}`;
+    const email = `${username}@wftools.com`;
+    return { username, email };
+  }
+
+  async function createClientAccount({
+    email,
+    password,
+    fullName,
+    contactEmail,
+    phone,
+    username,
+  }) {
+    const body = {
+      email,
+      password,
+      full_name: fullName,
+      contact_email: contactEmail,
+      phone,
+      metadata: {
+        full_name: fullName,
+        contact_email: contactEmail,
+        phone,
+        client_username: username,
+      },
+    };
+
+    const { data, error } = await supabase.functions.invoke("client-account", {
+      body,
+    });
+
+    if (error) {
+      throw new Error(error.message || "No se pudo crear la cuenta");
+    }
+
+    if (!data) {
+      throw new Error("Respuesta inesperada del servicio");
+    }
+
+    if (data.error) {
+      const message = typeof data.error === "string" ? data.error : data.error?.message;
+      throw new Error(message || "No se pudo crear la cuenta");
+    }
+
+    return data.data || data;
+  }
+
+  async function handleRegisterSubmit(event) {
+    event.preventDefault();
+    setRegisterError("");
+    if (registerSuccess) registerSuccess.hidden = true;
+
+    const fullName = registerNameInput?.value?.trim();
+    const contactEmail = registerEmailInput?.value?.trim()?.toLowerCase();
+    const phone = registerPhoneInput?.value?.trim();
+    const password = registerPasswordInput?.value || "";
+
+    if (!fullName || !contactEmail || !phone || !password) {
+      setRegisterError("Completa todos los campos requeridos.");
+      return;
+    }
+
+    if (password.length < 8) {
+      setRegisterError("La contraseña debe tener al menos 8 caracteres.");
+      return;
+    }
+
+    const credentials = buildClientCredentials(fullName, contactEmail);
+    setRegisterLoading(true);
+
+    try {
+      await createClientAccount({
+        email: credentials.email,
+        password,
+        fullName,
+        contactEmail,
+        phone,
+        username: credentials.username,
+      });
+
+      registerForm?.reset();
+      if (registerSuccess) registerSuccess.hidden = false;
+      if (registerUsername) registerUsername.textContent = credentials.username;
+      if (registerUserEmail) registerUserEmail.textContent = credentials.email;
+      if (loginEmail) loginEmail.value = credentials.email;
+      if (loginPassword) loginPassword.value = password;
+      switchAuthView("register");
+    } catch (err) {
+      const message =
+        err && typeof err === "object" && "message" in err
+          ? err.message
+          : String(err || "No se pudo crear la cuenta.");
+      setRegisterError(message);
+      return;
+    } finally {
+      setRegisterLoading(false);
+    }
   }
 
   function setSessionLoadingState(active, message) {
@@ -340,6 +505,10 @@
     setSessionLoadingState(false);
     if (appWrap) appWrap.style.display = "none";
     if (loginScreen) loginScreen.style.display = "flex";
+    switchAuthView("login");
+    resetRegisterFeedback();
+    setRegisterLoading(false);
+    registerForm?.reset();
     clearCreditsUI();
     resetLoginForm();
     updateUserIdentity(null);
@@ -478,7 +647,20 @@
   async function init() {
     global.AppCore?.setCreditDependentActionsEnabled(false);
     loginForm?.addEventListener("submit", handleLoginSubmit);
+    registerForm?.addEventListener("submit", handleRegisterSubmit);
     logoutBtn?.addEventListener("click", handleLogout);
+    showRegisterBtn?.addEventListener("click", (event) => {
+      event.preventDefault();
+      resetRegisterFeedback();
+      registerForm?.reset();
+      switchAuthView("register");
+    });
+    backToLoginBtn?.addEventListener("click", (event) => {
+      event.preventDefault();
+      switchAuthView("login");
+      resetRegisterFeedback();
+      registerForm?.reset();
+    });
     restoreRememberedEmail();
     resetPasswordToggle();
 
