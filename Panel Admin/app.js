@@ -63,6 +63,7 @@ const accountActiveCountEl = qs('#accountActiveCount');
 const accountAlertsEl = qs('#accountAlerts');
 const accountStatusTag = qs('#accountStatusTag');
 const btnGoClient = qs('#btnGoClient');
+const btnLoginGoClient = qs('#btnLoginGoClient');
 
 // Inyectar logo en login y header (con seguridad si no existen)
 const loginLogoEl = qs('#loginLogo');
@@ -329,12 +330,6 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
   }
 });
 
-qs('#btnRecover')?.addEventListener('click', async()=>{
-  const email = emailInput?.value.trim(); if(!email){ toast('Escribe tu email para enviar el link','warn'); return; }
-  await api(ENDPOINTS.recovery, { method:'POST', body:{ email } });
-  toast('Si el correo existe, se envió link de recuperación');
-});
-
 qs('#btnLogout')?.addEventListener('click', async()=>{
   sessionLoading(true, 'Cerrando sesión…');
   await sb.auth.signOut();
@@ -436,6 +431,7 @@ function navigateToClientApp(event){
   window.location.replace(CLIENT_APP_URL);
 }
 btnGoClient?.addEventListener('click', navigateToClientApp);
+btnLoginGoClient?.addEventListener('click', navigateToClientApp);
 qs('#btnReload')?.addEventListener('click', ()=> loadUsers());
 qs('#prev')?.addEventListener('click', ()=>{ if(page>1){ page--; loadUsers(); }});
 qs('#next')?.addEventListener('click', ()=>{ page++; loadUsers(); });
