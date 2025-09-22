@@ -30,7 +30,7 @@ const ENDPOINTS = {
 /************* STATE *************/
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let page = 1; const perPage = 10; let currentRows = []; let currentEdit = null;
-let lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0 };
+let lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0, blockedCount: 0 };
 
 const qs = sel => document.querySelector(sel);
 const $rows = qs('#rows'), $cards = qs('#cards'), $empty = qs('#empty'), $skeleton = qs('#skeleton');
@@ -149,6 +149,34 @@ function escapeHTML(str){
   if(str == null) return '';
   const map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
   return String(str).replace(/[&<>"']/g, ch => map[ch] || ch);
+}
+
+function parseDate(value){
+  if(!value) return null;
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+function formatDateTime(date){
+  if(!date) return '';
+  try {
+    return date.toLocaleString('es-CO', { dateStyle:'medium', timeStyle:'short' });
+  } catch {
+    return date.toISOString();
+  }
+}
+
+function getBanState(user){
+  const rawStatus = (user?.status || user?.app_metadata?.status || user?.user_metadata?.status || '').toString().toLowerCase();
+  const statusBlocked = rawStatus === 'banned' || rawStatus === 'blocked';
+  const isFlagged = user?.is_banned === true || statusBlocked;
+  const rawUntil = user?.banned_until || user?.bannedUntil || user?.ban_expires || user?.banExpires || null;
+  const until = parseDate(rawUntil);
+  const activeBan = until ? until.getTime() > Date.now() : false;
+  return {
+    isBlocked: activeBan || isFlagged,
+    until,
+  };
 }
 
 function isExcludedFromReport(email){
@@ -538,7 +566,7 @@ function renderRows(){
   if($rows) $rows.innerHTML=''; if($cards) $cards.innerHTML='';
   if($creditSummary) $creditSummary.style.display='none';
   if(!currentRows.length){
-    lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0 };
+    lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0, blockedCount: 0 };
     updateAccountSummary({ creditCount: 0, activeCount: 0, lowCount: 0 });
     if($empty) $empty.style.display='block';
     return;
@@ -550,6 +578,8 @@ function renderRows(){
   let reportingInactiveCount = 0;
   let reportingActiveCount = 0;
   let reportingCount = 0;
+
+  let blockedCount = 0;
 
   for(const u of currentRows){
     const meta = creditMeta(u.credits);
@@ -566,6 +596,14 @@ function renderRows(){
     const safePlan = escapeHTML(plan);
     const safeId = escapeHTML(id);
     const excluded = isExcludedFromReport(email);
+    const { isBlocked, until: banUntil } = getBanState(u);
+    if(isBlocked) blockedCount++;
+    const banTitle = banUntil ? `Bloqueado hasta ${formatDateTime(banUntil)}` : 'Bloqueo activo';
+    const banTag = isBlocked ? `<span class="tag tag-blocked" title="${escapeHTML(banTitle)}">Bloqueado</span>` : '';
+    const blockBtnLabel = isBlocked ? 'Desbloquear' : 'Bloquear';
+    const blockBtnClass = isBlocked ? 'btn btn-ghost btn-sm btn-success' : 'btn btn-ghost btn-sm btn-warning';
+    const blockBtnState = isBlocked ? 'true' : 'false';
+    const blockBtnTitle = isBlocked ? 'Quitar bloqueo al usuario' : 'Bloquear temporalmente al usuario';
 
     if(!excluded){
       reportingCreditCount += meta.value;
@@ -585,7 +623,7 @@ function renderRows(){
         <td>${avatarFor()}</td>
         <td>${safeEmail}</td>
         <td>${safeFullName}</td>
-        <td><span class="tag">${safePlan}</span></td>
+        <td><div class="plan-cell"><span class="tag">${safePlan}</span>${banTag}</div></td>
         <td>${creditBadgeHtml}${creditWarningHtml}</td>
         <td style="font-size:.8rem;color:var(--muted)">${safeId}</td>
         <td>
@@ -593,7 +631,7 @@ function renderRows(){
             <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
             <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Link recuperación</button>
             <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
-            <button class="btn btn-ghost btn-sm btn-warning" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Bloquear</button>
+            <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" data-blocked="${blockBtnState}" title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
             <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
           </div>
         </td>`;
@@ -614,7 +652,7 @@ function renderRows(){
               <div class="muted" style="font-size:.85rem">${safeEmail}</div>
             </div>
           </div>
-          <span class="tag">${safePlan}</span>
+          <div class="plan-cell">${banTag}<span class="tag">${safePlan}</span></div>
         </div>
         <div class="row-mid">
           <div><div class="label">Créditos</div><div>${creditBadgeHtml}</div></div>
@@ -625,7 +663,7 @@ function renderRows(){
           <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
           <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Recuperación</button>
           <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Contraseña</button>
-          <button class="btn btn-ghost btn-sm btn-warning" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Bloquear</button>
+          <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" data-blocked="${blockBtnState}" title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
         </div>`;
       if(meta.recommend) card.classList.add('row-alert');
@@ -647,6 +685,7 @@ function renderRows(){
     lowCount: reportingLowCount,
     reportingCount,
     totalRows: currentRows.length,
+    blockedCount,
   };
 
   if ($creditSummary){
@@ -683,6 +722,14 @@ function renderRows(){
           <span class="stat-value">${numberFmt.format(reportingLowCount)}</span>
           <span class="stat-sub">${reportingLowCount ? 'Revisa las cuentas marcadas' : 'Todo en orden'}</span>
         </div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon">⛔</div>
+        <div class="stat-body">
+          <span class="stat-title">Usuarios bloqueados</span>
+          <span class="stat-value">${numberFmt.format(blockedCount)}</span>
+          <span class="stat-sub">${blockedCount ? 'Bloqueos activos en la lista' : 'Sin bloqueos activos'}</span>
+        </div>
       </div>`;
   }
 }
@@ -706,6 +753,7 @@ function downloadReport(){
     ['Cuentas activas', numberFmt.format(lastSummary.activeCount)],
     ['Cuentas sin crédito', numberFmt.format(lastSummary.inactiveCount)],
     ['Alertas críticas', numberFmt.format(lastSummary.lowCount)],
+    ['Usuarios bloqueados', numberFmt.format(lastSummary.blockedCount)],
   ];
 
   const summarySheet = window.XLSX.utils.aoa_to_sheet(summaryRows);
@@ -713,6 +761,8 @@ function downloadReport(){
     const email = u.email || '';
     const meta = creditMeta(u.credits);
     const excluded = isExcludedFromReport(email);
+    const { isBlocked, until } = getBanState(u);
+    const banText = until ? formatDateTime(until) : (isBlocked ? 'Activo' : '—');
     return {
       'Correo': email || '—',
       'Nombre': u.full_name || '',
@@ -723,6 +773,8 @@ function downloadReport(){
       'Alerta': meta.recommend ? 'Sí' : 'No',
       'Tipo de cuenta': excluded ? 'Administrativa' : 'Cliente',
       'ID': u.id || '',
+      'Bloqueado': isBlocked ? 'Sí' : 'No',
+      'Bloqueado hasta': banText,
     };
   });
   const usersSheet = window.XLSX.utils.json_to_sheet(userData);
@@ -764,6 +816,36 @@ document.addEventListener('click', async (e)=>{
     const id = btn.dataset.id;
     if(!id){ toast('No se pudo identificar al usuario','err'); return; }
     const displayName = btn.dataset.name || btn.dataset.email || 'usuario';
+    const isBlocked = btn.dataset.blocked === 'true';
+    const originalText = btn.textContent;
+
+    if(isBlocked){
+      const confirmed = confirm(`¿Desbloquear a ${displayName}?`);
+      if(!confirmed) return;
+      let res;
+      btn.disabled = true;
+      btn.textContent = 'Desbloqueando…';
+      try {
+        res = await api(ENDPOINTS.block, { method:'POST', body:{ userId:id, unblock:true } });
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalText;
+      }
+      if(!res || res.networkError){
+        toast('No se pudo conectar con el servicio','err');
+        return;
+      }
+      if(res.ok){
+        toast('Usuario desbloqueado');
+        loadUsers();
+      } else {
+        const txt = await res.text().catch(()=>null);
+        console.error('unblock error:', txt);
+        toast('No se pudo desbloquear al usuario','err');
+      }
+      return;
+    }
+
     const promptMsg = `Ingresa las horas de bloqueo para ${displayName} (deja vacío para 1000 días)`;
     const input = prompt(promptMsg, '');
     if(input === null) return;
@@ -786,7 +868,7 @@ document.addEventListener('click', async (e)=>{
       res = await api(ENDPOINTS.block, { method:'POST', body:{ userId:id, hours } });
     } finally {
       btn.disabled = false;
-      btn.textContent = 'Bloquear';
+      btn.textContent = originalText;
     }
     if(!res || res.networkError){
       toast('No se pudo conectar con el servicio','err');

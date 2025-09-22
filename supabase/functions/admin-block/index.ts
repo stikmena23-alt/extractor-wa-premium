@@ -32,7 +32,7 @@ function createSupabaseClient() {
 }
 
 async function handlePost(request: Request) {
-  let payload: { userId?: string; hours?: number };
+  let payload: { userId?: string; hours?: number; unblock?: boolean };
   try {
     payload = await request.json();
   } catch {
@@ -40,10 +40,25 @@ async function handlePost(request: Request) {
   }
 
   const userId = payload.userId?.trim();
+  const unblock = payload.unblock === true;
   const hours = Number(payload.hours ?? 0);
 
   if (!userId) {
     return jsonResponse({ error: 'userId is required' }, { status: 400 });
+  }
+
+  if (unblock) {
+    const supabase = createSupabaseClient();
+    const { error } = await supabase.auth.admin.updateUserById(userId, {
+      ban_duration: 'none',
+    });
+
+    if (error) {
+      console.error('admin-unblock error:', error);
+      return jsonResponse({ error: 'Failed to unblock user', details: error.message }, { status: 500 });
+    }
+
+    return jsonResponse({ success: true, unblocked: true });
   }
 
   if (!Number.isFinite(hours) || hours <= 0) {
