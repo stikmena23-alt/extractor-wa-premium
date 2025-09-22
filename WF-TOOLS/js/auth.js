@@ -750,18 +750,8 @@
   }
 
   const PROFILE_BASE_COLUMNS = "id, plan, credits";
-  const PROFILE_NAME_COLUMNS = [
-    "full_name",
-    "display_name",
-    "name",
-    "contact_name",
-    "owner_name",
-  ];
-
-  function buildProfileSelect(includeNames = true) {
-    if (!includeNames) return PROFILE_BASE_COLUMNS;
-    return `${PROFILE_BASE_COLUMNS}, ${PROFILE_NAME_COLUMNS.join(", ")}`;
-  }
+  let profileSelectColumns = `*, ${PROFILE_BASE_COLUMNS}`;
+  let profileSelectMode = "full";
 
   function isMissingColumnError(error) {
     if (!error) return false;
@@ -770,14 +760,25 @@
     return /column .* does not exist/.test(message);
   }
 
-  async function fetchProfile(selectColumns, userId, { requireMatch } = { requireMatch: true }) {
-    let query = supabase.from("profiles").select(selectColumns);
-    if (requireMatch && userId) {
-      query = query.eq("id", userId).limit(1);
+  async function fetchProfile(userId, { requireMatch } = { requireMatch: true }) {
+    let query = supabase.from("profiles").select(profileSelectColumns);
+    if (userId && requireMatch) {
+      query = query.eq("id", userId);
     }
+    query = query.limit(1);
     const executor =
       typeof query.maybeSingle === "function" ? query.maybeSingle : query.single;
-    return executor.call(query);
+    const response = await executor.call(query);
+    if (
+      response.error &&
+      isMissingColumnError(response.error) &&
+      profileSelectMode === "full"
+    ) {
+      profileSelectMode = "base";
+      profileSelectColumns = PROFILE_BASE_COLUMNS;
+      return fetchProfile(userId, { requireMatch });
+    }
+    return response;
   }
 
   async function updateCredits() {
@@ -789,27 +790,14 @@
       return;
     }
 
-    let response = await fetchProfile(buildProfileSelect(true), userId, {
+    let response = await fetchProfile(userId, {
       requireMatch: true,
     });
 
-    if (isMissingColumnError(response.error)) {
-      response = await fetchProfile(buildProfileSelect(false), userId, {
-        requireMatch: true,
-      });
-    }
-
     if (!response.error && (!response.data || response.data.id !== userId)) {
-      // Fall back to the default RLS-scoped single selection just in case the
-      // table automatically filters by the current auth uid instead of the id column.
-      response = await fetchProfile(buildProfileSelect(true), userId, {
+      response = await fetchProfile(userId, {
         requireMatch: false,
       });
-      if (isMissingColumnError(response.error)) {
-        response = await fetchProfile(buildProfileSelect(false), userId, {
-          requireMatch: false,
-        });
-      }
     }
 
     const { data, error } = response;

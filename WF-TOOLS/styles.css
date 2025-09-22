@@ -799,6 +799,11 @@ body[data-theme="light"] .upload-item{
   color:#fca5a5;
 }
 
+.upload-item__badge.is-pending{
+  background:rgba(14,165,233,.18);
+  color:#38bdf8;
+}
+
 .upload-item__msg{
   margin:0;
   font-size:.85rem;
@@ -1847,8 +1852,16 @@ body[data-theme="light"] .graph-refresh{ color:#0a223d; }
 }
 
 #graphPanel.fullscreen .graph-top{
-  align-items:center;
+  flex-direction:column;
+  align-items:stretch;
+  gap:clamp(12px, 2vh, 24px);
   margin-bottom:clamp(8px, 2vh, 16px);
+}
+
+#graphPanel.fullscreen .graph-controls{
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:clamp(12px, 3vw, 28px);
 }
 
 #graphPanel.fullscreen h2{
@@ -1867,11 +1880,24 @@ body[data-theme="light"] .graph-refresh{ color:#0a223d; }
   position:static;
 }
 
+#graphPanel.fullscreen .graph-button-group{
+  flex-direction:row;
+  align-items:center;
+  justify-content:flex-end;
+  gap:12px;
+}
+
 #graphPanel.fullscreen .graph-actions{
-  flex-direction:column;
+  flex-direction:row;
+  align-items:flex-start;
+}
+
+#graphPanel.fullscreen .graph-selection{
+  flex:2 1 480px;
 }
 
 #graphPanel.fullscreen .graph-export{
+  flex:1 1 280px;
   justify-content:flex-start;
 }
 

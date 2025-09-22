@@ -147,6 +147,16 @@ function getNormalizedObjective(){
 function randomColor(){
   return '#'+Math.floor(Math.random()*16777215).toString(16).padStart(6,'0');
 }
+
+function escapeHTML(value){
+  if (value == null) return '';
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
 function removeNumberAndUniq(arr, numToRemove){
   if (!numToRemove) return Array.from(new Set(arr));
   return Array.from(new Set(arr.filter(x => x !== numToRemove)));
@@ -158,6 +168,20 @@ function sanitizeSource(text){
   t = t.replace(/(Internal\s*Ticket\s*Number|N[úu]mero\s+de\s+ticket\s+interno)[^\n\r]*[\n\r]+[^\n\r]*\d[\d\s\-.,;:/]*/gi,'$1 [omitido]');
   t = t.replace(/(Account\s*Identifier)([^0-9A-Za-z]{0,20})\+?[\d()\[\]\s\-.]{8,}/gi,'$1$2[omitido]');
   return t;
+}
+
+function formatFileSize(bytes){
+  const size = Number(bytes);
+  if (!Number.isFinite(size) || size <= 0) return '—';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let unitIndex = 0;
+  let value = size;
+  while (value >= 1024 && unitIndex < units.length - 1){
+    value /= 1024;
+    unitIndex++;
+  }
+  const rounded = value >= 100 ? Math.round(value) : Math.round(value * 10) / 10;
+  return `${rounded} ${units[unitIndex]}`;
 }
 
 // =================== ERRORES Y APRENDIZAJE ===================
@@ -289,25 +313,6 @@ async function processZipFile(file){
   }
 }
 
-function getServiceIpLabel(service){
-  if (!service) return null;
-  const ip = service.lastIP;
-  if (!ip || ip === 'No encontrado') return null;
-  const port = service.lastPort;
-  if (port !== null && port !== undefined && port !== '' && port !== 'No encontrado'){
-    return `${ip}:${port}`;
-  }
-  return ip;
-}
-
-function formatIpInfo(ipInfo){
-  if (!ipInfo) return null;
-  const { ip, port } = ipInfo;
-  if (!ip) return null;
-  if (port !== null && port !== undefined) return `${ip}:${port}`;
-  return ip;
-}
-
 function parseRgbColor(colorStr){
   if (!colorStr) return null;
   const normalized = colorStr.trim();
@@ -400,19 +405,16 @@ function renderUploadStatuses(){
       : '📇 Sin contactos';
     meta.appendChild(contactBadge);
 
-    const ipBadge = document.createElement('span');
-    ipBadge.className = 'upload-item__badge';
-    const ipLabel = item.ip || getServiceIpLabel(item.service);
-    if (ipLabel){
-      ipBadge.classList.add('is-ok');
-      ipBadge.textContent = `🌐 ${ipLabel}`;
-    } else if (item.status !== 'processing') {
-      ipBadge.classList.add('is-empty');
-      ipBadge.textContent = '🌐 Sin IP';
+    const sizeBadge = document.createElement('span');
+    sizeBadge.className = 'upload-item__badge';
+    if (typeof item.sizeBytes === 'number' && item.sizeBytes > 0){
+      sizeBadge.classList.add('is-ok');
+      sizeBadge.textContent = `💾 ${formatFileSize(item.sizeBytes)}`;
     } else {
-      ipBadge.textContent = '🌐 Analizando…';
+      sizeBadge.classList.add(item.status === 'processing' ? 'is-pending' : 'is-empty');
+      sizeBadge.textContent = item.status === 'processing' ? '💾 Calculando…' : '💾 Tamaño desconocido';
     }
-    meta.appendChild(ipBadge);
+    meta.appendChild(sizeBadge);
 
     if (typeof item.duplicates === 'number'){
       const dupBadge = document.createElement('span');
@@ -441,7 +443,7 @@ function addUploadStatusEntry(file){
     status: 'pending',
     contactCount: null,
     duplicates: null,
-    ip: null,
+    sizeBytes: typeof file?.size === 'number' ? file.size : null,
     message: '',
     service: null
   };
@@ -478,7 +480,7 @@ function normalizeContactsForBatch(list){
   return arr.filter(Boolean);
 }
 
-function addContactsToBatchEntry({ contacts, objective, caseId, service, sourceName, color }){
+function addContactsToBatchEntry({ contacts, objective, caseId, service, sourceName, color, skipMerge = false }){
   const normalized = normalizeContactsForBatch(contacts);
   if (!normalized.length) return null;
 
@@ -486,10 +488,12 @@ function addContactsToBatchEntry({ contacts, objective, caseId, service, sourceN
   const trimmedCase = (caseId || '').trim();
 
   let entry = null;
-  if (normalizedObjective){
-    entry = batch.find(item => item.objective === normalizedObjective && item.caseId === trimmedCase);
-  } else if (trimmedCase){
-    entry = batch.find(item => !item.objective && item.caseId === trimmedCase);
+  if (!skipMerge){
+    if (normalizedObjective){
+      entry = batch.find(item => item.objective === normalizedObjective && item.caseId === trimmedCase);
+    } else if (trimmedCase){
+      entry = batch.find(item => !item.objective && item.caseId === trimmedCase);
+    }
   }
 
   if (!entry){
@@ -628,17 +632,16 @@ async function handleDroppedFiles(fileList){
           objective: objectiveForBatch,
           caseId: caseIdValue,
           service: serviceSnapshot || currentServiceInfo,
-          sourceName: result.name
+          sourceName: result.name,
+          skipMerge: files.length > 1
         });
         anySuccess = true;
         lastSuccessful = result;
-        const ipBadgeValue = getServiceIpLabel(serviceSnapshot) || formatIpInfo(result.ipInfo) || null;
         const addedMsg = (batchEntry && result.contacts.length) ? ' Añadido al lote.' : '';
         updateUploadStatusEntry(entry, {
           status: 'done',
           contactCount: result.contacts.length,
           duplicates: result.counts.duplicates || 0,
-          ip: ipBadgeValue,
           service: serviceSnapshot || (batchEntry?.service ?? null),
           message: result.contacts.length
             ? `Contactos únicos: ${result.contacts.length}. Duplicados: ${result.counts.duplicates || 0}.${addedMsg}`
