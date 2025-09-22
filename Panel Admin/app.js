@@ -169,44 +169,77 @@ function formatDateTime(date){
 function getBanState(user){
   const meta = user?.user_metadata || {};
   const appMeta = user?.app_metadata || {};
+  const topLevelBan = (user?.ban && typeof user.ban === 'object') ? user.ban : null;
+  const userBan = (meta?.ban && typeof meta.ban === 'object') ? meta.ban : null;
+  const appBan = (appMeta?.ban && typeof appMeta.ban === 'object') ? appMeta.ban : null;
   const statusCandidates = [
+    user?.ban_status,
     user?.status,
+    topLevelBan?.status,
     appMeta?.status,
     meta?.status,
     appMeta?.ban_status,
     meta?.ban_status,
-    meta?.state,
-    appMeta?.state,
+    appMeta?.ban_state,
+    meta?.ban_state,
+    userBan?.status,
+    appBan?.status,
   ];
   const normalizedStatus = statusCandidates
     .map((value) => (value == null ? '' : String(value).toLowerCase()))
     .find((value) => value);
-  const statusBlocked = normalizedStatus === 'banned' || normalizedStatus === 'blocked';
-  const flaggedExplicitly =
-    user?.is_banned === true ||
-    meta?.is_banned === true ||
-    appMeta?.is_banned === true;
-  const rawUntil =
-    user?.banned_until ||
-    user?.bannedUntil ||
-    user?.ban_expires ||
-    user?.banExpires ||
-    meta?.ban_expires ||
-    meta?.banned_until ||
-    appMeta?.ban_expires ||
-    appMeta?.banned_until ||
-    null;
-  const until = parseDate(rawUntil);
-  const rawDuration =
-    (meta?.ban_duration || appMeta?.ban_duration || user?.ban_duration || '')
-      .toString()
-      .toLowerCase();
+  const statusBlocked = normalizedStatus
+    ? ['banned', 'blocked', 'bloqueado', 'baneado'].some((keyword) => normalizedStatus.includes(keyword))
+    : false;
+  const flaggedExplicitly = [
+    user?.is_banned,
+    user?.banned,
+    topLevelBan?.active,
+    meta?.is_banned,
+    meta?.banned,
+    userBan?.active,
+    appMeta?.is_banned,
+    appMeta?.banned,
+    appBan?.active,
+  ].some((value) => value === true);
+  const untilCandidates = [
+    user?.ban_expires,
+    user?.banned_until,
+    user?.bannedUntil,
+    topLevelBan?.until,
+    topLevelBan?.expires_at,
+    topLevelBan?.expires,
+    meta?.ban_expires,
+    meta?.banned_until,
+    meta?.ban_until,
+    userBan?.until,
+    userBan?.expires_at,
+    userBan?.expires,
+    appMeta?.ban_expires,
+    appMeta?.banned_until,
+    appMeta?.ban_until,
+    appBan?.until,
+    appBan?.expires_at,
+    appBan?.expires,
+  ];
+  const until = untilCandidates.map(parseDate).find(Boolean) || null;
+  const durationCandidates = [
+    user?.ban_duration,
+    topLevelBan?.duration,
+    meta?.ban_duration,
+    userBan?.duration,
+    appMeta?.ban_duration,
+    appBan?.duration,
+  ];
+  const rawDuration = durationCandidates
+    .map((value) => (value == null ? '' : String(value).toLowerCase()))
+    .find((value) => value);
   let isBlocked = false;
   if (until){
     isBlocked = until.getTime() > Date.now();
   }
   if (!isBlocked){
-    const hasDuration = rawDuration && rawDuration !== 'none';
+    const hasDuration = rawDuration && rawDuration !== 'none' && rawDuration !== '0' && rawDuration !== '0h';
     isBlocked = statusBlocked || flaggedExplicitly || hasDuration;
   }
   return {

@@ -62,21 +62,42 @@ async function handlePost(request: Request) {
   const baseAppMeta = { ...(currentUser.user.app_metadata ?? {}) } as Record<string, unknown>;
 
   if (unblock) {
+    const clearedAt = new Date().toISOString();
     const clearedUserMeta: Record<string, unknown> = {
       ...baseUserMeta,
       status: 'active',
       is_banned: false,
+      ban_status: 'active',
       ban_duration: null,
       ban_expires: null,
       banned_until: null,
+      blocked_at: null,
+      ban: {
+        status: 'active',
+        active: false,
+        duration: 'none',
+        until: null,
+        expires_at: null,
+        updated_at: clearedAt,
+      },
     };
     const clearedAppMeta: Record<string, unknown> = {
       ...baseAppMeta,
       status: 'active',
       is_banned: false,
+      ban_status: 'active',
       ban_duration: null,
       ban_expires: null,
       banned_until: null,
+      blocked_at: null,
+      ban: {
+        status: 'active',
+        active: false,
+        duration: 'none',
+        until: null,
+        expires_at: null,
+        updated_at: clearedAt,
+      },
     };
 
     const { error } = await supabase.auth.admin.updateUserById(userId, {
@@ -102,24 +123,40 @@ async function handlePost(request: Request) {
 
   const durationHours = Math.ceil(hours);
   const banDuration = `${durationHours}h`;
+  const blockedAt = new Date().toISOString();
   const banExpires = new Date(Date.now() + durationHours * 60 * 60 * 1000).toISOString();
+  const banDetails = {
+    status: 'blocked',
+    active: true,
+    duration: banDuration,
+    until: banExpires,
+    expires_at: banExpires,
+    started_at: blockedAt,
+    updated_at: blockedAt,
+  } as const;
 
   const updatedUserMeta: Record<string, unknown> = {
     ...baseUserMeta,
     status: 'banned',
     is_banned: true,
+    ban_status: 'blocked',
     ban_duration: banDuration,
     ban_expires: banExpires,
     banned_until: banExpires,
+    blocked_at: blockedAt,
+    ban: banDetails,
   };
 
   const updatedAppMeta: Record<string, unknown> = {
     ...baseAppMeta,
     status: 'banned',
     is_banned: true,
+    ban_status: 'blocked',
     ban_duration: banDuration,
     ban_expires: banExpires,
     banned_until: banExpires,
+    blocked_at: blockedAt,
+    ban: banDetails,
   };
 
   const { error } = await supabase.auth.admin.updateUserById(userId, {

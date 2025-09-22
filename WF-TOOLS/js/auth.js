@@ -13,6 +13,8 @@
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a3djamhjdXF5ZXBjbHBtcHN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTk4MTgsImV4cCI6MjA3MzQ5NTgxOH0.dBeJjYm12YW27LqIxon5ifPR1ygfFXAHVg8ZuCZCEf8";
 
   const supabase = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const FUNCTIONS_BASE = SUPABASE_URL.replace(".supabase.co", ".functions.supabase.co");
+  const CLIENT_ACCOUNT_ENDPOINT = `${FUNCTIONS_BASE}/client-account`;
 
   const loginScreen = document.getElementById("loginScreen");
   const loginForm = document.getElementById("loginForm");
@@ -627,7 +629,47 @@
     const code = (error.code || "").toLowerCase();
     if (code === "user_already_exists" || code === "email_conflict") return true;
     const message = (error.message || "").toLowerCase();
-    return message.includes("already registered") || message.includes("already exists");
+    return (
+      message.includes("already registered") ||
+      message.includes("already exists") ||
+      message.includes("ya existe")
+    );
+  }
+
+  async function callClientAccountEndpoint(payload) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+    try {
+      const response = await fetch(CLIENT_ACCOUNT_ENDPOINT, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+        },
+        body: JSON.stringify(payload),
+        signal: controller.signal,
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          data?.error?.message ||
+          data?.error?.msg ||
+          data?.error ||
+          response.statusText ||
+          "No se pudo crear la cuenta";
+        const error = new Error(message);
+        if (data?.error?.code) error.code = data.error.code;
+        throw error;
+      }
+      return data?.data ?? null;
+    } catch (error) {
+      if (error?.name === "AbortError") {
+        throw new Error("La solicitud tardó demasiado, inténtalo de nuevo.");
+      }
+      throw error;
+    } finally {
+      clearTimeout(timeout);
+    }
   }
 
   async function persistProfileExtras(userId, payload) {
@@ -661,29 +703,40 @@
     const candidates = buildUsernameCandidates(seed);
     let lastError = null;
     for (const username of candidates) {
-      const wfEmail = `${username}@wftools.com`;
+      const wfUsername = `client.${username}`;
+      const wfEmail = `${wfUsername}@wftools.com`;
       try {
-        const { data, error } = await supabase.auth.signUp({
+        const result = await callClientAccountEndpoint({
           email: wfEmail,
           password,
-          options: {
-            data: {
-              full_name: name,
-              personal_email: personalEmail,
-              phone_number: phone,
-            },
+          full_name: name,
+          contact_email: personalEmail,
+          phone,
+          metadata: {
+            full_name: name,
+            contact_email: personalEmail,
+            phone,
+            phone_number: phone,
+            personal_email: personalEmail,
           },
         });
-        if (error) throw error;
-        await persistProfileExtras(data?.user?.id, {
+        const action = (result?.action || "").toLowerCase();
+        if (action === "updated") {
+          const duplicateError = new Error("El usuario ya existe");
+          duplicateError.code = "user_already_exists";
+          lastError = duplicateError;
+          continue;
+        }
+        const createdUser = result?.user || null;
+        await persistProfileExtras(createdUser?.id, {
           name,
           personalEmail,
           phone,
           generatedEmail: wfEmail,
         });
         return {
-          user: data?.user || null,
-          username,
+          user: createdUser,
+          username: wfUsername,
           email: wfEmail,
         };
       } catch (error) {
