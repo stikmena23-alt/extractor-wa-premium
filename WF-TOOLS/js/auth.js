@@ -13,6 +13,16 @@
     "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imh0a3djamhjdXF5ZXBjbHBtcHN2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc5MTk4MTgsImV4cCI6MjA3MzQ5NTgxOH0.dBeJjYm12YW27LqIxon5ifPR1ygfFXAHVg8ZuCZCEf8";
 
   const supabase = global.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  const normalizedSupabaseUrl = SUPABASE_URL.replace(/\/+$/, "");
+  const functionsHost = normalizedSupabaseUrl.replace(
+    /https:\/\/([^/]+)\.supabase\.co$/,
+    "https://$1.functions.supabase.co"
+  );
+  const FUNCTIONS_BASE_URL =
+    functionsHost !== normalizedSupabaseUrl
+      ? functionsHost
+      : `${normalizedSupabaseUrl}/functions/v1`;
+  const CLIENT_ACCOUNT_FUNCTION = `${FUNCTIONS_BASE_URL}/client-account`;
 
   const loginScreen = document.getElementById("loginScreen");
   const loginForm = document.getElementById("loginForm");
@@ -597,7 +607,7 @@
       .replace(/\.\.+/g, ".")
       .replace(/^\.+|\.+$/g, "");
     const core = base || "cliente";
-    const root = `clien.${core}`.replace(/\.\.+/g, ".").replace(/\.+$/, "");
+    const root = `client.${core}`.replace(/\.\.+/g, ".").replace(/\.+$/, "");
     const timeSuffix = Date.now().toString(36).slice(-4);
     const randomSuffix = Math.random().toString(36).slice(-4);
     const variants = [root];
@@ -612,6 +622,7 @@
     if (!error) return false;
     const code = (error.code || "").toLowerCase();
     if (code === "user_already_exists" || code === "email_conflict") return true;
+    if (Number(error.status) === 409) return true;
     const message = (error.message || "").toLowerCase();
     return message.includes("already registered") || message.includes("already exists");
   }
@@ -649,28 +660,48 @@
     for (const username of candidates) {
       const wfEmail = `${username}@wftools.com`;
       try {
-        const { data, error } = await supabase.auth.signUp({
-          email: wfEmail,
-          password,
-          options: {
-            data: {
-              full_name: name,
-              personal_email: personalEmail,
-              phone_number: phone,
-            },
+        const response = await fetch(CLIENT_ACCOUNT_FUNCTION, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: SUPABASE_ANON_KEY,
+            Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
           },
+          body: JSON.stringify({
+            email: wfEmail,
+            password,
+            full_name: name,
+            contact_email: personalEmail,
+            phone,
+          }),
         });
-        if (error) throw error;
-        await persistProfileExtras(data?.user?.id, {
+
+        const payload = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          const message =
+            payload?.error?.message ||
+            payload?.message ||
+            response.statusText ||
+            "No se pudo crear la cuenta.";
+          const error = new Error(message);
+          error.code = payload?.error?.code || payload?.error?.name || null;
+          error.status = response.status;
+          throw error;
+        }
+
+        const createdUser = payload?.data?.user || null;
+        await persistProfileExtras(createdUser?.id, {
           name,
           personalEmail,
           phone,
           generatedEmail: wfEmail,
         });
         return {
-          user: data?.user || null,
+          user: createdUser,
           username,
           email: wfEmail,
+          action: payload?.data?.action || "created",
         };
       } catch (error) {
         if (isDuplicateUserError(error)) {
