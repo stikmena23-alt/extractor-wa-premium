@@ -36,6 +36,7 @@
       html, body {
         margin: 0;
         padding: 0;
+        min-height: 100dvh;
         height: 100%;
         overflow: hidden; /* Evita scroll del contenedor unificado */
         background: #000;
@@ -265,9 +266,81 @@
         box-shadow: 0 8px 18px rgba(0,0,0,.35); transition: transform .2s ease, box-shadow .2s ease;
         letter-spacing:.2px; font-weight:700; font-size:13px;
       }
-      .wa-float:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.5); }
+      .wa-float:hover,
+      .wa-float:focus-visible { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.5); outline: none; }
       .wa-icon { width:28px; height:28px; display:inline-block; }
       .wa-label { white-space:nowrap; }
+
+      @media (max-width: 960px) {
+        .frame-container {
+          min-height: 100dvh;
+        }
+        .cb-widget,
+        .cb2-widget {
+          left: calc(16px + env(safe-area-inset-left));
+          bottom: calc(16px + env(safe-area-inset-bottom));
+        }
+        .wa-support {
+          right: calc(16px + env(safe-area-inset-right));
+          bottom: calc(16px + env(safe-area-inset-bottom));
+        }
+        .cb-fab {
+          width: 56px;
+          min-width: 56px;
+          height: 56px;
+          padding: 0;
+          justify-content: center;
+          align-items: center;
+          gap: 0;
+          border-radius: 999px;
+          position: relative;
+        }
+        .cb-fab:hover,
+        .cb-fab:focus-visible {
+          width: 56px;
+          transform: translateY(-1px);
+          box-shadow: 0 12px 24px rgba(0,0,0,.45);
+        }
+        .cb-icon {
+          margin-left: 0;
+        }
+        .cb-label {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          border: 0;
+          opacity: 0 !important;
+          max-width: 0 !important;
+          transform: none !important;
+        }
+        .wa-float {
+          width: 56px;
+          height: 56px;
+          padding: 0;
+          justify-content: center;
+          align-items: center;
+          gap: 0;
+          border-radius: 999px;
+        }
+        .wa-float:hover,
+        .wa-float:focus-visible {
+          transform: translateY(-1px);
+        }
+        .wa-label {
+          position: absolute;
+          width: 1px;
+          height: 1px;
+          padding: 0;
+          margin: -1px;
+          overflow: hidden;
+          clip: rect(0, 0, 0, 0);
+          border: 0;
+        }
+      }
     </style>
 
     <!-- ====================================================================== -->
