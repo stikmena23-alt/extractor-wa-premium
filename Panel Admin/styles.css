@@ -100,6 +100,12 @@ a{color:var(--brand)}
 .btn[disabled]{opacity:.6; cursor:not-allowed}
 .btn-primary{background:linear-gradient(135deg, var(--brand), var(--brand-2)); color:#00131f; box-shadow:0 10px 25px rgba(14,165,233,.35)}
 .btn-ghost{background:#0b0f15; color:#fff; border:1px solid var(--border)}
+.btn-warning{background:rgba(245,158,11,.16); color:#facc15; border:1px solid rgba(245,158,11,.35)}
+.btn-warning:hover{background:rgba(245,158,11,.25)}
+.btn-warning:focus-visible{outline:2px solid rgba(245,158,11,.55)}
+.btn-danger{background:rgba(239,68,68,.15); color:#fecaca; border:1px solid rgba(239,68,68,.35)}
+.btn-danger:hover{background:rgba(239,68,68,.24)}
+.btn-danger:focus-visible{outline:2px solid rgba(239,68,68,.55)}
 .btn-sm{padding:8px 10px; font-size:.86rem; border-radius:12px}
 .row{display:flex; gap:10px; align-items:center; flex-wrap:wrap}
 

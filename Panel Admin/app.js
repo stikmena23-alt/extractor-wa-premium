@@ -23,6 +23,8 @@ const ENDPOINTS = {
   update: 'admin-update',
   recovery: 'admin-recovery',
   setPassword: 'admin-setpassword',
+  block: 'admin-block',
+  remove: 'admin-delete',
 };
 
 /************* STATE *************/
@@ -570,6 +572,8 @@ function renderRows(){
             <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
             <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Link recuperación</button>
             <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
+            <button class="btn btn-ghost btn-sm btn-warning" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Bloquear</button>
+            <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
           </div>
         </td>`;
       if(meta.recommend) tr.classList.add('row-alert');
@@ -599,7 +603,9 @@ function renderRows(){
         <div class="row-actions">
           <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
           <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Recuperación</button>
-          <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
+          <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Contraseña</button>
+          <button class="btn btn-ghost btn-sm btn-warning" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Bloquear</button>
+          <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
         </div>`;
       if(meta.recommend) card.classList.add('row-alert');
       $cards.append(card);
@@ -727,6 +733,62 @@ document.addEventListener('click', async (e)=>{
     const res = await api(ENDPOINTS.setPassword, { method:'POST', body:{ userId:id, password:pwd } });
     btn.disabled = false;
     if(res.ok) toast('Contraseña actualizada'); else toast('No se pudo cambiar','err');
+  }
+
+  if(act==='block'){
+    const id = btn.dataset.id;
+    if(!id){ toast('No se pudo identificar al usuario','err'); return; }
+    const displayName = btn.dataset.name || btn.dataset.email || 'usuario';
+    const promptMsg = `Ingresa las horas de bloqueo para ${displayName} (deja vacío para 1000 días)`;
+    const input = prompt(promptMsg, '');
+    if(input === null) return;
+    let hours;
+    const trimmed = (input || '').trim();
+    if(trimmed === ''){
+      hours = 1000 * 24;
+    } else {
+      const numeric = Number(trimmed.replace(',', '.'));
+      if(!Number.isFinite(numeric) || numeric <= 0){
+        toast('Duración de bloqueo inválida','warn');
+        return;
+      }
+      hours = Math.ceil(numeric);
+    }
+    btn.disabled = true;
+    btn.textContent = 'Bloqueando…';
+    const res = await api(ENDPOINTS.block, { method:'POST', body:{ userId:id, hours } });
+    btn.disabled = false;
+    btn.textContent = 'Bloquear';
+    if(res.ok){
+      const durationText = hours % 24 === 0 ? `${hours / 24} días` : `${hours} horas`;
+      toast(`Usuario bloqueado por ${durationText}`);
+      loadUsers();
+    } else {
+      const txt = await res.text().catch(()=>null);
+      console.error('block error:', txt);
+      toast('No se pudo bloquear al usuario','err');
+    }
+  }
+
+  if(act==='delete'){
+    const id = btn.dataset.id;
+    if(!id){ toast('No se pudo identificar al usuario','err'); return; }
+    const email = btn.dataset.email || 'este usuario';
+    const confirmed = confirm(`¿Eliminar definitivamente a ${email}? Esta acción no se puede deshacer.`);
+    if(!confirmed) return;
+    btn.disabled = true;
+    btn.textContent = 'Eliminando…';
+    const res = await api(ENDPOINTS.remove, { method:'POST', body:{ userId:id } });
+    btn.disabled = false;
+    btn.textContent = 'Eliminar';
+    if(res.ok){
+      toast('Usuario eliminado');
+      loadUsers();
+    } else {
+      const txt = await res.text().catch(()=>null);
+      console.error('delete error:', txt);
+      toast('No se pudo eliminar al usuario','err');
+    }
   }
 
   if(act==='edit'){
