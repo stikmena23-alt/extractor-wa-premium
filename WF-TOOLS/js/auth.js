@@ -530,6 +530,14 @@
     }
   }
 
+  function isSessionMissingError(error) {
+    if (!error) return false;
+    const name = (error.name || "").toLowerCase();
+    if (name.includes("authsessionmissingerror")) return true;
+    const message = (error.message || String(error)).toLowerCase();
+    return message.includes("auth session missing") || message.includes("session missing");
+  }
+
   async function ensureActiveSession() {
     try {
       const { data, error } = await supabase.auth.getSession();
@@ -546,13 +554,18 @@
     try {
       const { data, error } = await supabase.auth.refreshSession();
       if (error) {
-        if (error.message && !/refresh token/i.test(error.message)) {
+        const message = error.message || "";
+        if (message && !/refresh token/i.test(message) && !/session missing/i.test(message)) {
           console.warn("No se pudo refrescar la sesión", error);
         }
         return null;
       }
       return data?.session || null;
     } catch (err) {
+      if (isSessionMissingError(err)) {
+        console.debug("No hay sesión activa para refrescar.");
+        return null;
+      }
       console.error("No se pudo refrescar la sesión", err);
       return null;
     }
@@ -659,6 +672,7 @@
     let lastError = null;
     for (const username of candidates) {
       const wfEmail = `${username}@wftools.com`;
+      let lastRequestId = null;
       try {
         const response = await fetch(CLIENT_ACCOUNT_FUNCTION, {
           method: "POST",
@@ -677,6 +691,12 @@
         });
 
         const payload = await response.json().catch(() => null);
+        const requestId =
+          response.headers.get("sb-request-id") ||
+          response.headers.get("x-request-id") ||
+          response.headers.get("cf-ray") ||
+          null;
+        lastRequestId = requestId;
 
         if (!response.ok) {
           const message =
@@ -687,6 +707,7 @@
           const error = new Error(message);
           error.code = payload?.error?.code || payload?.error?.name || null;
           error.status = response.status;
+          if (requestId) error.requestId = requestId;
           throw error;
         }
 
@@ -704,6 +725,9 @@
           action: payload?.data?.action || "created",
         };
       } catch (error) {
+        if (lastRequestId && !error.requestId) {
+          error.requestId = lastRequestId;
+        }
         if (isDuplicateUserError(error)) {
           lastError = error;
           continue;
@@ -911,6 +935,9 @@
       let message = error?.message || "No se pudo completar el registro. Intenta nuevamente.";
       if (isDuplicateUserError(error)) {
         message = "No se pudo generar un usuario único. Intenta nuevamente.";
+      }
+      if (error?.requestId) {
+        message = `${message} (ID: ${error.requestId})`;
       }
       showRegisterError(message);
       showSessionToast(message, "danger");

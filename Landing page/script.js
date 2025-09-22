@@ -99,6 +99,12 @@ const byCreditsRow = document.querySelector('.by-credits');
 const byAmountRow  = document.querySelector('.by-amount');
 const creditsInput = document.getElementById('creditsInput');
 const amountInput  = document.getElementById('amountInput');
+const personalizationEnabled =
+  modeButtons.length > 0 &&
+  !!byCreditsRow &&
+  !!byAmountRow &&
+  !!creditsInput &&
+  !!amountInput;
 
 const rBase  = document.getElementById('rBase');
 const rBonus = document.getElementById('rBonus');
@@ -138,6 +144,7 @@ function planSugeridoPorCreditos(creds){
 }
 
 function setMode(mode){
+  if (!personalizationEnabled) return;
   modeButtons.forEach(b=>{
     const active = b.dataset.mode === mode;
     b.classList.toggle('active', active);
@@ -160,6 +167,7 @@ function setMode(mode){
 }
 
 const fmtNumberInput = (el)=>{
+  if (!el) return 0;
   const digits = Number((el.value||'').replace(/\D+/g,'') || 0);
   el.value = digits ? new Intl.NumberFormat('es-CO').format(digits) : '';
   // Mueve el cursor al final
@@ -168,6 +176,7 @@ const fmtNumberInput = (el)=>{
 };
 
 function updateRecommendation(baseCredits){
+  if (!recommendBox || !recText) return;
   const { candidato, siguiente } = planSugeridoPorCreditos(baseCredits);
   const bonoCandidato = calcularBonoPorCreditos(candidato.base);
   const totalCandidato = candidato.base + bonoCandidato;
@@ -185,44 +194,50 @@ function updateRecommendation(baseCredits){
 }
 
 function updateFromCredits(){
+  if (!creditsInput) return;
   const baseCredits = fmtNumberInput(creditsInput) || 0;
   const basePrice = baseCredits * CREDITO_VALOR;
   const bonus = calcularBonoPorCreditos(baseCredits);
   const total = baseCredits + bonus;
   const eff = total ? basePrice / total : 0;
 
-  rBase.textContent  = `$${fmtCOP(basePrice)}`;
-  rBonus.textContent = `${fmtCOP(bonus)} créditos`;
-  rTotal.textContent = `${fmtCOP(total)}`;
-  rEff.textContent   = total ? `$${fmtCOP(Math.round(eff))}` : '$0';
+  if (rBase)  rBase.textContent  = `$${fmtCOP(basePrice)}`;
+  if (rBonus) rBonus.textContent = `${fmtCOP(bonus)} créditos`;
+  if (rTotal) rTotal.textContent = `${fmtCOP(total)}`;
+  if (rEff)   rEff.textContent   = total ? `$${fmtCOP(Math.round(eff))}` : '$0';
 
   const waMsg = encodeURIComponent(
     `Hola, quiero comprar un plan personalizado de ${fmtCOP(baseCredits)} créditos (+${fmtCOP(bonus)} de bono = ${fmtCOP(total)} créditos) por $${fmtCOP(basePrice)}.`
   );
-  document.getElementById('customBuy').href = `https://wa.me/573126461216?text=${waMsg}`;
+  if (customBuy) {
+    customBuy.href = `https://wa.me/573126461216?text=${waMsg}`;
+  }
 
   updateRecommendation(baseCredits);
 }
 
 function updateFromAmount(){
-  const amountRaw = fmtNumberInput(document.getElementById('amountInput')) || 0;
+  if (!amountInput) return;
+  const amountRaw = fmtNumberInput(amountInput) || 0;
   const normAmount = Math.floor(amountRaw / CREDITO_VALOR) * CREDITO_VALOR;
-  if (normAmount !== amountRaw) document.getElementById('amountInput').value = normAmount ? fmtCOP(normAmount) : '';
+  if (normAmount !== amountRaw) amountInput.value = normAmount ? fmtCOP(normAmount) : '';
 
   const baseCredits = Math.floor(normAmount / CREDITO_VALOR);
   const bonus = calcularBonoPorCreditos(baseCredits);
   const total = baseCredits + bonus;
   const eff = total ? normAmount / total : 0;
 
-  rBase.textContent  = `$${fmtCOP(normAmount)}`;
-  rBonus.textContent = `${fmtCOP(bonus)} créditos`;
-  rTotal.textContent = `${fmtCOP(total)}`;
-  rEff.textContent   = total ? `$${fmtCOP(Math.round(eff))}` : '$0';
+  if (rBase)  rBase.textContent  = `$${fmtCOP(normAmount)}`;
+  if (rBonus) rBonus.textContent = `${fmtCOP(bonus)} créditos`;
+  if (rTotal) rTotal.textContent = `${fmtCOP(total)}`;
+  if (rEff)   rEff.textContent   = total ? `$${fmtCOP(Math.round(eff))}` : '$0';
 
   const waMsg = encodeURIComponent(
     `Hola, quiero comprar un plan personalizado por $${fmtCOP(normAmount)} (${fmtCOP(baseCredits)} créditos + ${fmtCOP(bonus)} de bono = ${fmtCOP(total)} créditos).`
   );
-  document.getElementById('customBuy').href = `https://wa.me/573126461216?text=${waMsg}`;
+  if (customBuy) {
+    customBuy.href = `https://wa.me/573126461216?text=${waMsg}`;
+  }
 
   updateRecommendation(baseCredits);
 }
@@ -238,14 +253,15 @@ document.getElementById('amountInput')?.addEventListener('input', updateFromAmou
 
 // Detalles del plan personalizado
 document.getElementById('customDetails')?.addEventListener('click', ()=>{
+  if (!personalizationEnabled) return;
   const activeMode = document.querySelector('.seg-btn.active')?.dataset.mode;
   let baseCredits = 0, amount = 0;
 
   if (activeMode === 'credits'){
-    baseCredits = parseDigits(document.getElementById('creditsInput').value);
+    baseCredits = parseDigits(creditsInput?.value);
     amount = baseCredits * CREDITO_VALOR;
   } else {
-    amount = Math.floor(parseDigits(document.getElementById('amountInput').value) / CREDITO_VALOR) * CREDITO_VALOR;
+    amount = Math.floor(parseDigits(amountInput?.value) / CREDITO_VALOR) * CREDITO_VALOR;
     baseCredits = Math.floor(amount / CREDITO_VALOR);
   }
   const bonus = calcularBonoPorCreditos(baseCredits);
@@ -266,11 +282,13 @@ document.getElementById('customDetails')?.addEventListener('click', ()=>{
 });
 
 // Estado inicial
-setMode('credits');
-document.getElementById('creditsInput').value = new Intl.NumberFormat('es-CO').format(30);
-updateFromCredits();
+if (personalizationEnabled) {
+  setMode('credits');
+  creditsInput.value = new Intl.NumberFormat('es-CO').format(30);
+  updateFromCredits();
 
-// Estado inicial (Por monto)
-setMode('amount');
-document.getElementById('amountInput').value = new Intl.NumberFormat('es-CO').format(300000);
-updateFromAmount();
+  // Estado inicial (Por monto)
+  setMode('amount');
+  amountInput.value = new Intl.NumberFormat('es-CO').format(300000);
+  updateFromAmount();
+}
