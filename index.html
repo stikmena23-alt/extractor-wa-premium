@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <title>WF-TOOLS</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <!-- Favicon principal -->
+    <link rel="icon" type="image/png" sizes="32x32" href="WF-TOOLS/WF%20TOOLS%202.png" />
+
+    <!-- ====================================================================== -->
+    <!--  ESTILOS: BASE / LAYOUT / OVERLAY                                     -->
+    <!-- ====================================================================== -->
+    <style>
+      /* =========================
+         Ajustes básicos / Layout
+         ========================= */
+      :root{
+        --bg-deep:#00060f;
+        --bg-card:rgba(0,10,28,.35);
+        --stroke:rgba(120,200,255,.25);
+        --text:#dff7ff;
+        --muted:#bfe9ff;
+        --brand-a:#21e4ff;
+        --brand-b:#6b8cff;
+        --accent:rgba(33,228,255,.12);
+      }
+      html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        overflow: hidden; /* Evita scroll del contenedor unificado */
+        background: #000;
+        color: var(--text);
+        font-family: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', 'Helvetica Neue', Arial;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      .frame-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+      }
+      iframe {
+        position: absolute; /* Apilados; se alterna visibilidad con .active */
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border: none;
+        display: none;
+      }
+      iframe.active { display: block; }
+
+      /* =========================
+         Botón flotante genérico (legacy)
+         ========================= */
+      .floating-btn {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+
+        background: #0ea5e9;
+        color: #ffffff;
+        padding: 12px 16px;
+        border-radius: 40px;
+        text-decoration: none;
+        font-family: inherit;
+        font-size: 14px;
+        font-weight: 700;
+        text-align: center;
+        box-shadow: 0 4px 8px rgba(0,0,0,.3);
+        letter-spacing: .2px;
+      }
+      .floating-btn img {
+        width: 28px;
+        height: 28px;
+        margin: 0 0 6px 0;
+      }
+
+      /* Cuando el botón está dentro de #rechargeWidget, no debe ser fixed */
+      #rechargeWidget .floating-btn { position: static; margin: 0; }
+
+      /* Ajustes del logo de recarga si fuese imagen */
+      #rechargeWidget img {
+        width: 40px;
+        height: 40px;
+        margin-bottom: 6px;
+        object-fit: cover;
+        object-position: left center;
+      }
+
+      /* =========================
+         Overlay de carga (transiciones suaves al cambiar iframes)
+         ========================= */
+      .loading-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.6);
+        display: none; /* Se controla por JS */
+        align-items: center;
+        justify-content: center;
+        z-index: 100000;
+      }
+      .loading-overlay .spinner {
+        border: 4px solid #f3f3f3;
+        border-top: 4px solid #0ea5e9;
+        border-radius: 50%;
+        width: 40px; height: 40px;
+        animation: spin 1s linear infinite;
+      }
+      @keyframes spin { 0% {transform: rotate(0)} 100% {transform: rotate(360deg)} }
+    </style>
+
+    <!-- ====================================================================== -->
+    <!--  ESTILOS: WIDGET CREDIBOOST (izquierda)                                -->
+    <!-- ====================================================================== -->
+    <style>
+      /* Widget CrediBoost (fondo rgb(0,10,28), círculo + rayo fino; ícono más a la derecha) */
+      .cb-widget {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 10000;
+      }
+      .cb-fab {
+        --cb-grad-a: #21e4ff;
+        --cb-grad-b: #6b8cff;
+        --cb-bg: rgb(0, 10, 28);
+        --cb-text: #eaf7ff;
+
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+
+        height: 48px;
+        width: 48px;         /* círculo cerrado */
+        border-radius: 999px;
+        padding: 0 14px 0 8px;
+
+        overflow: hidden;
+        text-decoration: none;
+        cursor: pointer;
+        color: var(--cb-text);
+        font: 600 13px/1.1 inherit;
+
+        background:
+          linear-gradient(var(--cb-bg), var(--cb-bg)) padding-box, /* fondo del botón */
+          linear-gradient(135deg, var(--cb-grad-a), var(--cb-grad-b)) border-box; /* borde degradado */
+        border: 2px solid transparent;
+
+        box-shadow: 0 6px 18px rgba(0,0,0,.35), inset 0 0 0 0 rgba(255,255,255,.04);
+        transition: width .32s cubic-bezier(.22,.61,.36,1), box-shadow .25s ease, transform .25s ease;
+      }
+      .cb-fab:hover,
+      .cb-fab:focus-visible {
+        width: 360px;        /* se estira (pill) y muestra el texto */
+        transform: translateY(-1px);
+        box-shadow: 0 12px 28px rgba(0,0,0,.45), 0 0 0 3px rgba(33,228,255,.14);
+        outline: none;
+      }
+      .cb-icon {
+        width: 36px;
+        height: 36px;
+        flex: 0 0 36px;
+        display: inline-block;
+        margin-left: 8px; /* ícono un poco a la derecha */
+      }
+      .cb-label {
+        white-space: nowrap;
+        user-select: none;
+        opacity: 0;
+        max-width: 0;
+        overflow: hidden;
+        transform: translateX(6px);
+        transition: opacity .18s .08s ease, max-width .32s ease, transform .18s .08s ease;
+        letter-spacing: .2px;
+      }
+      .cb-fab:hover .cb-label,
+      .cb-fab:focus-visible .cb-label {
+        opacity: 1;
+        max-width: 1000px;
+        transform: translateX(0);
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .cb-fab, .cb-label { transition: none; }
+      }
+    </style>
+
+    <!-- ====================================================================== -->
+    <!--  ESTILOS: WIDGET "ABRIR WF-TOOLS" (izquierda, solo landing)            -->
+    <!-- ====================================================================== -->
+    <style>
+      .cb2-widget {
+        position: fixed;
+        bottom: 20px;
+        left: 20px;
+        z-index: 10000;
+        display: none; /* se muestra sólo en landing */
+      }
+      .cb-fab {
+        --cb-grad-a: #21e4ff;
+        --cb-grad-b: #6b8cff;
+        --cb-bg: rgb(0, 10, 28);
+        --cb-text: #eaf7ff;
+
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+
+        height: 48px;
+        width: 48px;
+        border-radius: 999px;
+        padding: 0 14px 0 8px;
+
+        overflow: hidden;
+        text-decoration: none;
+        cursor: pointer;
+        color: var(--cb-text);
+        font: 600 13px/1.1 inherit;
+
+        background:
+          linear-gradient(var(--cb-bg), var(--cb-bg)) padding-box,
+          linear-gradient(135deg, var(--cb-grad-a), var(--cb-grad-b)) border-box;
+        border: 2px solid transparent;
+
+        box-shadow: 0 6px 18px rgba(0,0,0,.35), inset 0 0 0 0 rgba(255,255,255,.04);
+        transition: width .32s cubic-bezier(.22,.61,.36,1), box-shadow .25s ease, transform .25s ease;
+      }
+      .cb-fab:hover,
+      .cb-fab:focus-visible {
+        width: 360px;
+        transform: translateY(-1px);
+        box-shadow: 0 12px 28px rgba(0,0,0,.45), 0 0 0 3px rgba(33,228,255,.14);
+      }
+      .cb-icon { width: 36px; height: 36px; flex: 0 0 36px; display: inline-block; margin-left: 8px; }
+      .cb-label { white-space: nowrap; user-select: none; opacity: 0; max-width: 0; overflow: hidden; transform: translateX(6px);
+        transition: opacity .18s .08s ease, max-width .32s ease, transform .18s .08s ease; letter-spacing:.2px;}
+      .cb-fab:hover .cb-label, .cb-fab:focus-visible .cb-label { opacity:1; max-width:1000px; transform:translateX(0); }
+      @media (prefers-reduced-motion: reduce) { .cb-fab, .cb-label { transition: none; } }
+    </style>
+
+    <!-- ====================================================================== -->
+    <!--  ESTILOS: BOTÓN WHATSAPP (solo wfFrame activo)                          -->
+    <!-- ====================================================================== -->
+    <style>
+      .wa-support { position: fixed; bottom: 20px; right: 20px; z-index: 10000; display: none; }
+      .wa-float {
+        display:inline-flex; align-items:center; gap:10px; text-decoration:none; color:#eaf7ff;
+        background: rgb(0,10,28); border: 2px solid rgba(37,211,102,.65); border-radius:999px; padding:10px 14px;
+        box-shadow: 0 8px 18px rgba(0,0,0,.35); transition: transform .2s ease, box-shadow .2s ease;
+        letter-spacing:.2px; font-weight:700; font-size:13px;
+      }
+      .wa-float:hover { transform: translateY(-1px); box-shadow: 0 12px 28px rgba(0,0,0,.5); }
+      .wa-icon { width:28px; height:28px; display:inline-block; }
+      .wa-label { white-space:nowrap; }
+    </style>
+
+    <!-- ====================================================================== -->
+    <!--  ESTILOS: BOOT LOADER FUTURISTA (2–3s con progreso real)               -->
+    <!-- ====================================================================== -->
+    <style>
+      .boot-overlay{
+        position:fixed; inset:0; z-index:200000;
+        display:flex; align-items:center; justify-content:center;
+        background:
+          radial-gradient(1200px 600px at 30% 20%, rgba(33,228,255,.12), transparent 60%),
+          radial-gradient(900px 500px at 80% 80%, rgba(107,140,255,.10), transparent 55%),
+          linear-gradient(180deg, #020611 0%, var(--bg-deep) 100%);
+        color:var(--text);
+        overflow:hidden;
+        opacity:1; transition:opacity .55s ease;
+      }
+      .boot-content{
+        width:min(92vw,760px);
+        padding:34px 26px 28px;
+        border-radius:26px;
+        background: var(--bg-card);
+        border:1px solid var(--stroke);
+        backdrop-filter: blur(10px);
+        box-shadow: 0 30px 80px rgba(0,0,0,.6), inset 0 0 60px rgba(33,228,255,.05);
+      }
+      .boot-title{
+        margin:0 0 12px 0; display:flex; align-items:center; gap:12px;
+        font-weight:800; font-size:22px; letter-spacing:.4px; line-height:1.15;
+        font-family: 'Space Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, Ubuntu, Cantarell, 'Noto Sans', 'Helvetica Neue', Arial;
+        background: linear-gradient(90deg, var(--brand-a), var(--brand-b));
+        -webkit-background-clip: text; background-clip:text; color: transparent;
+        text-shadow: 0 0 18px rgba(33,228,255,.18);
+      }
+      .boot-title .dot{
+        width:11px;height:11px;border-radius:999px;background:var(--brand-a);
+        box-shadow:0 0 10px var(--brand-a),0 0 26px var(--brand-b);
+        animation:pulse 1.2s infinite ease-in-out;
+      }
+      @keyframes pulse{ 0%,100%{transform:scale(1);opacity:1} 50%{transform:scale(1.35);opacity:.8} }
+
+      .boot-msg{
+        min-height:24px;
+        font-weight:600; font-size:14px; letter-spacing:.3px; color:var(--muted);
+        margin-bottom:14px;
+        text-shadow: 0 0 10px rgba(107,140,255,.15);
+      }
+      .boot-progress{ height:12px; border-radius:999px; overflow:hidden; background: rgba(255,255,255,.08); border:1px solid rgba(255,255,255,.08); position:relative; }
+      .boot-bar{
+        position:absolute; left:0; top:0; bottom:0; width:0%;
+        background: linear-gradient(90deg,var(--brand-a),var(--brand-b));
+        box-shadow: 0 0 22px rgba(33,228,255,.6);
+        transition: width .35s ease;
+      }
+      .boot-sub{
+        margin-top:10px; font-size:12px; opacity:.75; letter-spacing:.25px;
+      }
+
+      /* Scanlines sutiles */
+      .boot-overlay::after{
+        content:"";
+        position:absolute; inset:0; pointer-events:none;
+        background-image: repeating-linear-gradient( to bottom, rgba(255,255,255,.03) 0, rgba(255,255,255,.03) 1px, transparent 3px );
+        mix-blend-mode:soft-light; opacity:.25; animation:scan 6s linear infinite;
+      }
+      @keyframes scan{ 0%{background-position-y:0} 100%{background-position-y:400px} }
+
+      /* Esquinas glow */
+      .boot-overlay::before{
+        content:"";
+        position:absolute; inset:-30%;
+        background: radial-gradient(800px 200px at -10% -20%, rgba(33,228,255,.12), transparent 50%),
+                    radial-gradient(800px 200px at 110% 120%, rgba(107,140,255,.12), transparent 50%);
+        filter: blur(16px);
+        pointer-events:none;
+      }
+
+      @media (prefers-reduced-motion: reduce){
+        .boot-overlay::after, .boot-title .dot { animation:none }
+        .boot-bar { transition:none }
+      }
+    </style>
+  </head>
+
+  <body>
+    <!-- ========================================================= -->
+    <!--  BOOT LOADER FUTURISTA (2–3s) con progreso real + reload  -->
+    <!-- ========================================================= -->
+    <div id="bootLoader" class="boot-overlay" role="status" aria-live="polite">
+      <div class="boot-content">
+        <div class="boot-title">
+          <span class="dot"></span>
+          <span id="bootTitle">Iniciando WF-TOOLS</span>
+        </div>
+        <div id="bootMsg" class="boot-msg">Preparando entorno…</div>
+        <div class="boot-progress" aria-hidden="true"><div id="bootBar" class="boot-bar"></div></div>
+        <div id="bootSub" class="boot-sub">Cargando recursos base…</div>
+      </div>
+    </div>
+
+    <!-- ========================================================= -->
+    <!--  CONTENEDOR PRINCIPAL DE IFRAMES                         -->
+    <!-- ========================================================= -->
+    <div class="frame-container">
+      <!-- Evita caché en main.js con ?v=2 -->
+      <iframe id="wfFrame"      src="WF-TOOLS/index.html?v=2"  class="active" title="WF Tools"></iframe>
+      <iframe id="adminFrame"   src="Panel%20Admin/index.html" title="Panel de Administración"></iframe>
+      <iframe id="landingFrame" src="Landing%20page/index.html" title="Landing CrediBoost"></iframe>
+    </div>
+
+    <!-- Overlay de carga (spinner para cambios de vista) -->
+    <div id="loadingOverlay" class="loading-overlay"><div class="spinner"></div></div>
+
+    <!-- ========================================================= -->
+    <!--  WIDGET CREDIBOOST (izquierda)                           -->
+    <!-- ========================================================= -->
+    <div id="rechargeWidget" class="cb-widget">
+      <a id="rechargeBtn" class="cb-fab" href="#" aria-label="Recargar créditos en CrediBoost para WF Tools" title="Recargar créditos en CrediBoost para WF Tools">
+        <!-- Icono circular con rayo fino -->
+        <svg class="cb-icon" viewBox="0 0 48 48" role="img" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <radialGradient id="cbGlowSm" cx="50%" cy="42%" r="70%">
+              <stop offset="0%"   stop-color="#21e4ff" stop-opacity="0.95"/>
+              <stop offset="60%"  stop-color="#6b8cff" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#6b8cff" stop-opacity="0.55"/>
+            </radialGradient>
+          </defs>
+          <circle cx="24" cy="24" r="20" fill="url(#cbGlowSm)"/>
+          <g transform="translate(24,24) scale(1.05)">
+            <path d="M 0 -16 L -6 -3 H 2 L -3 16 L 8 0 H 0 Z" fill="#ffffff" opacity="0.98"/>
+          </g>
+        </svg>
+        <span class="cb-label">Recargar en CrediBoost para WF Tools</span>
+      </a>
+    </div>
+
+    <!-- ========================================================= -->
+    <!--  WIDGET "ABRIR WF-TOOLS" (izquierda, SOLO en landing)     -->
+    <!-- ========================================================= -->
+    <div id="openWFWidget" class="cb2-widget">
+      <a id="openWFBtnGlobal" class="cb-fab" href="#" aria-label="Abrir WF-TOOLS" title="Abrir WF-TOOLS">
+        <svg class="cb-icon" viewBox="0 0 48 48" aria-hidden="true" preserveAspectRatio="xMidYMid meet">
+          <defs>
+            <radialGradient id="cbHomeGlow" cx="50%" cy="42%" r="70%">
+              <stop offset="0%"   stop-color="#21e4ff" stop-opacity="0.95"/>
+              <stop offset="60%"  stop-color="#6b8cff" stop-opacity="0.9"/>
+              <stop offset="100%" stop-color="#6b8cff" stop-opacity="0.55"/>
+            </radialGradient>
+          </defs>
+          <circle cx="24" cy="24" r="20" fill="url(#cbHomeGlow)"/>
+          <g transform="translate(24,24)">
+            <path d="M -12 0 L 0 -10 L 12 0" fill="none" stroke="#ffffff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+            <rect x="-8" y="0" width="16" height="12" rx="2" ry="2" fill="#ffffff" opacity="0.98"/>
+            <rect x="-2.5" y="4" width="5" height="8" rx="1" ry="1" fill="rgb(0,10,28)"/>
+          </g>
+        </svg>
+        <span class="cb-label">Abrir WF-TOOLS</span>
+      </a>
+    </div>
+
+    <!-- ========================================================= -->
+    <!--  BOTÓN WHATSAPP (derecha) — SOLO con wfFrame activo       -->
+    <!-- ========================================================= -->
+    <div id="waSupport" class="wa-support">
+      <a class="wa-float"
+         href="https://wa.me/573126461216?text=Hola%2C%20necesito%20soporte%20t%C3%A9cnico%20de%20WF-TOOLS.%20%C2%BFMe%20puedes%20ayudar%3F"
+         target="_blank" rel="noopener"
+         aria-label="Soporte técnico de WF-TOOLS por WhatsApp">
+        <svg viewBox="0 0 32 32" aria-hidden="true" class="wa-icon">
+          <path d="M19.11 17.2c-.28-.14-1.62-.8-1.87-.89-.25-.09-.43-.14-.62.14-.19.28-.71.89-.87 1.07-.16.18-.32.2-.6.07-.28-.14-1.18-.44-2.25-1.41-.83-.74-1.39-1.66-1.55-1.94-.16-.28-.02-.43.12-.57.12-.12.28-.32.42-.48.14-.16.18-.28.28-.46.09-.18.05-.34-.02-.48-.07-.14-.62-1.5-.85-2.06-.22-.53-.45-.46-.62-.47l-.53-.01c-.18 0-.48 .07-.73 .34-.25 .28-.96 .94-.96 2.29 0 1.35.99 2.65 1.13 2.83.14 .18 1.95 2.98 4.73 4.18 1.66 .72 2.31 .78 3.14 .66.5 -.08 1.62 -.66 1.85 -1.3.23 -.64.23 -1.19.16 -1.3-.07 -.11-.25 -.18-.53 -.32z" fill="currentColor"/>
+          <path d="M27.5 15.2c0 6.77-5.5 12.27-12.27 12.27-2.19 0-4.23-.59-5.98-1.62L4.5 27.5l1.71-4.61a12.17 12.17 0 0 1-1.98-6.69C4.23 9.43 9.73 3.93 16.5 3.93S27.5 8.43 27.5 15.2zm-3.09 0c0-4.86-3.95-8.81-8.81-8.81-4.86 0-8.81 3.95-8.81 8.81 0 1.55.42 3 1.15 4.26l-.75 2.76 2.84-.74a8.79 8.79 0 0 0 5.57 1.94c4.86 0 8.81-3.95 8.81-8.81z" fill="currentColor"/>
+        </svg>
+        <span class="wa-label">Soporte técnico</span>
+      </a>
+    </div>
+
+    <!-- ========================================================= -->
+    <!--  SCRIPTS                                                  -->
+    <!-- ========================================================= -->
+    <script>
+      /* ===== Boot Loader con progreso real (2–3s) y copy dinámico para recarga ===== */
+      (function bootWFTOOLS(){
+        const boot    = document.getElementById('bootLoader');
+        const titleEl = document.getElementById('bootTitle');
+        const msgEl   = document.getElementById('bootMsg');
+        const barEl   = document.getElementById('bootBar');
+        const subEl   = document.getElementById('bootSub');
+
+        const wf      = document.getElementById('wfFrame');
+        const admin   = document.getElementById('adminFrame');
+        const landing = document.getElementById('landingFrame');
+
+        // Detectar si esta navegación es una RECARGA del navegador
+        const navEntry = (performance.getEntriesByType && performance.getEntriesByType('navigation')[0]) || null;
+        const navType  = navEntry ? navEntry.type : (performance.navigation && performance.navigation.type === 1 ? 'reload' : 'navigate');
+        const isReload = navType === 'reload';
+
+        // Título y mensajes según sea carga inicial o recarga
+        const bootConfig = isReload ? {
+          title: "REORGANIZANDO ENTORNO WF-TOOLS",
+          scriptedSteps: [
+            "Recolectando estados previos…",
+            "Liberando cachés temporales…",
+            "Rehidratando módulos…",
+            "Sincronizando dependencias…",
+            "Ajustando rendimiento…"
+          ],
+          closing: "Listo. Reingresando a WF-TOOLS…",
+          subInit: "Reacomodando recursos base…"
+        } : {
+          title: "INICIANDO WF-TOOLS",
+          scriptedSteps: [
+            "Inicializando módulos del sistema…",
+            "Verificando integridad de recursos…",
+            "Cargando componentes de interfaz…",
+            "Sincronizando servicios seguros…",
+            "Optimizando rendimiento…"
+          ],
+          closing: "Listo. Entrando a WF-TOOLS…",
+          subInit: "Cargando recursos base…"
+        };
+
+        if (titleEl) titleEl.textContent = bootConfig.title;
+
+        // Progreso real por hitos: wf (60), landing (80), admin (95)
+        let progress = 0;
+        const hardMax  = 95; // reservamos el último 5% para el cierre bonito
+
+        function setMsg(t){ if (msgEl) msgEl.textContent = t; }
+        function setSub(t){ if (subEl) subEl.textContent = t; }
+        function setBar(p){
+          progress = Math.max(progress, Math.min(p, 100));
+          if (barEl) barEl.style.width = progress + "%";
+        }
+
+        // Pasos suaves (tiempo) mezclados con progreso real (~1.6s)
+        let i = 0;
+        function runScripted(){
+          if (i < bootConfig.scriptedSteps.length){
+            setMsg(bootConfig.scriptedSteps[i]);
+            const target = Math.min(hardMax, progress + 8);
+            setBar(target);
+            i++;
+            setTimeout(runScripted, 320); // 0.32s/step ≈ 1.6s
+          }
+        }
+
+        // Eventos reales
+        function onWFLoad(){ setSub(isReload ? "Núcleo restablecido" : "Recursos principales listos"); setBar(60); }
+        function onLandingLoad(){ setSub(isReload ? "Landing realineada" : "Sección de planes lista"); setBar(80); }
+        function onAdminLoad(){ setSub(isReload ? "Panel de administración rehidratado" : "Panel de administración listo"); setBar(95); }
+
+        wf.addEventListener('load', onWFLoad, { once:true });
+        landing.addEventListener('load', onLandingLoad, { once:true });
+        admin.addEventListener('load', onAdminLoad, { once:true });
+
+        // Fallbacks por si alguna vista tarda o no dispara aún
+        setTimeout(() => setBar(30), 260);
+        setTimeout(() => setBar(55), 680);
+
+        // Cierre elegante cuando tengamos >=95% o al cumplir ~2.4s
+        function tryFinish(){
+          if (progress >= 95){
+            setMsg(bootConfig.closing);
+            setSub("Bienvenido");
+            setBar(100);
+            if (boot){
+              boot.style.opacity = '0';
+              setTimeout(() => boot.remove(), 550);
+            }
+          } else {
+            setTimeout(tryFinish, 220);
+          }
+        }
+
+        // Inicio
+        setSub(bootConfig.subInit);
+        runScripted();
+        setTimeout(tryFinish, 2400);
+      })();
+
+      /* ===== Overlay de carga (para cambios de iframe) ===== */
+      function showLoading() {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.style.display = 'flex';
+      }
+      function hideLoading() {
+        const overlay = document.getElementById('loadingOverlay');
+        if (overlay) overlay.style.display = 'none';
+      }
+
+      /* ===== Alterna vista activa y controla widgets ===== */
+      const FRAME_IDS = ['wfFrame', 'adminFrame', 'landingFrame'];
+      const FRAME_STORAGE_KEY = 'wf-tools.activeFrame';
+
+      function rememberFrame(frameId) {
+        if (!FRAME_IDS.includes(frameId)) return;
+        try {
+          localStorage.setItem(FRAME_STORAGE_KEY, frameId);
+        } catch (_) {
+          /* ignore */
+        }
+      }
+
+      function getRememberedFrame() {
+        try {
+          const stored = localStorage.getItem(FRAME_STORAGE_KEY);
+          return FRAME_IDS.includes(stored) ? stored : null;
+        } catch (_) {
+          return null;
+        }
+      }
+
+      function showFrame(frameId, options) {
+        if (!FRAME_IDS.includes(frameId)) return;
+        const opts = options || {};
+        const shouldReload = !!opts.reload;
+
+        const currentActive = document.querySelector('.frame-container iframe.active');
+        const alreadyActive = currentActive && currentActive.id === frameId && !shouldReload;
+        if (!alreadyActive) {
+          showLoading();
+        }
+        rememberFrame(frameId);
+
+        FRAME_IDS.forEach((id) => {
+          const frame = document.getElementById(id);
+          if (!frame) return;
+
+          if (id === frameId) {
+            frame.classList.add('active');
+
+            // Widgets de la izquierda
+            const recharge = document.getElementById('rechargeWidget');
+            const openW   = document.getElementById('openWFWidget');
+
+            // WhatsApp (derecha)
+            const wa = document.getElementById('waSupport');
+
+            if (frameId === 'landingFrame') {
+              if (recharge) recharge.style.display = 'none';
+              if (openW)    openW.style.display    = 'flex';
+              if (wa)       wa.style.display       = 'none';
+              try { setupLandingIntercept(); } catch (_) {}
+            } else if (frameId === 'adminFrame') {
+              if (recharge) recharge.style.display = 'none';
+              if (openW)    openW.style.display    = 'none';
+              if (wa)       wa.style.display       = 'none';
+            } else {
+              if (recharge) recharge.style.display = 'flex';
+              if (openW)    openW.style.display    = 'none';
+              if (wa)       wa.style.display       = 'block';
+              try { setupAdminIntercept(); } catch (_) {}
+            }
+
+            if (shouldReload) {
+              let fallbackTimer = null;
+              const handleLoad = () => {
+                if (fallbackTimer !== null) clearTimeout(fallbackTimer);
+                frame.removeEventListener('load', handleLoad);
+                hideLoading();
+              };
+              fallbackTimer = setTimeout(() => {
+                frame.removeEventListener('load', handleLoad);
+                hideLoading();
+              }, 2600);
+              frame.addEventListener('load', handleLoad, { once: true });
+              try {
+                if (frame.contentWindow && typeof frame.contentWindow.location.reload === 'function') {
+                  frame.contentWindow.location.reload();
+                } else {
+                  const src = frame.getAttribute('src');
+                  if (src) frame.setAttribute('src', src);
+                }
+              } catch (_err) {
+                const src = frame.getAttribute('src');
+                if (src) frame.setAttribute('src', src);
+              }
+            } else {
+              setTimeout(() => hideLoading(), 500);
+            }
+          } else {
+            frame.classList.remove('active');
+          }
+        });
+      }
+
+      /* Botón de recarga (CrediBoost) -> abre landing en iframe */
+      document.getElementById('rechargeBtn').addEventListener('click', function (event) {
+        event.preventDefault();
+        showFrame('landingFrame');
+      });
+
+      /* Botón "Abrir WF-TOOLS" (desde landing) */
+      const openGlobal = document.getElementById('openWFBtnGlobal');
+      if (openGlobal) {
+        openGlobal.addEventListener('click', function (event) {
+          event.preventDefault();
+          showFrame('wfFrame');
+        });
+      }
+
+      /* Interceptor de Admin dentro de WF-TOOLS */
+      function setupAdminIntercept() {
+        try {
+          const wfFrame = document.getElementById('wfFrame');
+          const wfDoc   = wfFrame.contentDocument || wfFrame.contentWindow.document;
+          if (!wfDoc) return;
+
+          const intercept = function (e) {
+            if (!e) return;
+            e.preventDefault();
+            if (typeof e.stopPropagation === 'function') e.stopPropagation();
+            if (typeof e.stopImmediatePropagation === 'function') e.stopImmediatePropagation();
+            showFrame('adminFrame');
+            return false;
+          };
+
+          ['adminAccessBtn', 'adminPanelBtn', 'adminPanelBtnInline'].forEach((id) => {
+            const button = wfDoc.getElementById(id);
+            if (!button || button.dataset.wfAdminIntercept === 'true') return;
+            button.addEventListener('click', intercept, true);
+            button.dataset.wfAdminIntercept = 'true';
+          });
+        } catch (err) {
+          console.error('No se pudo interceptar el botón de administrador:', err);
+        }
+      }
+      document.getElementById('wfFrame').addEventListener('load', setupAdminIntercept);
+
+      /* Interceptor en landing para volver al wfFrame */
+      function setupLandingIntercept() {
+        try {
+          const landingFrame = document.getElementById('landingFrame');
+          const landingDoc = landingFrame.contentDocument || landingFrame.contentWindow.document;
+          const openBtn = landingDoc.getElementById('openWFBtn');
+          if (!openBtn) return;
+
+          openBtn.addEventListener('click', function (e) {
+            e.preventDefault();
+            e.stopImmediatePropagation();
+            showFrame('wfFrame');
+          });
+        } catch (err) {
+          console.error('No se pudo interceptar el botón de abrir WF-TOOLS:', err);
+        }
+      }
+      document.getElementById('landingFrame').addEventListener('load', setupLandingIntercept);
+
+      /* Estado inicial: wfFrame activo -> WhatsApp visible */
+      (function initWA(){
+        const wa = document.getElementById('waSupport');
+        if (wa) wa.style.display = 'block';
+      })();
+
+      const initialFrame = getRememberedFrame() || 'wfFrame';
+      if (FRAME_IDS.includes(initialFrame)) {
+        showFrame(initialFrame);
+      }
+    </script>
+  </body>
+</html>
