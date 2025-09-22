@@ -72,6 +72,17 @@ const graphLayoutSelect = document.getElementById("graphLayoutSelect");
 const graphRefreshBtn = document.getElementById("graphRefreshBtn");
 const uploadBtn = document.getElementById("uploadBtn");
 const filePicker = document.getElementById("filePicker");
+const uploadStatusPanel = document.getElementById("uploadStatusPanel");
+const uploadStatusList = document.getElementById("uploadStatusList");
+const uploadStatusCounter = document.getElementById("uploadStatusCounter");
+const graphSelectionBox = document.getElementById("graphSelectionBox");
+const graphSelectionLabel = document.getElementById("graphSelectionLabel");
+const graphLabelInput = document.getElementById("graphLabelInput");
+const graphCopyBtn = document.getElementById("graphCopyBtn");
+const graphLabelSaveBtn = document.getElementById("graphLabelSaveBtn");
+const graphDeleteBtn = document.getElementById("graphDeleteBtn");
+const graphExportPdfBtn = document.getElementById("graphExportPdfBtn");
+const graphExportXlsxBtn = document.getElementById("graphExportXlsxBtn");
 
 // ----------- ESTADO GLOBAL -----------
 let currentContacts = [];
@@ -84,6 +95,14 @@ let settings = {
   autosave: true,
   exportHistory: []
 };
+const MAX_UPLOAD_FILES = 10;
+let uploadStatusItems = [];
+let graphDataset = { nodes: [], edges: [], mode: 'none' };
+let graphNodeMap = new Map();
+let graphActiveMode = 'none';
+let selectedGraphNode = null;
+let graphPendingSelection = null;
+const graphLabels = new Map();
 
 // Zona horaria de referencia (UTC−5 sin DST)
 const HLC_TZ = 'America/Bogota';
@@ -270,76 +289,251 @@ async function processZipFile(file){
   }
 }
 
+function renderUploadStatuses(){
+  if (!uploadStatusList) return;
+  uploadStatusList.innerHTML = '';
+  if (!uploadStatusItems.length){
+    const empty = document.createElement('p');
+    empty.className = 'upload-status-empty';
+    empty.textContent = 'Sin cargas registradas.';
+    uploadStatusList.appendChild(empty);
+    if (uploadStatusCounter) uploadStatusCounter.textContent = `0/${MAX_UPLOAD_FILES}`;
+    return;
+  }
+
+  if (uploadStatusCounter) uploadStatusCounter.textContent = `${uploadStatusItems.length}/${MAX_UPLOAD_FILES}`;
+  const statusLabels = { pending: 'Pendiente', processing: 'Procesando', done: 'Completado', error: 'Error' };
+
+  uploadStatusItems.slice().reverse().forEach(item => {
+    const row = document.createElement('div');
+    row.className = `upload-item upload-item--${item.status || 'pending'}`;
+
+    const top = document.createElement('div');
+    top.className = 'upload-item__top';
+    const nameEl = document.createElement('div');
+    nameEl.className = 'upload-item__name';
+    nameEl.textContent = item.name || 'Archivo';
+    top.appendChild(nameEl);
+
+    const state = document.createElement('div');
+    state.className = 'upload-item__state';
+    if (item.status === 'processing'){
+      const spinner = document.createElement('span');
+      spinner.className = 'upload-item__spinner';
+      spinner.setAttribute('aria-hidden', 'true');
+      state.appendChild(spinner);
+    }
+    const label = document.createElement('span');
+    label.textContent = statusLabels[item.status] || statusLabels.pending;
+    state.appendChild(label);
+    top.appendChild(state);
+    row.appendChild(top);
+
+    const meta = document.createElement('div');
+    meta.className = 'upload-item__meta';
+
+    const contactBadge = document.createElement('span');
+    contactBadge.className = 'upload-item__badge';
+    const hasContacts = typeof item.contactCount === 'number' && item.contactCount > 0;
+    if (hasContacts) contactBadge.classList.add('is-ok');
+    else if (item.status !== 'processing') contactBadge.classList.add('is-empty');
+    contactBadge.textContent = hasContacts
+      ? `📇 ${item.contactCount} contacto${item.contactCount === 1 ? '' : 's'}`
+      : '📇 Sin contactos';
+    meta.appendChild(contactBadge);
+
+    const ipBadge = document.createElement('span');
+    ipBadge.className = 'upload-item__badge';
+    if (item.ip){
+      ipBadge.classList.add('is-ok');
+      ipBadge.textContent = `🌐 ${item.ip}`;
+    } else if (item.status !== 'processing') {
+      ipBadge.classList.add('is-empty');
+      ipBadge.textContent = '🌐 Sin IP';
+    } else {
+      ipBadge.textContent = '🌐 Analizando…';
+    }
+    meta.appendChild(ipBadge);
+
+    if (typeof item.duplicates === 'number'){
+      const dupBadge = document.createElement('span');
+      dupBadge.className = 'upload-item__badge';
+      dupBadge.textContent = `🔁 ${item.duplicates} duplicado${item.duplicates === 1 ? '' : 's'}`;
+      meta.appendChild(dupBadge);
+    }
+
+    row.appendChild(meta);
+
+    if (item.message){
+      const msg = document.createElement('p');
+      msg.className = 'upload-item__msg';
+      msg.textContent = item.message;
+      row.appendChild(msg);
+    }
+
+    uploadStatusList.appendChild(row);
+  });
+}
+
+function addUploadStatusEntry(file){
+  const entry = {
+    id: `upl-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    name: file?.name || 'Archivo',
+    status: 'pending',
+    contactCount: null,
+    duplicates: null,
+    ip: null,
+    message: ''
+  };
+  uploadStatusItems.push(entry);
+  if (uploadStatusItems.length > MAX_UPLOAD_FILES){
+    uploadStatusItems = uploadStatusItems.slice(uploadStatusItems.length - MAX_UPLOAD_FILES);
+  }
+  renderUploadStatuses();
+  return entry;
+}
+
+function updateUploadStatusEntry(entry, patch){
+  if (!entry) return;
+  Object.assign(entry, patch || {});
+  renderUploadStatuses();
+}
+
+function resetUploadTracking(){
+  uploadStatusItems = [];
+  renderUploadStatuses();
+}
+
+async function processSingleUploadedFile(file){
+  if (!file) throw new Error('Archivo inválido');
+  const name = file.name || 'Archivo';
+  if (/\.zip$/i.test(name)){
+    const res = await processZipFile(file);
+    if (!res || !res.html) throw new Error('zip_invalido');
+    const ai = res.ai ? stripCountry57(normalizeNumber(res.ai)) : null;
+    return finalizeProcessedUpload(res.html, ai, name);
+  }
+  if (/\.(txt|csv|html?)$/i.test(name)){
+    const raw = await readFileAsText(file);
+    const aiRaw = extractAccountIdentifierFromHtml(raw || '');
+    const ai = aiRaw ? stripCountry57(normalizeNumber(aiRaw)) : null;
+    return finalizeProcessedUpload(raw, ai, name);
+  }
+  throw new Error('tipo_no_soportado');
+}
+
+function finalizeProcessedUpload(raw, accountId, name){
+  if (!raw) throw new Error('contenido_vacio');
+  const sanitized = sanitizeSource(raw);
+  const contacts = textToContacts(sanitized);
+  const counts = countOccurrences(sanitized);
+  const ipInfo = parseIPAndPortFromText(raw);
+  const ipShown = ipInfo ? (ipInfo.port != null ? `${ipInfo.ip}:${ipInfo.port}` : ipInfo.ip) : null;
+  return {
+    name,
+    raw,
+    sanitized,
+    contacts,
+    counts,
+    accountId,
+    ipInfo,
+    ipShown
+  };
+}
+
+function applyProcessedUpload(result){
+  if (!result) return;
+  inputText.value = result.raw || '';
+  if (result.accountId){
+    accountIdEl.value = stripCountry57(normalizeNumber(result.accountId));
+  }
+  currentContacts = Array.isArray(result.contacts) ? result.contacts : [];
+  currentCounts = result.counts || { read:0, duplicates:0, countsMap:{} };
+  renderPreview();
+  extractServiceInfoFromSource(result.raw);
+}
+
 async function handleDroppedFiles(fileList){
-  const files = Array.from(fileList || []);
-  if (!files.length) return false;
+  const incoming = Array.from(fileList || []);
+  if (!incoming.length) return false;
+
+  const validFiles = incoming.filter(f => f && (/(\.zip)$/i.test(f.name || '') || /\.(txt|csv|html?)$/i.test(f.name || '')));
+  if (!validFiles.length){
+    const msg = 'No se detectaron archivos compatibles. Arrastra un .zip con records.html o .txt/.csv/.html.';
+    alert(errorStats.no_files > 1 ? `${msg} Revisa que sean archivos válidos.` : msg);
+    return false;
+  }
 
   if (isImportingFiles){
-    alert("Ya hay una importación en curso. Espera a que finalice.");
+    alert('Ya hay una importación en curso. Espera a que finalice.');
     return false;
+  }
+
+  const availableSlots = MAX_UPLOAD_FILES - uploadStatusItems.length;
+  if (availableSlots <= 0){
+    alert('Has alcanzado el límite de 10 archivos en el historial. Usa "Limpiar" para reiniciar.');
+    return false;
+  }
+
+  let files = validFiles;
+  if (validFiles.length > availableSlots){
+    alert(`Solo se procesarán ${availableSlots} archivo${availableSlots === 1 ? '' : 's'} por el límite activo.`);
+    files = validFiles.slice(0, availableSlots);
   }
 
   isImportingFiles = true;
   if (dropZone) dropZone.classList.add('processing');
 
-  const previousAccountId = accountIdEl ? accountIdEl.value : "";
-  let pendingAccountId = null;
+  const previousAccountId = accountIdEl ? accountIdEl.value : '';
+  let anySuccess = false;
+  let lastSuccessful = null;
 
   try {
-    const zipFiles = files.filter(f => /\.zip$/i.test(f.name));
-    const textFiles = files.filter(f => /\.(txt|csv|html?)$/i.test(f.name));
-
-    const parts = [];
-
-    if (zipFiles.length){
-      for (const z of zipFiles){
-        const res = await processZipFile(z);
-        if (res){
-          parts.push(res.html);
-          if (res.ai && !pendingAccountId) pendingAccountId = res.ai;
+    for (const file of files){
+      const entry = addUploadStatusEntry(file);
+      updateUploadStatusEntry(entry, { status: 'processing', message: 'Leyendo archivo…' });
+      try {
+        const result = await processSingleUploadedFile(file);
+        updateUploadStatusEntry(entry, { message: 'Validando crédito…' });
+        const ok = await requestCredit();
+        if (!ok){
+          updateUploadStatusEntry(entry, {
+            status: 'error',
+            message: 'No se pudo consumir un crédito. Verifica tu sesión o tus créditos disponibles.'
+          });
+          continue;
         }
+        applyProcessedUpload(result);
+        anySuccess = true;
+        lastSuccessful = result;
+        updateUploadStatusEntry(entry, {
+          status: 'done',
+          contactCount: result.contacts.length,
+          duplicates: result.counts.duplicates || 0,
+          ip: result.ipShown || null,
+          message: result.contacts.length
+            ? `Contactos únicos: ${result.contacts.length}. Duplicados: ${result.counts.duplicates || 0}.`
+            : 'Sin contactos válidos.'
+        });
+      } catch (error) {
+        console.error('Error procesando archivo', error);
+        updateUploadStatusEntry(entry, {
+          status: 'error',
+          message: 'No se pudo procesar este archivo. Verifica el contenido.'
+        });
       }
     }
 
-    if (textFiles.length){
-      for (const f of textFiles){
-        try{ parts.push(await readFileAsText(f)); }
-        catch{ logError('file_read'); }
-      }
-    }
-
-    if (!parts.length){
-      logError('no_files');
-      const msg = "No se detectaron archivos compatibles. Arrastra un .zip con records.html o .txt/.csv/.html.";
-      alert(errorStats.no_files > 1 ? msg + " Revisa que sean archivos válidos." : msg);
+    if (!anySuccess){
       if (accountIdEl) accountIdEl.value = previousAccountId;
       return false;
     }
 
-    const merged = parts.join("\n\n");
-    const extractedAi = extractAccountIdentifierFromHtml(merged);
-    if (extractedAi) pendingAccountId = extractedAi;
-
-    const finalAccountId = pendingAccountId || previousAccountId;
-    if (accountIdEl) accountIdEl.value = finalAccountId;
-
-    const srcSan = sanitizeSource(merged);
-    const nextContacts = textToContacts(srcSan);
-    const nextCounts = countOccurrences(srcSan);
-
-    const ok = await requestCredit();
-    if (!ok){
-      if (accountIdEl) accountIdEl.value = previousAccountId;
-      alert("No se pudo consumir un crédito. Verifica tu sesión o tus créditos disponibles.");
-      return false;
+    if (lastSuccessful && lastSuccessful.accountId){
+      accountIdEl.value = stripCountry57(normalizeNumber(lastSuccessful.accountId));
     }
 
-    inputText.value = merged;
-    currentContacts = nextContacts;
-    currentCounts = nextCounts;
-    renderPreview();
-    extractServiceInfoFromSource(merged); // ← hará reset y luego parseará
-    alert("Archivos cargados. Vista previa actualizada.");
+    alert(files.length > 1 ? 'Carga múltiple finalizada. Revisa la vista previa.' : 'Archivo cargado y listo en la vista previa.');
     return true;
   } finally {
     if (dropZone) dropZone.classList.remove('processing');
@@ -568,6 +762,7 @@ clearBtn.addEventListener("click", () => {
   inputText.value=""; accountIdEl.value=""; caseIdEl.value="";
   currentContacts=[]; currentCounts={ read:0,duplicates:0,countsMap:{} }; renderPreview();
   extractServiceInfoFromSource(null); // reset panel
+  resetUploadTracking();
 });
 
 clearBatchBtn.addEventListener("click", () => {
@@ -1626,18 +1821,39 @@ function attachNumberLabels(network, nodeData){
   });
 }
 
+function getContactNodeLabel(contact, freq){
+  if (!contact) return String(freq ?? 1);
+  const label = graphLabels.get(contact);
+  if (label){
+    return `${label}\n(${freq ?? 1})`;
+  }
+  return String(freq ?? 1);
+}
+
+function storeGraphDataset(nodeArr, edges){
+  graphDataset = {
+    nodes: nodeArr.map(n => ({ ...n })),
+    edges: edges.map(e => ({ ...e })),
+    mode: graphActiveMode
+  };
+  graphNodeMap = new Map(graphDataset.nodes.map(n => [String(n.id), n]));
+}
+
 function renderGraphNetwork(nodeArr, edges){
   if (!graphEl) return;
+  storeGraphDataset(nodeArr, edges);
   const options = getGraphOptions();
   const data = {
-    nodes: new vis.DataSet(nodeArr),
-    edges: new vis.DataSet(edges)
+    nodes: new vis.DataSet(nodeArr.map(n => ({ ...n }))),
+    edges: new vis.DataSet(edges.map(e => ({ ...e })))
   };
   if (graphNetwork) {
     graphNetwork.destroy();
     graphNetwork = null;
   }
   graphNetwork = new vis.Network(graphEl, data, options);
+  graphNetwork.on('selectNode', handleGraphNodeSelect);
+  graphNetwork.on('deselectNode', handleGraphNodeDeselect);
   if (options.physics && options.physics.enabled){
     graphNetwork.once('stabilizationIterationsDone', () => {
       graphNetwork.setOptions({ physics: false });
@@ -1652,24 +1868,53 @@ function renderGraphNetwork(nodeArr, edges){
     }, 80);
   }
   attachNumberLabels(graphNetwork, nodeArr);
+  const desiredContact = graphPendingSelection || (selectedGraphNode?.contact || null);
+  graphPendingSelection = null;
+  if (desiredContact){
+    selectGraphContactNode(desiredContact);
+  } else {
+    updateGraphSelectionUI();
+  }
 }
 
 function renderGraph(numbers){
   if (!graphEl) return;
+  graphActiveMode = 'current';
   const list = Array.isArray(numbers) ? numbers : [];
   if (!list.length){
+    graphActiveMode = 'none';
+    storeGraphDataset([], []);
     if (graphNetwork) { graphNetwork.destroy(); graphNetwork = null; }
-    graphEl.innerHTML = '<div class="muted">Sin contactos para graficar</div>';
+    if (graphEl) graphEl.innerHTML = '<div class="muted">Sin contactos para graficar</div>';
+    clearGraphSelection(true);
+    updateGraphSelectionUI();
     return false;
   }
   graphEl.innerHTML = '';
   const objectiveLabel = getNormalizedObjective() || 'Objetivo';
-  const nodeArr = [{ id: 'root', label: objectiveLabel, shape: 'box', color: { background: '#0ea5e9', border: '#0b8ec7' }, font: { color: '#041024' } }];
+  const nodeArr = [{
+    id: 'root',
+    label: objectiveLabel,
+    shape: 'box',
+    color: { background: '#0ea5e9', border: '#0b8ec7' },
+    font: { color: '#041024' },
+    type: 'objetivo',
+    title: objectiveLabel
+  }];
   const edges = [];
   list.forEach((n, i) => {
     const freq = currentCounts.countsMap[n] || 1;
-    nodeArr.push({ id: i, label: String(freq), title: n, value: Math.max(1, freq) });
-    edges.push({ from: 'root', to: i });
+    const nodeId = `c-${i}`;
+    nodeArr.push({
+      id: nodeId,
+      label: getContactNodeLabel(n, freq),
+      title: n,
+      value: Math.max(1, freq),
+      contact: n,
+      freq,
+      type: 'contact'
+    });
+    edges.push({ from: 'root', to: nodeId });
   });
   renderGraphNetwork(nodeArr, edges);
   return true;
@@ -1677,12 +1922,21 @@ function renderGraph(numbers){
 
 function renderBatchGraph(){
   if (!graphEl) return;
+  graphActiveMode = 'batch';
   const nodeArr = [];
   const edges = [];
   const owners = new Map();
   batch.forEach((item, idx) => {
     const id = `item-${idx}`;
-    nodeArr.push({ id, label: item.objective || `Reporte ${idx + 1}`, shape: 'box', color: { background: item.color }, font: { color: '#041024' } });
+    nodeArr.push({
+      id,
+      label: item.objective || `Reporte ${idx + 1}`,
+      shape: 'box',
+      color: { background: item.color },
+      font: { color: '#041024' },
+      type: 'reporte',
+      title: item.objective || `Reporte ${idx + 1}`
+    });
     item.contacts.forEach(c => {
       if (!owners.has(c)) owners.set(c, new Set());
       owners.get(c).add(id);
@@ -1693,12 +1947,26 @@ function renderBatchGraph(){
     const cid = `c-${cIdx++}`;
     const freq = set.size;
     const color = freq > 1 ? { background: '#f87171', border: '#ef4444' } : { background: '#1e293b', border: '#334155' };
-    nodeArr.push({ id: cid, label: String(freq), title: contact, color, value: Math.max(1, freq) });
+    nodeArr.push({
+      id: cid,
+      label: getContactNodeLabel(contact, freq),
+      title: contact,
+      color,
+      value: Math.max(1, freq),
+      contact,
+      freq,
+      type: 'contact',
+      ownerRefs: Array.from(set)
+    });
     set.forEach(id => edges.push({ from: id, to: cid }));
   });
   if (edges.length === 0) {
+    graphActiveMode = 'none';
+    storeGraphDataset([], []);
     if (graphNetwork) { graphNetwork.destroy(); graphNetwork = null; }
     graphEl.innerHTML = '<div class="muted">Sin datos en el lote</div>';
+    clearGraphSelection(true);
+    updateGraphSelectionUI();
     return false;
   }
   graphEl.innerHTML = '';
@@ -1706,9 +1974,92 @@ function renderBatchGraph(){
   return true;
 }
 
+function clearGraphSelection(silent = false){
+  selectedGraphNode = null;
+  graphPendingSelection = null;
+  if (graphLabelInput) graphLabelInput.value = '';
+  if (!silent) updateGraphSelectionUI();
+}
+
+function selectGraphContactNode(contact){
+  if (!contact){
+    clearGraphSelection();
+    return;
+  }
+  const node = graphDataset.nodes.find(n => n.contact === contact);
+  if (!node){
+    clearGraphSelection();
+    return;
+  }
+  selectedGraphNode = { id: node.id, contact: node.contact, type: node.type || 'contact' };
+  if (graphNetwork){
+    try { graphNetwork.selectNodes([node.id]); } catch {}
+  }
+  if (graphLabelInput) graphLabelInput.value = graphLabels.get(node.contact) || '';
+  updateGraphSelectionUI();
+}
+
+function handleGraphNodeSelect(params){
+  if (!params.nodes || !params.nodes.length){
+    clearGraphSelection();
+    return;
+  }
+  const nodeId = params.nodes[0];
+  const node = graphNodeMap.get(String(nodeId));
+  if (node && node.contact){
+    selectedGraphNode = { id: nodeId, contact: node.contact, type: node.type || 'contact' };
+    if (graphLabelInput) graphLabelInput.value = graphLabels.get(node.contact) || '';
+    graphPendingSelection = node.contact;
+  } else {
+    clearGraphSelection();
+    return;
+  }
+  updateGraphSelectionUI();
+}
+
+function handleGraphNodeDeselect(){
+  clearGraphSelection();
+}
+
+function updateGraphSelectionUI(){
+  const hasData = (graphDataset.nodes?.length || 0) > 0;
+  const hasSelection = !!(hasData && selectedGraphNode && selectedGraphNode.contact);
+  if (graphSelectionBox){
+    graphSelectionBox.classList.toggle('is-disabled', !hasData);
+  }
+  if (graphSelectionLabel){
+    if (!hasData){
+      graphSelectionLabel.textContent = 'Sin datos disponibles.';
+    } else if (hasSelection){
+      const label = graphLabels.get(selectedGraphNode.contact) || 'Sin etiqueta';
+      graphSelectionLabel.innerHTML = `<strong>${escapeHTML(selectedGraphNode.contact)}</strong> · ${escapeHTML(label)}`;
+    } else {
+      graphSelectionLabel.textContent = 'Selecciona un contacto del gráfico.';
+    }
+  }
+  if (graphLabelInput){
+    if (hasSelection){
+      graphLabelInput.disabled = false;
+      graphLabelInput.value = graphLabels.get(selectedGraphNode.contact) || '';
+    } else {
+      graphLabelInput.disabled = true;
+      graphLabelInput.value = '';
+    }
+  }
+  [graphCopyBtn, graphLabelSaveBtn, graphDeleteBtn].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = !hasSelection;
+  });
+  [graphExportPdfBtn, graphExportXlsxBtn].forEach(btn => {
+    if (!btn) return;
+    btn.disabled = !hasData;
+  });
+}
+
 function setGraphControlsEnabled(enabled){
   if (graphLayoutSelect) graphLayoutSelect.disabled = !enabled;
   if (graphRefreshBtn) graphRefreshBtn.disabled = !enabled;
+  updateGraphSelectionUI();
 }
 
 function renderRelations(){
@@ -1716,10 +2067,151 @@ function renderRelations(){
   if(batch.length>0) hasData = !!renderBatchGraph();
   else if(currentContacts.length) hasData = !!renderGraph(currentContacts);
   else{
+    graphActiveMode = 'none';
+    storeGraphDataset([], []);
     if(graphNetwork){ graphNetwork.destroy(); graphNetwork=null; }
     if(graphEl) graphEl.innerHTML='';
+    clearGraphSelection(true);
+    updateGraphSelectionUI();
   }
   setGraphControlsEnabled(hasData);
+}
+
+async function copySelectedContact(){
+  if (!selectedGraphNode?.contact) return;
+  const value = selectedGraphNode.contact;
+  try {
+    await navigator.clipboard.writeText(value);
+    alert('Número copiado al portapapeles.');
+  } catch {
+    const ta = document.createElement('textarea');
+    ta.value = value;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    try {
+      document.execCommand('copy');
+      alert('Número copiado al portapapeles.');
+    } catch {
+      alert('No se pudo copiar el número.');
+    }
+    ta.remove();
+  }
+}
+
+function saveGraphLabel(){
+  if (!selectedGraphNode?.contact || !graphLabelInput || graphLabelInput.disabled) return;
+  const contact = selectedGraphNode.contact;
+  const value = (graphLabelInput.value || '').trim();
+  if (value){
+    graphLabels.set(contact, value);
+  } else {
+    graphLabels.delete(contact);
+  }
+  graphPendingSelection = contact;
+  renderRelations();
+}
+
+function deleteSelectedContact(){
+  if (!selectedGraphNode?.contact) return;
+  const contact = selectedGraphNode.contact;
+  if (!confirm(`¿Eliminar ${contact} del gráfico actual?`)) return;
+  graphLabels.delete(contact);
+  graphPendingSelection = null;
+  selectedGraphNode = null;
+  if (graphActiveMode === 'current'){
+    currentContacts = currentContacts.filter(n => n !== contact);
+    if (currentCounts?.countsMap && currentCounts.countsMap[contact]){
+      const freq = currentCounts.countsMap[contact];
+      currentCounts.read = Math.max(0, (currentCounts.read || 0) - freq);
+      if (freq > 1) currentCounts.duplicates = Math.max(0, (currentCounts.duplicates || 0) - 1);
+      delete currentCounts.countsMap[contact];
+    }
+    renderPreview();
+  } else if (graphActiveMode === 'batch'){
+    batch.forEach(item => { if (item.contacts) item.contacts.delete(contact); });
+    renderBatch();
+  } else {
+    renderRelations();
+  }
+}
+
+function buildGraphExportSheets(){
+  if (!graphDataset || !graphDataset.nodes.length) return null;
+  const nodeMap = new Map(graphDataset.nodes.map(n => [String(n.id), n]));
+  const nodesRows = [["ID","Tipo","Contacto","Etiqueta","Frecuencia","Relacionados"]];
+  graphDataset.nodes.forEach(node => {
+    if (node.contact){
+      const related = graphDataset.edges
+        .filter(edge => edge.from === node.id || edge.to === node.id)
+        .map(edge => {
+          const otherId = edge.from === node.id ? edge.to : edge.from;
+          const other = nodeMap.get(String(otherId));
+          if (!other) return '';
+          if (other.contact) return other.contact;
+          return other.title || other.label || String(otherId);
+        })
+        .filter(Boolean);
+      nodesRows.push([
+        node.id,
+        graphActiveMode === 'batch' ? 'Contacto (lote)' : 'Contacto',
+        node.contact,
+        graphLabels.get(node.contact) || '',
+        node.freq ?? '',
+        related.join(', ')
+      ]);
+    } else {
+      const typeLabel = node.type === 'objetivo' ? 'Objetivo' : node.type === 'reporte' ? 'Reporte' : 'Nodo';
+      nodesRows.push([node.id, typeLabel, node.title || node.label || '', '', '', '']);
+    }
+  });
+  const edgesRows = [["Desde","Hasta"]];
+  graphDataset.edges.forEach(edge => edgesRows.push([edge.from, edge.to]));
+  return { nodesRows, edgesRows };
+}
+
+async function exportGraphToPdf(){
+  if (!graphDataset.nodes.length){
+    alert('No hay datos para exportar.');
+    return;
+  }
+  if (!window.html2canvas || !window.jspdf?.jsPDF){
+    alert('Las bibliotecas de exportación no están disponibles.');
+    return;
+  }
+  const target = graphPanel || graphEl;
+  if (!target) return;
+  try {
+    const styles = window.getComputedStyle(document.body);
+    const bg = styles.getPropertyValue('background-color') || '#ffffff';
+    const canvas = await window.html2canvas(target, { backgroundColor: bg, useCORS: true, scale: 2 });
+    const imgData = canvas.toDataURL('image/png');
+    const pdf = new window.jspdf.jsPDF({ orientation: 'landscape', unit: 'pt', format: 'a4' });
+    const pageWidth = pdf.internal.pageSize.getWidth();
+    const pageHeight = pdf.internal.pageSize.getHeight();
+    const ratio = Math.min(pageWidth / canvas.width, pageHeight / canvas.height);
+    const imgWidth = canvas.width * ratio;
+    const imgHeight = canvas.height * ratio;
+    const offsetX = (pageWidth - imgWidth) / 2;
+    const offsetY = (pageHeight - imgHeight) / 2;
+    pdf.addImage(imgData, 'PNG', offsetX, offsetY, imgWidth, imgHeight);
+    pdf.save(`wf-tools_grafico_${nowStamp()}.pdf`);
+  } catch (error) {
+    console.error('Error exportando gráfico a PDF', error);
+    alert('No se pudo exportar el gráfico a PDF.');
+  }
+}
+
+function exportGraphToXlsx(){
+  const sheets = buildGraphExportSheets();
+  if (!sheets){
+    alert('No hay datos para exportar.');
+    return;
+  }
+  const filename = `wf-tools_grafico_${nowStamp()}.xlsx`;
+  downloadWB(filename, { 'Nodos': sheets.nodesRows, 'Conexiones': sheets.edgesRows });
 }
 
 function addChatMessage(text, who){
@@ -1822,6 +2314,18 @@ if (graphRefreshBtn){
   });
 }
 
+graphCopyBtn?.addEventListener('click', copySelectedContact);
+graphLabelSaveBtn?.addEventListener('click', saveGraphLabel);
+graphDeleteBtn?.addEventListener('click', deleteSelectedContact);
+graphLabelInput?.addEventListener('keydown', event => {
+  if (event.key === 'Enter'){
+    event.preventDefault();
+    saveGraphLabel();
+  }
+});
+graphExportPdfBtn?.addEventListener('click', exportGraphToPdf);
+graphExportXlsxBtn?.addEventListener('click', exportGraphToXlsx);
+
 let graphResizeTimer = null;
 if (typeof window !== 'undefined'){
   window.addEventListener('resize', () => {
@@ -1854,6 +2358,8 @@ async function requestCredit(){
 function initCore(){
   restoreLocal();
   renderPreview();
+  renderUploadStatuses();
+  updateGraphSelectionUI();
 }
 
 function setCreditDependentActionsEnabled(enabled){

@@ -245,6 +245,16 @@
           <button id="addToBatchBtn" class="btn yellow">Agregar al lote</button>
           <button id="clearBtn" class="btn danger">Limpiar</button>
         </div>
+
+        <div class="upload-status-panel" id="uploadStatusPanel" aria-live="polite">
+          <div class="upload-status-head">
+            <h3>Historial de cargas</h3>
+            <span id="uploadStatusCounter" class="upload-status-counter">0/10</span>
+          </div>
+          <div id="uploadStatusList" class="upload-status-list">
+            <p class="upload-status-empty">Sin cargas registradas.</p>
+          </div>
+        </div>
       </section>
 
       <!-- Vista previa -->
@@ -412,6 +422,23 @@
           </div>
         </div>
         <div id="colorControls" class="color-controls"></div>
+        <div class="graph-actions" id="graphActions">
+          <div class="graph-selection" id="graphSelectionBox">
+            <div class="graph-selection__label" id="graphSelectionLabel">Sin datos disponibles.</div>
+            <div class="graph-selection__controls">
+              <input type="text" id="graphLabelInput" class="mini-input" placeholder="Etiqueta personalizada" disabled />
+              <div class="graph-selection__buttons">
+                <button id="graphCopyBtn" class="btn outline" type="button" disabled>Copiar número</button>
+                <button id="graphLabelSaveBtn" class="btn" type="button" disabled>Guardar etiqueta</button>
+                <button id="graphDeleteBtn" class="btn danger" type="button" disabled>Borrar</button>
+              </div>
+            </div>
+          </div>
+          <div class="graph-export">
+            <button id="graphExportPdfBtn" class="btn outline" type="button" disabled>Exportar PDF</button>
+            <button id="graphExportXlsxBtn" class="btn outline" type="button" disabled>Exportar XLSX</button>
+          </div>
+        </div>
         <div id="graph"></div>
       </section>
 
@@ -466,6 +493,8 @@
   <script src="https://cdn.jsdelivr.net/npm/vis-network@9.1.2/standalone/umd/vis-network.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/sentiment@5.0.2/build/sentiment.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
   <!-- App -->
   <script src="js/app-core.js"></script>
