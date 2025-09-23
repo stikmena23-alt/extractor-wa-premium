@@ -172,6 +172,7 @@ function getBanState(user){
   const topLevelBan = (user?.ban && typeof user.ban === 'object') ? user.ban : null;
   const userBan = (meta?.ban && typeof meta.ban === 'object') ? meta.ban : null;
   const appBan = (appMeta?.ban && typeof appMeta.ban === 'object') ? appMeta.ban : null;
+  const directFlags = (typeof user === 'object' && user) ? user : {};
   const statusCandidates = [
     user?.ban_status,
     user?.status,
@@ -184,6 +185,9 @@ function getBanState(user){
     meta?.ban_state,
     userBan?.status,
     appBan?.status,
+    directFlags?.ban_status,
+    directFlags?.ban_state,
+    directFlags?.banState,
   ];
   const normalizedStatus = statusCandidates
     .map((value) => (value == null ? '' : String(value).toLowerCase()))
@@ -201,11 +205,17 @@ function getBanState(user){
     appMeta?.is_banned,
     appMeta?.banned,
     appBan?.active,
+    directFlags?.blocked,
+    directFlags?.is_blocked,
   ].some((value) => value === true);
   const untilCandidates = [
     user?.ban_expires,
     user?.banned_until,
     user?.bannedUntil,
+    user?.blocked_until,
+    user?.blockedUntil,
+    directFlags?.ban_expires,
+    directFlags?.blocked_until,
     topLevelBan?.until,
     topLevelBan?.expires_at,
     topLevelBan?.expires,
@@ -223,6 +233,27 @@ function getBanState(user){
     appBan?.expires,
   ];
   const until = untilCandidates.map(parseDate).find(Boolean) || null;
+  const sinceCandidates = [
+    user?.blocked_at,
+    user?.blockedAt,
+    user?.banned_at,
+    user?.bannedAt,
+    directFlags?.blocked_at,
+    directFlags?.banned_at,
+    topLevelBan?.since,
+    topLevelBan?.from,
+    topLevelBan?.started_at,
+    topLevelBan?.startedAt,
+    userBan?.since,
+    userBan?.from,
+    userBan?.started_at,
+    userBan?.startedAt,
+    appBan?.since,
+    appBan?.from,
+    appBan?.started_at,
+    appBan?.startedAt,
+  ];
+  const since = sinceCandidates.map(parseDate).find(Boolean) || null;
   const durationCandidates = [
     user?.ban_duration,
     topLevelBan?.duration,
@@ -245,7 +276,51 @@ function getBanState(user){
   return {
     isBlocked,
     until,
+    since,
   };
+}
+
+function composeBanTitle({ until, since } = {}){
+  const parts = [];
+  if(since) parts.push(`Bloqueado desde ${formatDateTime(since)}`);
+  if(until) parts.push(`Hasta ${formatDateTime(until)}`);
+  if(!parts.length) return 'Bloqueo activo';
+  return parts.join(' · ');
+}
+
+function applyBlockStateForUser(userId, { isBlocked, until = null, since = null } = {}){
+  if(!userId) return;
+  const detail = composeBanTitle({ until, since });
+  const title = isBlocked ? `Quitar bloqueo · ${detail}` : 'Bloquear temporalmente al usuario';
+  document.querySelectorAll('button[data-act="block"]').forEach((button)=>{
+    if(button.dataset.id !== userId) return;
+    button.dataset.blocked = isBlocked ? 'true' : 'false';
+    button.dataset.blockedUntil = until ? String(until.toISOString?.() || until) : '';
+    button.dataset.blockedSince = since ? String(since.toISOString?.() || since) : '';
+    button.textContent = isBlocked ? 'Desbloquear' : 'Bloquear';
+    button.title = title;
+    if(button.classList){
+      button.classList.remove('btn-warning', 'btn-success');
+      button.classList.add(isBlocked ? 'btn-success' : 'btn-warning');
+    }
+    const tableCell = button.closest('tr')?.querySelector('.plan-cell');
+    const cardCell = button.closest('.card-row')?.querySelector('.plan-cell');
+    [tableCell, cardCell].forEach((cell)=>{
+      if(!cell) return;
+      let tag = cell.querySelector('.tag-blocked');
+      if(isBlocked){
+        if(!tag){
+          tag = document.createElement('span');
+          tag.className = 'tag tag-blocked';
+          cell.insertBefore(tag, cell.firstChild);
+        }
+        tag.textContent = 'Bloqueado';
+        tag.title = detail;
+      } else if(tag){
+        tag.remove();
+      }
+    });
+  });
 }
 
 function isExcludedFromReport(email){
@@ -665,14 +740,19 @@ function renderRows(){
     const safePlan = escapeHTML(plan);
     const safeId = escapeHTML(id);
     const excluded = isExcludedFromReport(email);
-    const { isBlocked, until: banUntil } = getBanState(u);
+    const { isBlocked, until: banUntil, since: banSince } = getBanState(u);
     if(isBlocked) blockedCount++;
-    const banTitle = banUntil ? `Bloqueado hasta ${formatDateTime(banUntil)}` : 'Bloqueo activo';
+    const banTitle = composeBanTitle({ until: banUntil, since: banSince });
     const banTag = isBlocked ? `<span class="tag tag-blocked" title="${escapeHTML(banTitle)}">Bloqueado</span>` : '';
     const blockBtnLabel = isBlocked ? 'Desbloquear' : 'Bloquear';
     const blockBtnClass = isBlocked ? 'btn btn-ghost btn-sm btn-success' : 'btn btn-ghost btn-sm btn-warning';
     const blockBtnState = isBlocked ? 'true' : 'false';
-    const blockBtnTitle = isBlocked ? 'Quitar bloqueo al usuario' : 'Bloquear temporalmente al usuario';
+    const blockBtnTitle = isBlocked ? `Quitar bloqueo · ${banTitle}` : 'Bloquear temporalmente al usuario';
+    const blockBtnExtraData = [
+      `data-blocked="${blockBtnState}"`,
+      banUntil ? `data-blocked-until="${escapeHTML(banUntil.toISOString())}"` : '',
+      banSince ? `data-blocked-since="${escapeHTML(banSince.toISOString())}"` : '',
+    ].filter(Boolean).join(' ');
 
     if(!excluded){
       reportingCreditCount += meta.value;
@@ -700,7 +780,7 @@ function renderRows(){
             <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
             <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Link recuperación</button>
             <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
-            <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" data-blocked="${blockBtnState}" title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
+            <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" ${blockBtnExtraData} title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
             <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
           </div>
         </td>`;
@@ -732,7 +812,7 @@ function renderRows(){
           <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
           <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Recuperación</button>
           <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Contraseña</button>
-          <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" data-blocked="${blockBtnState}" title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
+          <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" ${blockBtnExtraData} title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
         </div>`;
       if(meta.recommend) card.classList.add('row-alert');
@@ -830,8 +910,9 @@ function downloadReport(){
     const email = u.email || '';
     const meta = creditMeta(u.credits);
     const excluded = isExcludedFromReport(email);
-    const { isBlocked, until } = getBanState(u);
+    const { isBlocked, until, since } = getBanState(u);
     const banText = until ? formatDateTime(until) : (isBlocked ? 'Activo' : '—');
+    const banSinceText = since ? formatDateTime(since) : (isBlocked ? 'Desconocido' : '—');
     return {
       'Correo': email || '—',
       'Nombre': u.full_name || '',
@@ -844,6 +925,7 @@ function downloadReport(){
       'ID': u.id || '',
       'Bloqueado': isBlocked ? 'Sí' : 'No',
       'Bloqueado hasta': banText,
+      'Bloqueado desde': banSinceText,
     };
   });
   const usersSheet = window.XLSX.utils.json_to_sheet(userData);
@@ -889,7 +971,11 @@ document.addEventListener('click', async (e)=>{
     const originalText = btn.textContent;
 
     if(isBlocked){
-      const confirmed = confirm(`¿Desbloquear a ${displayName}?`);
+      const blockedUntil = parseDate(btn.dataset.blockedUntil);
+      const blockedSince = parseDate(btn.dataset.blockedSince);
+      const detailText = composeBanTitle({ until: blockedUntil, since: blockedSince });
+      const extraLine = detailText && detailText !== 'Bloqueo activo' ? `\n${detailText}` : '';
+      const confirmed = confirm(`¿Desbloquear a ${displayName}?${extraLine}`);
       if(!confirmed) return;
       let res;
       btn.disabled = true;
@@ -906,6 +992,7 @@ document.addEventListener('click', async (e)=>{
       }
       if(res.ok){
         toast('Usuario desbloqueado');
+        applyBlockStateForUser(id, { isBlocked:false });
         loadUsers();
       } else {
         const txt = await res.text().catch(()=>null);
@@ -946,6 +1033,10 @@ document.addEventListener('click', async (e)=>{
     if(res.ok){
       const durationText = hours % 24 === 0 ? `${hours / 24} días` : `${hours} horas`;
       toast(`Usuario bloqueado por ${durationText}`);
+      const since = new Date();
+      const untilMs = since.getTime() + (hours * 60 * 60 * 1000);
+      const until = Number.isFinite(untilMs) ? new Date(untilMs) : null;
+      applyBlockStateForUser(id, { isBlocked:true, since, until });
       loadUsers();
     } else {
       const txt = await res.text().catch(()=>null);
