@@ -168,6 +168,46 @@
       margin-left: 8px;
     }
 
+    .credit-loader {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: color-mix(in oklab, var(--card) 90%, var(--text) 10%);
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .credit-loader::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      animation: spin .8s linear infinite;
+    }
+
+    .btn-primary.is-loading,
+    .btn-primary:disabled {
+      cursor: not-allowed;
+      opacity: .75;
+    }
+
+    .btn-primary.is-loading::after {
+      content: '';
+      width: 12px;
+      height: 12px;
+      margin-left: 8px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      animation: spin .8s linear infinite;
+    }
+
     /* Centramos encabezado y título. La acción (botón de tema) se posiciona a la derecha. */
     header {
       justify-content: center;

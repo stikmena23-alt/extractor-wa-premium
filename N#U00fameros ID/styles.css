@@ -56,6 +56,68 @@
       margin-left: 8px;
     }
 
+    .credit-loader {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 999px;
+      background: #111923;
+      border: 1px solid var(--border);
+      font-size: 12px;
+      color: var(--muted);
+      white-space: nowrap;
+    }
+
+    .credit-loader::before {
+      content: '';
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      animation: spin .8s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .btn.is-loading,
+    .btn:disabled {
+      cursor: not-allowed;
+      opacity: .75;
+    }
+
+    .btn.is-loading::after {
+      content: '';
+      width: 12px;
+      height: 12px;
+      margin-left: 8px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      animation: spin .8s linear infinite;
+    }
+
+    .loading-state {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px dashed var(--border);
+      color: var(--muted);
+    }
+
+    .loading-state::before {
+      content: '';
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      border: 2px solid currentColor;
+      border-right-color: transparent;
+      animation: spin .8s linear infinite;
+    }
+
     /* Centramos el encabezado principal: logo y título en el centro y la pastilla a la derecha */
     .site-header {
       justify-content: center;

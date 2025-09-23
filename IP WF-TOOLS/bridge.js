@@ -1,10 +1,106 @@
 (function(){
+      const analyzeBtn = document.getElementById('btnLookup');
+      const creditsEl = document.getElementById('uiUserCredits');
+      const noCreditsEl = document.getElementById('uiNoCredits');
+      const userInfoBar = document.getElementById('userInfoBar');
+      const CREDIT_TIMEOUT_MS = 8000;
+      let creditLoaderTimer = null;
+      let spendInFlight = false;
+
       function redirectToLogin(){
         try {
           if (window.parent && window.parent !== window) {
             window.parent.postMessage({ type: 'wftools-open-login' }, '*');
           }
         } catch (_err) {}
+      }
+
+      function insertBeforeLogout(node){
+        if (!userInfoBar) return;
+        const logoutBtn = document.getElementById('uiLogoutBtn');
+        if (logoutBtn && logoutBtn.parentElement === userInfoBar) {
+          userInfoBar.insertBefore(node, logoutBtn);
+        } else {
+          userInfoBar.appendChild(node);
+        }
+      }
+
+      function showCreditLoader(message){
+        if (!userInfoBar) return;
+        clearTimeout(creditLoaderTimer);
+        let loader = document.getElementById('uiCreditLoader');
+        if (!loader) {
+          loader = document.createElement('span');
+          loader.id = 'uiCreditLoader';
+          loader.className = 'credit-loader';
+          insertBeforeLogout(loader);
+        }
+        loader.textContent = message;
+      }
+
+      function hideCreditLoader(delay = 0){
+        clearTimeout(creditLoaderTimer);
+        const remove = () => {
+          const node = document.getElementById('uiCreditLoader');
+          if (node && node.parentElement) {
+            node.parentElement.removeChild(node);
+          }
+        };
+        if (delay > 0){
+          creditLoaderTimer = setTimeout(remove, delay);
+        } else {
+          remove();
+        }
+      }
+
+      function setAnalyzeBtnLoading(message){
+        if (!analyzeBtn) return;
+        if (!analyzeBtn.dataset.originalText){
+          analyzeBtn.dataset.originalText = analyzeBtn.textContent || '';
+        }
+        analyzeBtn.textContent = message;
+        analyzeBtn.disabled = true;
+        analyzeBtn.classList.add('is-loading');
+      }
+
+      function restoreAnalyzeBtn(){
+        if (!analyzeBtn) return;
+        const original = analyzeBtn.dataset.originalText;
+        if (original !== undefined){
+          analyzeBtn.textContent = original;
+        }
+        analyzeBtn.disabled = false;
+        analyzeBtn.classList.remove('is-loading');
+      }
+
+      function applyCreditsState(rawCredits){
+        const num = Number(rawCredits);
+        const isNum = Number.isFinite(num);
+        if (creditsEl){
+          if (isNum){
+            const safeVal = Math.max(0, Math.floor(num));
+            creditsEl.textContent = safeVal.toLocaleString('es-CO');
+            creditsEl.dataset.rawCredits = String(safeVal);
+          } else {
+            creditsEl.textContent = '—';
+            delete creditsEl.dataset.rawCredits;
+          }
+        }
+        const shouldDisable = !isNum || num <= 0;
+        if (noCreditsEl){
+          noCreditsEl.style.display = shouldDisable ? 'inline' : 'none';
+        }
+        if (analyzeBtn && !spendInFlight){
+          analyzeBtn.disabled = shouldDisable;
+        }
+      }
+
+      function reflectLocalSpend(amount){
+        if (!creditsEl) return;
+        const current = Number(creditsEl.dataset.rawCredits);
+        if (!Number.isFinite(current)) return;
+        const next = Math.max(0, current - amount);
+        applyCreditsState(next);
       }
 
       // Solicita la información del usuario al cargar el iframe
@@ -21,47 +117,28 @@
           const email = event.data.email || '—';
           const plan = event.data.plan || '—';
           const creditsRaw = event.data.credits;
-          let credits = (creditsRaw !== undefined && creditsRaw !== null) ? creditsRaw : '—';
           const uNameEl    = document.getElementById('uiUserName');
           const uEmailEl   = document.getElementById('uiUserEmail');
           const uPlanEl    = document.getElementById('uiUserPlan');
-          const uCreditsEl = document.getElementById('uiUserCredits');
-          const noCreditsEl= document.getElementById('uiNoCredits');
-          const analyzeBtn = document.getElementById('btnLookup');
           if (uNameEl)    uNameEl.textContent    = name;
           if (uEmailEl)   uEmailEl.textContent   = email;
           if (uPlanEl)    uPlanEl.textContent    = plan;
-          // Formatea visualmente los créditos con separador de miles
-          let displayCredits = credits;
-          const numCred = parseInt(credits, 10);
-          if (Number.isFinite(numCred)) {
-            displayCredits = numCred.toLocaleString('es-CO');
-          }
-          if (uCreditsEl) uCreditsEl.textContent = displayCredits;
-          // Controla disponibilidad de botón según créditos
-          const num = parseInt(credits, 10);
-          if (!Number.isFinite(num) || num <= 0) {
-            if (noCreditsEl) noCreditsEl.style.display = 'inline';
-            if (analyzeBtn) analyzeBtn.disabled = true;
-          } else {
-            if (noCreditsEl) noCreditsEl.style.display = 'none';
-            if (analyzeBtn) analyzeBtn.disabled = false;
-          }
+          applyCreditsState(creditsRaw);
+          hideCreditLoader();
         } else if (type === 'wftools-logout') {
           // Limpia el panel al cerrar sesión y deshabilita la consulta
           ['uiUserName','uiUserEmail','uiUserPlan','uiUserCredits'].forEach(function(id){
             const el = document.getElementById(id);
             if (el) el.textContent = '—';
           });
-          const noCreditsEl= document.getElementById('uiNoCredits');
-          const analyzeBtn = document.getElementById('btnLookup');
           if (noCreditsEl) noCreditsEl.style.display = 'none';
           if (analyzeBtn) analyzeBtn.disabled = true;
+          hideCreditLoader();
+          spendInFlight = false;
+          restoreAnalyzeBtn();
           redirectToLogin();
         }
       });
-
-      const CREDIT_TIMEOUT_MS = 8000;
 
       function makeRequestId(prefix){
         return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -139,14 +216,48 @@
       // Envuelve la función de búsqueda para descontar créditos antes de analizar
       const originalLookup = window.lookup;
       if (typeof originalLookup === 'function') {
-        window.lookup = async function() {
+        const wrappedLookup = async function() {
+          const evt = arguments[0];
+          if (evt && typeof evt.preventDefault === 'function') {
+            evt.preventDefault();
+          }
+          if (evt && typeof evt.stopImmediatePropagation === 'function') {
+            evt.stopImmediatePropagation();
+          }
+          if (spendInFlight) {
+            return;
+          }
+          spendInFlight = true;
+          setAnalyzeBtnLoading('Descontando créditos…');
+          showCreditLoader('Descontando 4 créditos…');
           const ok = await spendCredits(4);
           if (!ok) {
             alert('No tienes créditos suficientes para esta consulta.');
+            hideCreditLoader(400);
+            restoreAnalyzeBtn();
+            spendInFlight = false;
             return;
           }
-          return originalLookup.apply(this, arguments);
+          reflectLocalSpend(4);
+          showCreditLoader('Créditos descontados, ejecutando análisis…');
+          try {
+            return await originalLookup.apply(this, Array.prototype.slice.call(arguments, 1));
+          } finally {
+            restoreAnalyzeBtn();
+            hideCreditLoader(800);
+            spendInFlight = false;
+          }
         };
+        try {
+          window.lookup = wrappedLookup;
+          lookup = wrappedLookup;
+        } catch (_err) {
+          window.lookup = wrappedLookup;
+        }
+        if (analyzeBtn) {
+          analyzeBtn.removeEventListener('click', originalLookup);
+          analyzeBtn.addEventListener('click', wrappedLookup);
+        }
       }
 
       // Maneja el botón de cierre de sesión (en la barra de usuario)
