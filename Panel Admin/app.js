@@ -31,6 +31,9 @@ const ENDPOINTS = {
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let page = 1; const perPage = 10; let currentRows = []; let currentEdit = null;
 let lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0, blockedCount: 0 };
+let blockModalState = null;
+
+const DEFAULT_BLOCK_AMOUNT = 12;
 
 const qs = sel => document.querySelector(sel);
 const $rows = qs('#rows'), $cards = qs('#cards'), $empty = qs('#empty'), $skeleton = qs('#skeleton');
@@ -66,6 +69,21 @@ const accountAlertsEl = qs('#accountAlerts');
 const accountStatusTag = qs('#accountStatusTag');
 const btnGoClient = qs('#btnGoClient');
 const btnLoginGoClient = qs('#btnLoginGoClient');
+
+const blockModal = qs('#blockModal');
+const blockModalTitle = qs('#blockModalTitle');
+const blockModalSubtitle = qs('#blockModalSubtitle');
+const blockAmountInput = qs('#blockAmount');
+const blockUnitInputs = Array.from(blockModal?.querySelectorAll('input[name="blockUnit"]') || []);
+const blockQuickButtons = Array.from(blockModal?.querySelectorAll('[data-quick-unit]') || []);
+const blockCustomUntilInput = qs('#blockCustomUntil');
+const blockSummarySince = qs('#blockSummarySince');
+const blockSummaryUntil = qs('#blockSummaryUntil');
+const blockSummaryDuration = qs('#blockSummaryDuration');
+const blockError = qs('#blockError');
+const btnBlockConfirm = qs('#btnBlockConfirm');
+const btnBlockCancel = qs('#blockModalCancel');
+const btnBlockClose = qs('#blockModalClose');
 
 // Inyectar logo en login y header (con seguridad si no existen)
 const loginLogoEl = qs('#loginLogo');
@@ -286,6 +304,228 @@ function composeBanTitle({ until, since } = {}){
   if(until) parts.push(`Hasta ${formatDateTime(until)}`);
   if(!parts.length) return 'Bloqueo activo';
   return parts.join(' · ');
+}
+
+function pluralizeDuration(unit, amount){
+  const value = Math.max(0, Math.round(Number(amount) || 0));
+  const abs = Math.abs(value);
+  switch(unit){
+    case 'years': return abs === 1 ? '1 año' : `${value} años`;
+    case 'months': return abs === 1 ? '1 mes' : `${value} meses`;
+    case 'days': return abs === 1 ? '1 día' : `${value} días`;
+    case 'hours':
+    default: return abs === 1 ? '1 hora' : `${value} horas`;
+  }
+}
+
+function describeCustomDuration(totalHours){
+  const hours = Math.max(1, Math.ceil(Number(totalHours) || 0));
+  let remainingHours = hours;
+  const days = Math.floor(remainingHours / 24);
+  remainingHours -= days * 24;
+  const years = Math.floor(days / 365);
+  const months = Math.floor((days - years * 365) / 30);
+  const daysLeft = days - (years * 365) - (months * 30);
+  const parts = [];
+  if(years > 0) parts.push(years === 1 ? '1 año' : `${years} años`);
+  if(months > 0) parts.push(months === 1 ? '1 mes' : `${months} meses`);
+  if(daysLeft > 0) parts.push(daysLeft === 1 ? '1 día' : `${daysLeft} días`);
+  if(!parts.length || remainingHours > 0){
+    if(remainingHours > 0){
+      parts.push(remainingHours === 1 ? '1 hora' : `${remainingHours} horas`);
+    } else if(!parts.length){
+      parts.push('1 hora');
+    }
+  }
+  return parts.join(' · ');
+}
+
+function calculateBlockRange({ since, amount, unit, customUntil }){
+  const baseSince = since instanceof Date && !Number.isNaN(since.valueOf()) ? new Date(since) : new Date();
+  if(customUntil instanceof Date && !Number.isNaN(customUntil.valueOf())){
+    if(customUntil.getTime() <= baseSince.getTime()){
+      return { error: 'La fecha debe ser posterior a la actual.' };
+    }
+    const diffMs = customUntil.getTime() - baseSince.getTime();
+    const hours = Math.max(1, Math.ceil(diffMs / (60 * 60 * 1000)));
+    return {
+      since: baseSince,
+      until: customUntil,
+      hours,
+      label: describeCustomDuration(hours),
+      source: 'custom'
+    };
+  }
+  const numericAmount = Number(amount);
+  if(!Number.isFinite(numericAmount) || numericAmount <= 0){
+    return { error: 'Ingresa una cantidad válida.' };
+  }
+  const safeUnit = unit || 'hours';
+  const until = new Date(baseSince);
+  switch(safeUnit){
+    case 'years':
+      until.setFullYear(until.getFullYear() + Math.round(numericAmount));
+      break;
+    case 'months':
+      until.setMonth(until.getMonth() + Math.round(numericAmount));
+      break;
+    case 'days':
+      until.setDate(until.getDate() + Math.round(numericAmount));
+      break;
+    case 'hours':
+    default:
+      until.setHours(until.getHours() + Math.round(numericAmount));
+      break;
+  }
+  const diff = until.getTime() - baseSince.getTime();
+  if(!Number.isFinite(diff) || diff <= 0){
+    return { error: 'No se pudo calcular la duración.' };
+  }
+  const hours = Math.max(1, Math.ceil(diff / (60 * 60 * 1000)));
+  return {
+    since: baseSince,
+    until,
+    hours,
+    label: pluralizeDuration(safeUnit, Math.round(numericAmount)),
+    source: 'auto',
+    unit: safeUnit,
+    amount: Math.round(numericAmount)
+  };
+}
+
+function getSelectedBlockUnit(){
+  const active = blockUnitInputs.find((input)=> input.checked);
+  return active ? active.value : 'hours';
+}
+
+function setSelectedBlockUnit(unit){
+  blockUnitInputs.forEach((input)=>{
+    input.checked = input.value === unit;
+  });
+}
+
+function allowBodyScrollIfNoModal(){
+  const editOpen = modal && modal.style.display === 'flex';
+  const blockOpen = blockModal && blockModal.style.display === 'flex';
+  if(!editOpen && !blockOpen){
+    document.body.style.overflow = '';
+  }
+}
+
+function updateBlockSummary(){
+  if(!blockModalState) return;
+  const since = blockModalState.since instanceof Date ? blockModalState.since : new Date();
+  const amount = blockAmountInput ? Number(blockAmountInput.value) : DEFAULT_BLOCK_AMOUNT;
+  const unit = getSelectedBlockUnit();
+  const customRaw = blockCustomUntilInput?.value?.trim() || '';
+  const customDate = customRaw ? new Date(customRaw) : null;
+  const result = calculateBlockRange({ since, amount, unit, customUntil: customDate });
+
+  if(blockSummarySince) blockSummarySince.textContent = formatDateTime(since);
+
+  if(result.error){
+    if(blockSummaryUntil) blockSummaryUntil.textContent = '—';
+    if(blockSummaryDuration) blockSummaryDuration.textContent = '—';
+    if(blockError){
+      blockError.textContent = result.error;
+      blockError.style.display = 'block';
+    }
+    if(btnBlockConfirm) btnBlockConfirm.disabled = true;
+    blockModalState.computed = null;
+    if(blockCustomUntilInput){
+      if(customRaw){
+        blockCustomUntilInput.setAttribute('aria-invalid', 'true');
+      } else {
+        blockCustomUntilInput.removeAttribute('aria-invalid');
+      }
+    }
+    if(blockAmountInput){
+      blockAmountInput.setAttribute('aria-invalid', (!customRaw && result.error) ? 'true' : 'false');
+    }
+    return;
+  }
+
+  blockModalState.computed = result;
+  if(blockSummaryUntil) blockSummaryUntil.textContent = formatDateTime(result.until);
+  if(blockSummaryDuration){
+    const durationText = result.label || pluralizeDuration('hours', result.hours);
+    blockSummaryDuration.textContent = `${durationText} · ${numberFmt.format(result.hours)} h`;
+  }
+  if(blockError) blockError.style.display = 'none';
+  if(btnBlockConfirm) btnBlockConfirm.disabled = false;
+  if(blockCustomUntilInput){
+    blockCustomUntilInput.setAttribute('aria-invalid', 'false');
+  }
+  if(blockAmountInput){
+    blockAmountInput.setAttribute('aria-invalid', 'false');
+  }
+}
+
+function openBlockModalForUser({ id, displayName, email }){
+  if(!blockModal) return;
+  blockModalState = {
+    id,
+    displayName,
+    email,
+    since: new Date(),
+    computed: null,
+  };
+  if(blockModalTitle) blockModalTitle.textContent = 'Bloquear usuario';
+  if(blockModalSubtitle){
+    const namePart = displayName || 'Usuario';
+    const emailPart = email ? ` · ${email}` : '';
+    blockModalSubtitle.textContent = `${namePart}${emailPart}`;
+  }
+  if(blockAmountInput){
+    blockAmountInput.value = String(DEFAULT_BLOCK_AMOUNT);
+    blockAmountInput.setAttribute('aria-invalid', 'false');
+  }
+  if(blockCustomUntilInput){
+    blockCustomUntilInput.value = '';
+    blockCustomUntilInput.setAttribute('aria-invalid', 'false');
+  }
+  setSelectedBlockUnit('hours');
+  if(blockError){
+    blockError.style.display = 'none';
+    blockError.textContent = '';
+  }
+  if(btnBlockConfirm){
+    btnBlockConfirm.disabled = false;
+    btnBlockConfirm.textContent = 'Confirmar bloqueo';
+  }
+  if(blockSummaryUntil) blockSummaryUntil.textContent = '—';
+  if(blockSummaryDuration) blockSummaryDuration.textContent = '—';
+  if(blockSummarySince) blockSummarySince.textContent = formatDateTime(blockModalState.since);
+  document.body.style.overflow = 'hidden';
+  blockModal.style.display = 'flex';
+  updateBlockSummary();
+}
+
+function closeBlockModal(){
+  if(!blockModal) return;
+  blockModal.style.display = 'none';
+  if(blockAmountInput){
+    blockAmountInput.value = String(DEFAULT_BLOCK_AMOUNT);
+    blockAmountInput.setAttribute('aria-invalid', 'false');
+  }
+  if(blockCustomUntilInput){
+    blockCustomUntilInput.value = '';
+    blockCustomUntilInput.setAttribute('aria-invalid', 'false');
+  }
+  if(blockError){
+    blockError.style.display = 'none';
+    blockError.textContent = '';
+  }
+  if(btnBlockConfirm){
+    btnBlockConfirm.disabled = false;
+    btnBlockConfirm.textContent = 'Confirmar bloqueo';
+  }
+  if(blockSummarySince) blockSummarySince.textContent = '—';
+  if(blockSummaryUntil) blockSummaryUntil.textContent = '—';
+  if(blockSummaryDuration) blockSummaryDuration.textContent = '—';
+  if(blockModalSubtitle) blockModalSubtitle.textContent = '—';
+  blockModalState = null;
+  allowBodyScrollIfNoModal();
 }
 
 function applyBlockStateForUser(userId, { isBlocked, until = null, since = null } = {}){
@@ -606,6 +846,93 @@ rememberCheck?.addEventListener('change', ()=>{
 emailInput?.addEventListener('input', ()=>{
   if(rememberCheck?.checked){
     rememberEmail(emailInput.value.trim());
+  }
+});
+
+blockUnitInputs.forEach((input)=>{
+  input.addEventListener('change', ()=>{
+    if(blockModalState){
+      updateBlockSummary();
+    }
+  });
+});
+
+blockAmountInput?.addEventListener('input', ()=> updateBlockSummary());
+blockAmountInput?.addEventListener('change', ()=> updateBlockSummary());
+
+blockCustomUntilInput?.addEventListener('input', ()=> updateBlockSummary());
+blockCustomUntilInput?.addEventListener('change', ()=> updateBlockSummary());
+
+blockQuickButtons.forEach((btn)=>{
+  btn.addEventListener('click', ()=>{
+    const unit = btn.dataset.quickUnit;
+    const rawValue = btn.dataset.quickValue;
+    if(!unit || !rawValue) return;
+    setSelectedBlockUnit(unit);
+    if(blockAmountInput){
+      blockAmountInput.value = rawValue;
+    }
+    if(blockCustomUntilInput){
+      blockCustomUntilInput.value = '';
+      blockCustomUntilInput.setAttribute('aria-invalid', 'false');
+    }
+    updateBlockSummary();
+  });
+});
+
+btnBlockCancel?.addEventListener('click', (event)=>{
+  event?.preventDefault?.();
+  closeBlockModal();
+});
+
+btnBlockClose?.addEventListener('click', (event)=>{
+  event?.preventDefault?.();
+  closeBlockModal();
+});
+
+btnBlockConfirm?.addEventListener('click', async ()=>{
+  if(!blockModalState?.id){
+    toast('No se pudo identificar al usuario','err');
+    return;
+  }
+  updateBlockSummary();
+  const result = blockModalState.computed;
+  if(!result || !Number.isFinite(result.hours) || result.hours <= 0){
+    if(blockError){
+      blockError.textContent = 'Define una duración válida para el bloqueo.';
+      blockError.style.display = 'block';
+    }
+    return;
+  }
+  const userId = blockModalState.id;
+  const confirmOriginal = btnBlockConfirm.textContent;
+  btnBlockConfirm.disabled = true;
+  btnBlockConfirm.textContent = 'Bloqueando…';
+  let res;
+  try {
+    res = await api(ENDPOINTS.block, { method:'POST', body:{ userId, hours: result.hours } });
+  } finally {
+    btnBlockConfirm.disabled = false;
+    btnBlockConfirm.textContent = confirmOriginal || 'Confirmar bloqueo';
+  }
+  if(!res || res.networkError){
+    toast('No se pudo conectar con el servicio','err');
+    return;
+  }
+  if(res.ok){
+    const durationText = result.label || pluralizeDuration('hours', result.hours);
+    const untilText = result.until ? formatDateTime(result.until) : '';
+    const message = untilText
+      ? `Usuario bloqueado hasta ${untilText} · ${durationText}`
+      : `Usuario bloqueado · ${durationText}`;
+    toast(message);
+    applyBlockStateForUser(userId, { isBlocked:true, since: result.since, until: result.until });
+    closeBlockModal();
+    loadUsers();
+  } else {
+    const txt = await res.text().catch(()=>null);
+    console.error('block error:', txt);
+    toast('No se pudo bloquear al usuario','err');
   }
 });
 
@@ -1001,48 +1328,8 @@ document.addEventListener('click', async (e)=>{
       }
       return;
     }
-
-    const promptMsg = `Ingresa las horas de bloqueo para ${displayName} (deja vacío para 1000 días)`;
-    const input = prompt(promptMsg, '');
-    if(input === null) return;
-    let hours;
-    const trimmed = (input || '').trim();
-    if(trimmed === ''){
-      hours = 1000 * 24;
-    } else {
-      const numeric = Number(trimmed.replace(',', '.'));
-      if(!Number.isFinite(numeric) || numeric <= 0){
-        toast('Duración de bloqueo inválida','warn');
-        return;
-      }
-      hours = Math.ceil(numeric);
-    }
-    let res;
-    btn.disabled = true;
-    btn.textContent = 'Bloqueando…';
-    try {
-      res = await api(ENDPOINTS.block, { method:'POST', body:{ userId:id, hours } });
-    } finally {
-      btn.disabled = false;
-      btn.textContent = originalText;
-    }
-    if(!res || res.networkError){
-      toast('No se pudo conectar con el servicio','err');
-      return;
-    }
-    if(res.ok){
-      const durationText = hours % 24 === 0 ? `${hours / 24} días` : `${hours} horas`;
-      toast(`Usuario bloqueado por ${durationText}`);
-      const since = new Date();
-      const untilMs = since.getTime() + (hours * 60 * 60 * 1000);
-      const until = Number.isFinite(untilMs) ? new Date(untilMs) : null;
-      applyBlockStateForUser(id, { isBlocked:true, since, until });
-      loadUsers();
-    } else {
-      const txt = await res.text().catch(()=>null);
-      console.error('block error:', txt);
-      toast('No se pudo bloquear al usuario','err');
-    }
+    openBlockModalForUser({ id, displayName, email: btn.dataset.email || '' });
+    return;
   }
 
   if(act==='delete'){
@@ -1104,9 +1391,13 @@ function openModal(u){
   modal.style.display='flex';
 }
 
+function closeEditModal(){
+  if(modal) modal.style.display = 'none';
+  allowBodyScrollIfNoModal();
+}
+
 qs('#closeModal')?.addEventListener('click', ()=>{
-  modal.style.display='none';
-  document.body.style.overflow = ''; // restaurar scroll del fondo
+  closeEditModal();
 });
 
 function validateModal(){
@@ -1165,8 +1456,7 @@ qs('#btnSave')?.addEventListener('click', async()=>{
   }
   try { const data = JSON.parse(txt); console.log('Perfil guardado:', data.profile); } catch {}
 
-  modal.style.display='none';
-  document.body.style.overflow = ''; // restaurar scroll
+  closeEditModal();
   toast('Cambios guardados');
   loadUsers();
 });
@@ -1179,10 +1469,15 @@ qs('#btnRecovery')?.addEventListener('click', async()=>{
   toast('Link de recuperación enviado');
 });
 
-// Cerrar modal con tecla Escape
+// Cerrar modales con tecla Escape
 window.addEventListener('keydown', (e)=>{
-  if(e.key === 'Escape' && modal.style.display === 'flex'){
-    modal.style.display = 'none';
-    document.body.style.overflow = '';
+  if(e.key === 'Escape'){
+    if(blockModal && blockModal.style.display === 'flex'){
+      closeBlockModal();
+      return;
+    }
+    if(modal && modal.style.display === 'flex'){
+      closeEditModal();
+    }
   }
 });

@@ -246,6 +246,99 @@
         </div>
       </div>
     </div>
+
+    <!-- MODAL BLOCK -->
+    <div
+      id="blockModal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="blockModalTitle"
+    >
+      <div class="content block-modal">
+        <div class="head">
+          <div class="block-modal__head">
+            <strong id="blockModalTitle">Bloquear usuario</strong>
+            <div id="blockModalSubtitle" class="block-modal__subtitle">—</div>
+          </div>
+          <button id="blockModalClose" class="btn btn-ghost btn-sm">✕</button>
+        </div>
+        <div class="body">
+          <p class="block-modal__intro">
+            Define cuánto tiempo permanecerá bloqueado el usuario. Puedes elegir una duración rápida
+            o indicar la fecha exacta de finalización.
+          </p>
+
+          <div class="block-modal__group">
+            <span class="group-label">Duración automática</span>
+            <div class="block-duration-options" role="radiogroup">
+              <label class="chip">
+                <input type="radio" name="blockUnit" value="hours" checked />
+                <span>Horas</span>
+              </label>
+              <label class="chip">
+                <input type="radio" name="blockUnit" value="days" />
+                <span>Días</span>
+              </label>
+              <label class="chip">
+                <input type="radio" name="blockUnit" value="months" />
+                <span>Meses</span>
+              </label>
+              <label class="chip">
+                <input type="radio" name="blockUnit" value="years" />
+                <span>Años</span>
+              </label>
+            </div>
+            <div class="block-duration-amount">
+              <label for="blockAmount">Cantidad</label>
+              <input id="blockAmount" class="input" type="number" min="1" value="12" />
+              <div class="hint">Selecciona la unidad y el número correspondiente.</div>
+            </div>
+            <div class="block-quick">
+              <span class="group-label">Atajos rápidos</span>
+              <div class="block-quick__grid">
+                <button type="button" class="chip chip-btn" data-quick-unit="hours" data-quick-value="6">6h</button>
+                <button type="button" class="chip chip-btn" data-quick-unit="hours" data-quick-value="12">12h</button>
+                <button type="button" class="chip chip-btn" data-quick-unit="days" data-quick-value="1">1 día</button>
+                <button type="button" class="chip chip-btn" data-quick-unit="days" data-quick-value="3">3 días</button>
+                <button type="button" class="chip chip-btn" data-quick-unit="months" data-quick-value="1">1 mes</button>
+                <button type="button" class="chip chip-btn" data-quick-unit="years" data-quick-value="1">1 año</button>
+              </div>
+            </div>
+          </div>
+
+          <div class="block-modal__group">
+            <span class="group-label">Fecha de finalización manual</span>
+            <label class="block-manual-label" for="blockCustomUntil">Fecha y hora</label>
+            <input id="blockCustomUntil" class="input" type="datetime-local" />
+            <div class="hint">
+              Si defines una fecha manual se ignorará la cantidad automática. Debe ser posterior a la hora actual.
+            </div>
+          </div>
+
+          <div id="blockError" class="msg-inline" style="display:none; color:var(--danger)">Error</div>
+
+          <div class="block-summary">
+            <div>
+              <span class="label">Inicia</span>
+              <strong id="blockSummarySince">—</strong>
+            </div>
+            <div>
+              <span class="label">Finaliza</span>
+              <strong id="blockSummaryUntil">—</strong>
+            </div>
+            <div>
+              <span class="label">Duración total</span>
+              <strong id="blockSummaryDuration">—</strong>
+            </div>
+          </div>
+        </div>
+        <div class="foot">
+          <button id="blockModalCancel" type="button" class="btn btn-ghost">Cancelar</button>
+          <button id="btnBlockConfirm" type="button" class="btn btn-warning">Confirmar bloqueo</button>
+        </div>
+      </div>
+    </div>
   </div>
 </body>
 </html>
