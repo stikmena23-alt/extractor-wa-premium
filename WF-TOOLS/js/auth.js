@@ -593,7 +593,68 @@
       .replace(/^\.+|\.+$/g, "");
   }
 
+  function sanitizeNameTokens(value) {
+    return (value || "")
+      .toString()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-zA-Z\s]+/g, " ")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean);
+  }
+
+  const SURNAME_VOWELS = new Set(["a", "e", "i", "o", "u"]);
+
+  function buildSurnameSignature(words, desiredLength = 2) {
+    if (!Array.isArray(words) || !words.length || desiredLength <= 0) return "";
+
+    const primary = [];
+    const extras = [];
+
+    words.forEach((rawWord) => {
+      const letters = rawWord.toLowerCase().replace(/[^a-z]/g, "").split("");
+      if (!letters.length) return;
+      const firstConsonantIndex = letters.findIndex((letter) => !SURNAME_VOWELS.has(letter));
+      if (firstConsonantIndex >= 0) {
+        primary.push(letters[firstConsonantIndex]);
+        letters.splice(firstConsonantIndex, 1);
+      } else {
+        primary.push(letters.shift());
+      }
+
+      const remainingConsonants = letters.filter((letter) => !SURNAME_VOWELS.has(letter));
+      const remainingVowels = letters.filter((letter) => SURNAME_VOWELS.has(letter));
+      extras.push(...remainingConsonants, ...remainingVowels);
+    });
+
+    const combined = [...primary, ...extras];
+    return combined.join("").slice(0, desiredLength);
+  }
+
+  function buildPreferredUsernameFromName(name) {
+    const tokens = sanitizeNameTokens(name);
+    if (!tokens.length) return "";
+
+    const firstName = tokens[0].toLowerCase().replace(/[^a-z]/g, "");
+    const surnameTokens = tokens.length > 2 ? tokens.slice(-2) : tokens.slice(1);
+    const normalizedSurnames = surnameTokens
+      .map((word) => word.toLowerCase().replace(/[^a-z]/g, ""))
+      .filter(Boolean);
+
+    const suffix = buildSurnameSignature(normalizedSurnames, 2);
+    const base = `${firstName}${suffix}`.replace(/[^a-z0-9]/g, "");
+
+    if (base) {
+      return base.slice(0, 18);
+    }
+    return "";
+  }
+
   function computeUsernameSeed(name, email, phone) {
+    const preferred = buildPreferredUsernameFromName(name);
+    if (preferred) return preferred;
+
     const fallbackEmail = (email || "").split("@")[0] || "";
     const fallbackPhone = (phone || "").replace(/\D+/g, "");
     return (
@@ -606,22 +667,17 @@
 
   function buildUsernameCandidates(seed) {
     const base = (seed || "cliente")
-      .split(".")
-      .filter(Boolean)
-      .join(".")
-      .slice(0, 28)
-      .replace(/\.\.+/g, ".")
-      .replace(/^\.+|\.+$/g, "");
+      .toString()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "")
+      .slice(0, 18);
     const core = base || "cliente";
-    const root = `clien.${core}`.replace(/\.\.+/g, ".").replace(/\.+$/, "");
     const timeSuffix = Date.now().toString(36).slice(-4);
     const randomSuffix = Math.random().toString(36).slice(-4);
-    const variants = [root];
-    variants.push(`${root}.${timeSuffix}`);
-    variants.push(`${root}.${randomSuffix}`);
-    return Array.from(new Set(variants)).map((candidate) =>
-      candidate.replace(/\.\.+/g, ".").replace(/\.+$/, "").slice(0, 48)
-    );
+    const variants = [core];
+    variants.push(`${core}${timeSuffix}`);
+    variants.push(`${core}${randomSuffix}`);
+    return Array.from(new Set(variants)).map((candidate) => candidate.slice(0, 24));
   }
 
   function isDuplicateUserError(error) {
