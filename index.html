@@ -1164,6 +1164,9 @@
             closeMenu();
             // Permite que el menú vuelva a mostrarse automáticamente en el próximo inicio de sesión.
             menuShownOnce = false;
+            if (typeof window.showFrame === 'function') {
+              window.showFrame('wfFrame', { skipOverlay: true });
+            }
             ['ipFrame','numFrame'].forEach(function(fid){
               const f = document.getElementById(fid);
               if (f && f.contentWindow) {
@@ -1192,6 +1195,10 @@
               ok,
               reason,
             });
+          } else if (type === 'wftools-open-login') {
+            if (typeof window.showFrame === 'function') {
+              window.showFrame('wfFrame', { skipOverlay: true });
+            }
           } else if (type === 'wftools-request-user-info') {
             // Un iframe secundario solicita la info de sesión
             if (lastUserInfo && event.source && typeof event.source.postMessage === 'function') {
