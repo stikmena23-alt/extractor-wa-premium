@@ -32,6 +32,7 @@ const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let page = 1; const perPage = 10; let currentRows = []; let currentEdit = null;
 let lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0, blockedCount: 0 };
 let blockModalState = null;
+let blockedSummaryOverride = null;
 
 const DEFAULT_BLOCK_AMOUNT = 12;
 
@@ -184,6 +185,25 @@ function formatDateTime(date){
   }
 }
 
+function isTruthyFlag(value){
+  if (value === true) return true;
+  if (value === false || value === null || value === undefined) return false;
+  if (typeof value === 'number') return Number.isFinite(value) && value !== 0;
+  if (typeof value === 'string') {
+    const normalized = value.trim().toLowerCase();
+    if (!normalized) return false;
+    if (['true','1','yes','y','on','activo','activa','active','si','sí','t'].includes(normalized)) return true;
+    if (normalized === 'permanent' || normalized === 'perma' || normalized === 'permanente') return true;
+    return false;
+  }
+  if (typeof value === 'object') {
+    if (!value) return false;
+    if ('active' in value) return isTruthyFlag(value.active);
+    if ('enabled' in value) return isTruthyFlag(value.enabled);
+  }
+  return false;
+}
+
 function getBanState(user){
   const meta = user?.user_metadata || {};
   const appMeta = user?.app_metadata || {};
@@ -206,26 +226,48 @@ function getBanState(user){
     directFlags?.ban_status,
     directFlags?.ban_state,
     directFlags?.banState,
+    directFlags?.status,
+    directFlags?.state,
+    directFlags?.block_status,
+    directFlags?.blockState,
+    directFlags?.block_state,
+    directFlags?.banStatus,
+    directFlags?.reason,
+    directFlags?.ban?.status,
+    directFlags?.block?.status,
   ];
   const normalizedStatus = statusCandidates
     .map((value) => (value == null ? '' : String(value).toLowerCase()))
     .find((value) => value);
   const statusBlocked = normalizedStatus
-    ? ['banned', 'blocked', 'bloqueado', 'baneado'].some((keyword) => normalizedStatus.includes(keyword))
+    ? ['banned', 'blocked', 'bloqueado', 'baneado', 'suspendido', 'suspensión', 'suspendida', 'permanent', 'permanente', 'indefinido']
+        .some((keyword) => normalizedStatus.includes(keyword))
     : false;
   const flaggedExplicitly = [
     user?.is_banned,
     user?.banned,
     topLevelBan?.active,
+    topLevelBan?.blocked,
     meta?.is_banned,
     meta?.banned,
+    meta?.ban_active,
     userBan?.active,
+    userBan?.blocked,
     appMeta?.is_banned,
     appMeta?.banned,
+    appMeta?.ban_active,
     appBan?.active,
+    appBan?.blocked,
     directFlags?.blocked,
     directFlags?.is_blocked,
-  ].some((value) => value === true);
+    directFlags?.ban_active,
+    directFlags?.active_block,
+    directFlags?.banActive,
+    directFlags?.block_active,
+    directFlags?.active,
+    directFlags?.ban?.active,
+    directFlags?.block?.active,
+  ].some(isTruthyFlag);
   const untilCandidates = [
     user?.ban_expires,
     user?.banned_until,
@@ -234,21 +276,28 @@ function getBanState(user){
     user?.blockedUntil,
     directFlags?.ban_expires,
     directFlags?.blocked_until,
+    directFlags?.ban_until,
+    directFlags?.blockedUntil,
+    directFlags?.block_until,
     topLevelBan?.until,
     topLevelBan?.expires_at,
     topLevelBan?.expires,
     meta?.ban_expires,
     meta?.banned_until,
     meta?.ban_until,
+    meta?.ban?.until,
     userBan?.until,
     userBan?.expires_at,
     userBan?.expires,
     appMeta?.ban_expires,
     appMeta?.banned_until,
     appMeta?.ban_until,
+    appMeta?.ban?.until,
     appBan?.until,
     appBan?.expires_at,
     appBan?.expires,
+    directFlags?.ban?.until,
+    directFlags?.block?.until,
   ];
   const until = untilCandidates.map(parseDate).find(Boolean) || null;
   const sinceCandidates = [
@@ -258,6 +307,9 @@ function getBanState(user){
     user?.bannedAt,
     directFlags?.blocked_at,
     directFlags?.banned_at,
+    directFlags?.ban_since,
+    directFlags?.block_since,
+    directFlags?.banSince,
     topLevelBan?.since,
     topLevelBan?.from,
     topLevelBan?.started_at,
@@ -270,6 +322,8 @@ function getBanState(user){
     appBan?.from,
     appBan?.started_at,
     appBan?.startedAt,
+    directFlags?.ban?.since,
+    directFlags?.block?.since,
   ];
   const since = sinceCandidates.map(parseDate).find(Boolean) || null;
   const durationCandidates = [
@@ -279,6 +333,8 @@ function getBanState(user){
     userBan?.duration,
     appMeta?.ban_duration,
     appBan?.duration,
+    directFlags?.ban_duration,
+    directFlags?.ban?.duration,
   ];
   const rawDuration = durationCandidates
     .map((value) => (value == null ? '' : String(value).toLowerCase()))
@@ -289,13 +345,166 @@ function getBanState(user){
   }
   if (!isBlocked){
     const hasDuration = rawDuration && rawDuration !== 'none' && rawDuration !== '0' && rawDuration !== '0h';
-    isBlocked = statusBlocked || flaggedExplicitly || hasDuration;
+    const durationSuggestsPermanent = rawDuration && /perma|indefin|forever|sin limite|sin límite/.test(rawDuration);
+    const statusSuggestsPermanent = normalizedStatus && /perma|indefin|forever/.test(normalizedStatus);
+    isBlocked = statusBlocked || flaggedExplicitly || hasDuration || durationSuggestsPermanent || statusSuggestsPermanent;
   }
   return {
     isBlocked,
     until,
     since,
   };
+}
+
+function normalizeBlockEntry(entry){
+  if (!entry || typeof entry !== 'object') return null;
+  const result = {};
+  const nestedBan = typeof entry.ban === 'object' && entry.ban ? entry.ban : null;
+  const nestedMeta = typeof entry.meta === 'object' && entry.meta ? entry.meta : null;
+  const statusCandidates = [
+    entry.status,
+    entry.state,
+    entry.block_status,
+    entry.blockState,
+    entry.ban_status,
+    entry.reason,
+    nestedBan?.status,
+    nestedMeta?.status,
+  ].filter((value) => value != null && value !== '');
+  if (statusCandidates.length) {
+    result.status = String(statusCandidates[0]);
+  }
+  const activeCandidates = [
+    entry.active,
+    entry.is_active,
+    entry.enabled,
+    entry.blocked,
+    entry.is_blocked,
+    entry.banned,
+    entry.isBanned,
+    entry.active_block,
+    entry.blockActive,
+    nestedBan?.active,
+    nestedMeta?.active,
+    nestedMeta?.enabled,
+  ];
+  const activeValue = activeCandidates.find((value) => value !== undefined);
+  if (activeValue !== undefined) {
+    result.active = isTruthyFlag(activeValue);
+  }
+  const untilCandidates = [
+    entry.until,
+    entry.until_at,
+    entry.until_date,
+    entry.untilIso,
+    entry.expires_at,
+    entry.expires,
+    entry.blocked_until,
+    entry.banned_until,
+    entry.end_at,
+    nestedBan?.until,
+    nestedBan?.expires_at,
+    nestedBan?.expires,
+    nestedMeta?.until,
+    nestedMeta?.expires_at,
+  ];
+  const sinceCandidates = [
+    entry.since,
+    entry.since_at,
+    entry.started_at,
+    entry.start_at,
+    entry.blocked_at,
+    entry.banned_at,
+    entry.created_at,
+    nestedBan?.since,
+    nestedBan?.started_at,
+    nestedMeta?.since,
+  ];
+  const parse = (value) => {
+    if (!value) return null;
+    if (value instanceof Date) return value;
+    const date = new Date(value);
+    if (Number.isNaN(date.valueOf())) return null;
+    return date;
+  };
+  const untilDate = untilCandidates.map(parse).find(Boolean);
+  const sinceDate = sinceCandidates.map(parse).find(Boolean);
+  if (untilDate) result.until = untilDate;
+  if (sinceDate) result.since = sinceDate;
+  return result;
+}
+
+async function enrichUsersWithActiveBlocks(users, payload){
+  if (!Array.isArray(users) || !users.length) return;
+  const blockMap = new Map();
+  const register = (entry) => {
+    if (!entry || typeof entry !== 'object') return;
+    const id = entry.user_id || entry.userId || entry.uid || entry.id || entry.user || entry.profile_id;
+    if (!id) return;
+    blockMap.set(String(id), entry);
+  };
+  const sources = [
+    payload?.activeBlocks,
+    payload?.blockedUsers,
+    payload?.bannedUsers,
+    payload?.blocks,
+    payload?.banList,
+  ];
+  sources.forEach((arr) => {
+    if (Array.isArray(arr)) arr.forEach(register);
+  });
+  if (!blockMap.size) {
+    const ids = Array.from(new Set(users.map((u) => u?.id).filter(Boolean)));
+    if (ids.length && sb?.rpc) {
+      try {
+        const { data, error } = await sb.rpc('admin_list_active_blocks', { user_ids: ids });
+        if (!error && Array.isArray(data)) {
+          data.forEach(register);
+        }
+      } catch (err) {
+        console.warn('No se pudieron consultar los bloqueos activos', err);
+      }
+    }
+  }
+  if (!blockMap.size) return;
+
+  users.forEach((user) => {
+    if (!user || !user.id) return;
+    const info = blockMap.get(String(user.id));
+    if (!info) return;
+    const normalized = normalizeBlockEntry(info);
+    if (!normalized) return;
+    const { active, status, since, until } = normalized;
+    if (status) {
+      user.ban_status = status;
+      user.status = user.status || status;
+      user.ban = Object.assign({}, user.ban, { status });
+    }
+    if (active != null) {
+      const flag = !!active;
+      user.blocked = flag;
+      user.is_blocked = flag;
+      user.is_banned = flag;
+      user.banned = flag;
+      user.block_active = flag;
+      user.ban_active = flag;
+      user.ban = Object.assign({}, user.ban, { active: flag });
+    }
+    if (since instanceof Date) {
+      const iso = since.toISOString();
+      user.blocked_at = iso;
+      user.banned_at = iso;
+      user.ban = Object.assign({}, user.ban, { since: iso });
+    }
+    if (until instanceof Date) {
+      const iso = until.toISOString();
+      user.blocked_until = iso;
+      user.banned_until = iso;
+      user.blockedUntil = iso;
+      user.ban_expires = iso;
+      user.ban = Object.assign({}, user.ban, { until: iso });
+    }
+  });
 }
 
 function composeBanTitle({ until, since } = {}){
@@ -561,6 +770,12 @@ function applyBlockStateForUser(userId, { isBlocked, until = null, since = null 
       }
     });
   });
+
+  if (typeof blockedSummaryOverride === 'number') {
+    const delta = isBlocked ? 1 : -1;
+    const nextValue = blockedSummaryOverride + delta;
+    blockedSummaryOverride = nextValue < 0 ? 0 : nextValue;
+  }
 }
 
 function isExcludedFromReport(email){
@@ -1015,6 +1230,7 @@ async function loadUsers(){
     overlay(true); if($skeleton) $skeleton.style.display='block';
     if($rows) $rows.innerHTML=''; if($cards) $cards.innerHTML='';
     if($empty) $empty.style.display='none';
+    blockedSummaryOverride = null;
     const q = qs('#q')?.value.trim() || undefined;
     const res = await api(ENDPOINTS.list, { query:{ page, perPage, q } });
     if(res.networkError){
@@ -1027,6 +1243,18 @@ async function loadUsers(){
       toast('Error cargando usuarios','err'); return;
     }
     const payload = await res.json(); currentRows = payload.users || [];
+    if (payload) {
+      const summaryCandidate =
+        payload.blockedTotal ??
+        payload.blocked_count ??
+        payload.blockedCount ??
+        (payload.summary && payload.summary.blockedCount) ??
+        (payload.metrics && payload.metrics.blocked);
+      if (Number.isFinite(Number(summaryCandidate))) {
+        blockedSummaryOverride = Number(summaryCandidate);
+      }
+    }
+    await enrichUsersWithActiveBlocks(currentRows, payload);
     renderRows(); const pageInfo = qs('#pageInfo'); if(pageInfo) pageInfo.textContent = `Página ${page}`;
   } finally {
     if($skeleton) $skeleton.style.display='none'; overlay(false);
@@ -1038,6 +1266,9 @@ function renderRows(){
   if($creditSummary) $creditSummary.style.display='none';
   if(!currentRows.length){
     lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0, blockedCount: 0 };
+    if (Number.isFinite(Number(blockedSummaryOverride))) {
+      lastSummary.blockedCount = Number(blockedSummaryOverride);
+    }
     updateAccountSummary({ creditCount: 0, activeCount: 0, lowCount: 0 });
     if($empty) $empty.style.display='block';
     return;
@@ -1154,6 +1385,10 @@ function renderRows(){
 
   updateAccountSummary({ creditCount: reportingCreditCount, activeCount: reportingActiveCount, lowCount: reportingLowCount });
 
+  const resolvedBlockedCount = Number.isFinite(Number(blockedSummaryOverride))
+    ? Number(blockedSummaryOverride)
+    : blockedCount;
+
   lastSummary = {
     creditCount: reportingCreditCount,
     activeCount: reportingActiveCount,
@@ -1161,7 +1396,7 @@ function renderRows(){
     lowCount: reportingLowCount,
     reportingCount,
     totalRows: currentRows.length,
-    blockedCount,
+    blockedCount: resolvedBlockedCount,
   };
 
   if ($creditSummary){
@@ -1203,8 +1438,8 @@ function renderRows(){
         <div class="stat-icon">⛔</div>
         <div class="stat-body">
           <span class="stat-title">Usuarios bloqueados</span>
-          <span class="stat-value">${numberFmt.format(blockedCount)}</span>
-          <span class="stat-sub">${blockedCount ? 'Bloqueos activos en la lista' : 'Sin bloqueos activos'}</span>
+          <span class="stat-value">${numberFmt.format(resolvedBlockedCount)}</span>
+          <span class="stat-sub">${resolvedBlockedCount ? 'Bloqueos activos en la lista' : 'Sin bloqueos activos'}</span>
         </div>
       </div>`;
   }

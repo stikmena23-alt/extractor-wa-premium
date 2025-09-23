@@ -1299,4 +1299,88 @@
     revalidateSessionState,
     getCurrentUserEmail: () => currentSessionEmail,
   };
+
+  function sendBridgeResponse(type, requestId, payload){
+    if (!requestId) return;
+    try {
+      window.parent?.postMessage(Object.assign({ type, requestId }, payload), '*');
+    } catch (err) {
+      console.warn('No se pudo enviar la respuesta al contenedor principal', err);
+    }
+  }
+
+  window.addEventListener('message', (event)=>{
+    if (!event.data || typeof event.data !== 'object') return;
+    const { type } = event.data;
+    if (type === 'wftools-internal-spend-credits') {
+      const requestId = event.data.requestId;
+      const amount = Number.parseInt(event.data.amount, 10);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        sendBridgeResponse('wftools-internal-spend-result', requestId, { ok:false, reason:'invalid-amount' });
+        return;
+      }
+      (async () => {
+        if (!global.Auth || typeof global.Auth.spendCredit !== 'function') {
+          sendBridgeResponse('wftools-internal-spend-result', requestId, { ok:false, reason:'unavailable' });
+          return;
+        }
+        let ok = true;
+        for (let i = 0; i < amount; i += 1) {
+          try {
+            const result = await global.Auth.spendCredit();
+            if (!result) {
+              ok = false;
+              break;
+            }
+          } catch (err) {
+            console.error('Error al consumir créditos desde el puente', err);
+            ok = false;
+            break;
+          }
+        }
+        const refresh = typeof global.Auth.revalidateSessionState === 'function'
+          ? global.Auth.revalidateSessionState()
+          : null;
+        if (refresh && typeof refresh.then === 'function') {
+          try {
+            await refresh;
+          } catch (err) {
+            console.warn('No se pudo revalidar la sesión tras consumir créditos', err);
+          }
+        }
+        sendBridgeResponse('wftools-internal-spend-result', requestId, {
+          ok,
+          reason: ok ? null : 'denied',
+        });
+      })();
+    } else if (type === 'wftools-internal-logout-request') {
+      const requestId = event.data.requestId;
+      (async () => {
+        let ok = false;
+        try {
+          if (typeof handleLogout === 'function') {
+            await handleLogout();
+            ok = true;
+          } else if (logoutBtn && typeof logoutBtn.click === 'function') {
+            logoutBtn.click();
+            ok = true;
+          }
+        } catch (err) {
+          console.error('Error al cerrar sesión desde el puente', err);
+        }
+        if (!ok && logoutBtn && typeof logoutBtn.click === 'function') {
+          try {
+            logoutBtn.click();
+            ok = true;
+          } catch (err) {
+            console.warn('No se pudo disparar el cierre de sesión automáticamente', err);
+          }
+        }
+        sendBridgeResponse('wftools-internal-logout-result', requestId, {
+          ok,
+          reason: ok ? null : 'unavailable',
+        });
+      })();
+    }
+  });
 })(window);

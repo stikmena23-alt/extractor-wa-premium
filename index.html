@@ -1068,6 +1068,48 @@
             }
           });
         });
+        const pendingCreditRequests = new Map();
+        const pendingLogoutRequests = new Map();
+
+        function forwardToWfFrame(message){
+          const wf = document.getElementById('wfFrame');
+          if (!wf || !wf.contentWindow) return false;
+          try {
+            wf.contentWindow.postMessage(message, '*');
+            return true;
+          } catch (err) {
+            console.warn('No se pudo reenviar el mensaje al marco principal de WF-TOOLS', err);
+            return false;
+          }
+        }
+
+        function respondToChild(source, payload){
+          if (!source || typeof source.postMessage !== 'function') return;
+          try {
+            source.postMessage(payload, '*');
+          } catch (err) {
+            console.warn('No se pudo responder al iframe solicitante', err);
+          }
+        }
+
+        function registerPendingRequest(store, requestId, response){
+          if (!requestId || !response) return null;
+          const timer = setTimeout(()=>{
+            store.delete(requestId);
+            try { response({ ok:false, reason:'timeout' }); } catch(_err){}
+          }, 8000);
+          store.set(requestId, { respond: response, timer });
+          return timer;
+        }
+
+        function resolvePendingRequest(store, requestId, payload){
+          if (!requestId || !store.has(requestId)) return;
+          const entry = store.get(requestId);
+          store.delete(requestId);
+          if (entry?.timer) clearTimeout(entry.timer);
+          try { entry?.respond(payload); } catch(_err){}
+        }
+
         // Listen messages from child frames and forward relevant data
         window.addEventListener('message', function (event) {
           if (!event.data || typeof event.data !== 'object') return;
@@ -1130,12 +1172,61 @@
                 } catch(_e){}
               }
             });
+          } else if (type === 'wftools-internal-spend-result') {
+            const requestId = event.data.requestId;
+            const ok = event.data.ok === true;
+            const reason = event.data.reason || null;
+            resolvePendingRequest(pendingCreditRequests, requestId, {
+              type: 'wftools-spend-credits-result',
+              requestId,
+              ok,
+              reason,
+            });
+          } else if (type === 'wftools-internal-logout-result') {
+            const requestId = event.data.requestId;
+            const ok = event.data.ok === true;
+            const reason = event.data.reason || null;
+            resolvePendingRequest(pendingLogoutRequests, requestId, {
+              type: 'wftools-logout-result',
+              requestId,
+              ok,
+              reason,
+            });
           } else if (type === 'wftools-request-user-info') {
             // Un iframe secundario solicita la info de sesión
             if (lastUserInfo && event.source && typeof event.source.postMessage === 'function') {
               try {
                 event.source.postMessage(Object.assign({ type: 'wftools-user-info' }, lastUserInfo), '*');
               } catch(_e){}
+            }
+          } else if (type === 'wftools-spend-credits') {
+            const amount = Number.parseInt(event.data.amount, 10);
+            const requestId = event.data.requestId || `spend-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const source = event.source;
+            const respond = (payload)=> respondToChild(source, Object.assign({ requestId }, payload));
+            if (!Number.isFinite(amount) || amount <= 0) {
+              respond({ type:'wftools-spend-credits-result', ok:false, reason:'invalid-amount' });
+              return;
+            }
+            const registered = registerPendingRequest(pendingCreditRequests, requestId, (payload)=>{
+              respond(Object.assign({ type:'wftools-spend-credits-result' }, payload));
+            });
+            if (!forwardToWfFrame({ type: 'wftools-internal-spend-credits', requestId, amount })) {
+              if (registered) clearTimeout(registered);
+              pendingCreditRequests.delete(requestId);
+              respond({ type:'wftools-spend-credits-result', ok:false, reason:'wf-unavailable' });
+            }
+          } else if (type === 'wftools-request-logout') {
+            const requestId = event.data.requestId || `logout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+            const source = event.source;
+            const respond = (payload)=> respondToChild(source, Object.assign({ requestId }, payload));
+            const registered = registerPendingRequest(pendingLogoutRequests, requestId, (payload)=>{
+              respond(Object.assign({ type:'wftools-logout-result' }, payload));
+            });
+            if (!forwardToWfFrame({ type: 'wftools-internal-logout-request', requestId })) {
+              if (registered) clearTimeout(registered);
+              pendingLogoutRequests.delete(requestId);
+              respond({ type:'wftools-logout-result', ok:false, reason:'wf-unavailable' });
             }
           }
         });
