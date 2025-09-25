@@ -2701,6 +2701,25 @@ setGraphControlsEnabled(false);
 async function requestCredit(){
   if (window.Auth && typeof window.Auth.spendCredit === 'function'){
     try {
+      let sessionOk = true;
+      if (typeof window.Auth.revalidateSessionState === 'function'){
+        const session = await window.Auth.revalidateSessionState();
+        sessionOk = !!session;
+      } else if (typeof window.Auth.ensureActiveSession === 'function'){
+        const session = await window.Auth.ensureActiveSession();
+        sessionOk = !!session;
+      }
+      if (!sessionOk){
+        console.warn('No hay sesión activa para consumir créditos.');
+        if (typeof window.Auth.forceLoginView === 'function'){
+          window.Auth.forceLoginView('Tu sesión expiró. Inicia sesión para continuar.');
+        } else {
+          try {
+            window.parent?.postMessage?.({ type: 'wftools-open-login' }, '*');
+          } catch (_err) {}
+        }
+        return false;
+      }
       return await window.Auth.spendCredit();
     } catch (error) {
       console.error('No se pudo consumir crédito', error);

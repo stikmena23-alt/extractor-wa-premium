@@ -738,9 +738,11 @@ async function loadBlockedUsers(){
     let usingView = false;
     try {
       const fromView = await fetchBlockedViaView();
-      if (Array.isArray(fromView)) {
+      if (Array.isArray(fromView) && fromView.length) {
         rawList = fromView;
         usingView = true;
+      } else if (Array.isArray(fromView) && !fromView.length) {
+        console.info('La vista v_banned_profiles no tiene registros activos, consultando función.');
       }
     } catch (viewErr) {
       console.warn('Fallo al consultar la vista de bloqueados', viewErr);

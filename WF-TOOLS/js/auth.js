@@ -149,6 +149,8 @@
   let sessionActive = false;
   let revalidationPromise = null;
   let lastBroadcastedCredits = null;
+  let sessionHeartbeatTimer = null;
+  const SESSION_HEARTBEAT_MS = 60_000;
   const ADMIN_PREFIXES = ["admin.", "sup."];
   const creditFormatter = new Intl.NumberFormat("es-CO");
 
@@ -243,6 +245,30 @@
     } else if (state === "closed") {
       sessionStatusText.classList.add("closed");
     }
+  }
+
+  function stopSessionHeartbeat() {
+    if (sessionHeartbeatTimer) {
+      clearInterval(sessionHeartbeatTimer);
+      sessionHeartbeatTimer = null;
+    }
+  }
+
+  function startSessionHeartbeat() {
+    stopSessionHeartbeat();
+    sessionHeartbeatTimer = setInterval(() => {
+      if (!sessionActive) return;
+      try {
+        const pending = revalidateSessionState();
+        if (pending && typeof pending.catch === "function") {
+          pending.catch((err) => {
+            console.warn("No se pudo revalidar la sesión en el latido", err);
+          });
+        }
+      } catch (err) {
+        console.warn("No se pudo ejecutar el latido de sesión", err);
+      }
+    }, SESSION_HEARTBEAT_MS);
   }
 
   function hideSessionToast() {
@@ -490,6 +516,7 @@
   }
 
   function showLoginUI(message, state) {
+    stopSessionHeartbeat();
     setSessionLoadingState(false);
     sessionActive = false;
     if (appWrap) appWrap.style.display = "none";
@@ -519,6 +546,7 @@
   function showAppUI() {
     setSessionLoadingState(false);
     sessionActive = true;
+    startSessionHeartbeat();
     if (loginScreen) loginScreen.style.display = "none";
     if (appWrap) appWrap.style.display = "block";
     resetLoginForm();
@@ -1288,6 +1316,17 @@
     spendCredit,
     ensureActiveSession,
     revalidateSessionState,
+    forceLoginView: (message) => {
+      const text = message || "Tu sesión expiró. Inicia sesión para continuar.";
+      showLoginUI(text, "closed");
+      try {
+        if (typeof window !== "undefined" && window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: "wftools-open-login" }, "*");
+        }
+      } catch (_err) {
+        /* noop */
+      }
+    },
     getCurrentUserEmail: () => currentSessionEmail,
   };
 
