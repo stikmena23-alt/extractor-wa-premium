@@ -182,9 +182,22 @@ async function fetchFromProfiles(userIds: string[] | null): Promise<NormalizedBl
   return results;
 }
 
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+};
+
 serve(async (req) => {
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { status: 200, headers: corsHeaders });
+  }
+
   if (req.method !== "GET") {
-    return new Response("Method Not Allowed", { status: 405, headers: { "Allow": "GET" } });
+    return new Response("Method Not Allowed", {
+      status: 405,
+      headers: { ...corsHeaders, "Allow": "GET" },
+    });
   }
 
   const url = new URL(req.url);
@@ -220,6 +233,7 @@ serve(async (req) => {
   return new Response(JSON.stringify(body), {
     status: 200,
     headers: {
+      ...corsHeaders,
       "Content-Type": "application/json; charset=utf-8",
       "Cache-Control": "no-store",
     },
