@@ -9,6 +9,7 @@ const ADMIN_EMAILS = new Set([
   'stikmena6@gmail.com',
   'admin.kevinqt@wftools.com',
   'admin.devinsonmq@wftools.com',
+  'admin.franciscojm@wftools.com',
   // 'otro.admin@tu-dominio.com',
 ]);
 
