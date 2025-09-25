@@ -529,80 +529,6 @@ async function fetchFromView(filter: FilterOptions): Promise<NormalizedBlock[] |
   return normalized;
 }
 
-async function fetchFromLog(filter: FilterOptions): Promise<NormalizedBlock[]> {
-  const ids = Array.from(new Set(filter.userIds ?? [])).filter(Boolean);
-  const emails = Array.from(new Set((filter.emails ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean)));
-
-  let query = supabase
-    .from("admin_ban_log")
-    .select("user_id, action, ban_duration, banned_until, reason, actor_email, created_at")
-    .order("created_at", { ascending: false });
-  if (ids.length) {
-    query = query.in("user_id", ids);
-  }
-
-  const { data, error } = await query;
-  if (error) {
-    console.warn("admin_ban_log fallback error", error.message ?? error);
-    return [];
-  }
-  if (!Array.isArray(data) || !data.length) return [];
-
-  const latestByUser = new Map<string, BlockRow>();
-  for (const raw of data as BlockRow[]) {
-    const id = getUserId(raw);
-    if (!id || latestByUser.has(id)) continue;
-    latestByUser.set(id, { ...raw });
-  }
-
-  const now = Date.now();
-  const activeRows: BlockRow[] = [];
-  for (const [id, row] of latestByUser.entries()) {
-    const action = typeof row.action === "string" ? row.action.toLowerCase() : null;
-    if (action !== "ban") continue;
-    const until =
-      parseDate(row.banned_until) ||
-      parseDate(row.bannedUntil) ||
-      parseDate(row.blocked_until) ||
-      parseDate(row.blockedUntil);
-    if (!until || Number.isNaN(until.valueOf()) || until.getTime() <= now) continue;
-    const since =
-      parseDate(row.blocked_at) ||
-      parseDate(row.blockedAt) ||
-      parseDate(row.banned_at) ||
-      parseDate(row.bannedAt) ||
-      parseDate(row.created_at) ||
-      parseDate(row.createdAt) ||
-      new Date();
-    activeRows.push({
-      ...row,
-      user_id: id,
-      blocked_at: since.toISOString(),
-      blocked_until: until.toISOString(),
-      source: row.source && typeof row.source === "string" && row.source.trim() ? row.source : "admin_ban_log",
-    });
-  }
-
-  if (!activeRows.length) return [];
-
-  await hydrateEntries(activeRows);
-
-  let filteredRows = activeRows;
-  if (emails.length) {
-    const emailSet = new Set(emails);
-    filteredRows = activeRows.filter((row) =>
-      getEmailCandidates(row).some((value) => emailSet.has(value.toLowerCase())),
-    );
-  }
-
-  const normalized: NormalizedBlock[] = [];
-  for (const row of filteredRows) {
-    const mapped = normalizeRecord(row, "admin_ban_log");
-    if (mapped) normalized.push(mapped);
-  }
-  return normalized;
-}
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
@@ -637,14 +563,25 @@ serve(async (req) => {
 
   const filters: FilterOptions = { userIds, emails };
 
-  let data = await fetchFromView(filters);
-  let source = "view";
-  if (!data) {
-    data = await fetchFromLog(filters);
-    source = "admin_ban_log";
+  const data = await fetchFromView(filters);
+  if (data === null) {
+    return new Response(
+      JSON.stringify({
+        error: "No se pudo leer la vista v_profiles_banned. Verifica que exista y que el servicio tenga acceso.",
+      }),
+      {
+        status: 500,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json; charset=utf-8",
+          "Cache-Control": "no-store",
+        },
+      },
+    );
   }
+  const source = "view";
 
-  const active = filterActive(data ?? [], includeExpired);
+  const active = filterActive(data, includeExpired);
   const filtered = applySearch(active, search);
   const ordered = sortBlocks(filtered);
   const total = ordered.length;
