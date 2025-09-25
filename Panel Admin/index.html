@@ -263,7 +263,15 @@
             </div>
             <div class="field" style="flex:1">
               <label>Créditos</label>
-              <input id="m_credits" class="input" type="number" min="0" />
+              <input
+                id="m_credits"
+                class="input"
+                type="text"
+                inputmode="numeric"
+                autocomplete="off"
+                spellcheck="false"
+                placeholder="0"
+              />
             </div>
           </div>
           <div class="sep"></div>
@@ -370,6 +378,35 @@
         <div class="foot">
           <button id="blockModalCancel" type="button" class="btn btn-ghost">Cancelar</button>
           <button id="btnBlockConfirm" type="button" class="btn btn-warning">Confirmar bloqueo</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL UNBLOCK -->
+    <div
+      id="unblockModal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="unblockModalTitle"
+    >
+      <div class="content unblock-modal">
+        <div class="head">
+          <div class="unblock-modal__head">
+            <strong id="unblockModalTitle">Desbloquear usuario</strong>
+            <div id="unblockModalSubtitle" class="unblock-modal__subtitle">—</div>
+          </div>
+          <button id="unblockModalClose" class="btn btn-ghost btn-sm">✕</button>
+        </div>
+        <div class="body unblock-modal__body">
+          <p id="unblockModalDescription" class="unblock-modal__intro">
+            Al desbloquear al usuario recuperará el acceso de inmediato.
+          </p>
+          <div id="unblockModalMeta" class="unblock-modal__meta"></div>
+        </div>
+        <div class="foot">
+          <button id="unblockModalCancel" type="button" class="btn btn-ghost">Cancelar</button>
+          <button id="btnUnblockConfirm" type="button" class="btn btn-success">Desbloquear ahora</button>
         </div>
       </div>
     </div>

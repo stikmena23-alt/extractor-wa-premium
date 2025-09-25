@@ -3,9 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.1";
 
 type JsonRecord = Record<string, unknown>;
 
-type BannedRow = {
-  user_id?: string | null;
-  userId?: string | null;
+type ViewRow = {
   profile_id?: string | null;
   profileId?: string | null;
   banned_until?: string | Date | null;
@@ -14,11 +12,13 @@ type BannedRow = {
   bannedAt?: string | Date | null;
   created_at?: string | Date | null;
   createdAt?: string | Date | null;
-  updated_at?: string | Date | null;
-  updatedAt?: string | Date | null;
   reason?: string | null;
   actor_email?: string | null;
   actorEmail?: string | null;
+  profile_name?: string | null;
+  profileName?: string | null;
+  is_banned_now?: boolean | null;
+  isBannedNow?: boolean | null;
 };
 
 type ProfileRow = ({ id?: string | null } & JsonRecord) | null;
@@ -43,6 +43,8 @@ const corsHeaders = {
 };
 
 const MAX_FETCH = 500;
+const VIEW_NAME = "v_profiles_banned";
+const EMAIL_LOOKUP_COLUMNS = ["email", "contact_email", "user_email", "auth_email", "identity"] as const;
 
 function parseMultiValue(params: URLSearchParams, key: string): string[] {
   const collected = new Set<string>();
@@ -162,6 +164,49 @@ function matchesEmails(row: BlockedPayloadRow, emailSet: Set<string>): boolean {
   return false;
 }
 
+async function resolveProfileIdsByEmails(emails: string[]): Promise<string[]> {
+  const normalized = Array.from(new Set(emails.map((value) => value.trim().toLowerCase()).filter(Boolean)));
+  if (!normalized.length) return [];
+  const normalizedSet = new Set(normalized);
+  const found = new Set<string>();
+  const missingColumns = new Set<string>();
+
+  for (const column of EMAIL_LOOKUP_COLUMNS) {
+    if (missingColumns.has(column)) continue;
+    const filters = normalized.map((email) => `${column}.ilike.${email}`).join(",");
+    if (!filters) continue;
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select(`id, ${column}`)
+        .or(filters);
+      if (error) {
+        const message = error.message ?? String(error);
+        if (error.code === "42703" || /column .* does not exist/i.test(message)) {
+          missingColumns.add(column);
+          continue;
+        }
+        console.warn(`profiles lookup error on ${column}`, message);
+        continue;
+      }
+      if (!Array.isArray(data)) continue;
+      for (const row of data) {
+        if (!row || typeof row !== "object") continue;
+        const id = safeString((row as JsonRecord)["id"]);
+        const value = safeString((row as JsonRecord)[column]);
+        if (!id || !value) continue;
+        if (normalizedSet.has(value.trim().toLowerCase())) {
+          found.add(id);
+        }
+      }
+    } catch (err) {
+      console.warn(`profiles lookup exception on ${column}`, err);
+    }
+  }
+
+  return Array.from(found);
+}
+
 function isActiveBan(bannedUntil: unknown): boolean {
   if (!bannedUntil) return true;
   if (bannedUntil instanceof Date) {
@@ -174,21 +219,21 @@ function isActiveBan(bannedUntil: unknown): boolean {
   return ts > Date.now();
 }
 
-async function fetchBannedRows(userIds: string[] | null): Promise<BannedRow[]> {
+async function fetchViewRows(userIds: string[] | null, limit: number): Promise<ViewRow[]> {
   let query = supabase
-    .from("banned_users")
+    .from(VIEW_NAME)
     .select("*")
     .order("banned_until", { ascending: false })
-    .limit(MAX_FETCH);
+    .limit(limit);
   if (userIds && userIds.length) {
-    query = query.in("user_id", userIds);
+    query = query.in("profile_id", userIds);
   }
   const { data, error } = await query;
   if (error) {
     throw new Error(error.message ?? String(error));
   }
   if (!Array.isArray(data)) return [];
-  return data as BannedRow[];
+  return data as ViewRow[];
 }
 
 async function fetchProfiles(ids: string[]): Promise<Map<string, JsonRecord>> {
@@ -210,27 +255,24 @@ async function fetchProfiles(ids: string[]): Promise<Map<string, JsonRecord>> {
   return map;
 }
 
-function buildPayloadRow(row: BannedRow, profile: ProfileRow): BlockedPayloadRow | null {
-  const idCandidate = row.user_id ?? row.userId ?? row.profile_id ?? row.profileId;
+function buildPayloadRow(row: ViewRow, profile: ProfileRow): BlockedPayloadRow | null {
+  const idCandidate = row.profile_id ?? row.profileId;
   if (!idCandidate) return null;
   const userId = String(idCandidate);
   const profileRecord = profile as JsonRecord | null;
   const rowRecord = row as JsonRecord;
 
-  const profileName = pickProfileName(profile);
+  const profileName = pickProfileName(profile) ??
+    safeString(rowRecord["profile_name"]) ??
+    safeString(rowRecord["profileName"]);
   const profileEmail = pickProfileEmail(profile);
   const profilePhone = pickProfilePhone(profile);
-  const rowEmail =
-    safeString(rowRecord["email"]) ??
-    safeString(rowRecord["user_email"]) ??
-    safeString(rowRecord["contact_email"]) ??
-    safeString(rowRecord["auth_email"]) ??
-    safeString(rowRecord["identity"]);
+  const rowEmail = safeString(rowRecord["email"]) ?? null;
 
   const bannedAt =
     isoString(row.banned_at ?? row.bannedAt ?? row.created_at ?? row.createdAt) ?? null;
   const bannedUntil = isoString(row.banned_until ?? row.bannedUntil) ?? null;
-  const updatedAt = isoString(row.updated_at ?? row.updatedAt ?? bannedAt ?? bannedUntil) ?? null;
+  const updatedAt = isoString(bannedAt ?? bannedUntil ?? rowRecord["updated_at"] ?? rowRecord["updatedAt"]) ?? null;
 
   const contactEmail = profileRecord ? safeString(profileRecord["contact_email"]) : null;
   const userEmail = profileRecord ? safeString(profileRecord["user_email"]) : null;
@@ -263,8 +305,14 @@ function buildPayloadRow(row: BannedRow, profile: ProfileRow): BlockedPayloadRow
     actor_email: actorEmail,
     updated_at: updatedAt,
     checked_at: updatedAt,
-    is_banned_now: isActiveBan(bannedUntil),
-    source: "banned_users",
+    source: VIEW_NAME,
+    view: VIEW_NAME,
+    is_banned_now:
+      typeof rowRecord["is_banned_now"] === "boolean"
+        ? (rowRecord["is_banned_now"] as boolean)
+        : typeof rowRecord["isBannedNow"] === "boolean"
+          ? (rowRecord["isBannedNow"] as boolean)
+          : isActiveBan(bannedUntil),
   };
 
   return payload;
@@ -284,42 +332,62 @@ serve(async (req) => {
   const url = new URL(req.url);
   const search = url.searchParams.get("q");
   const includeExpired = url.searchParams.get("includeExpired") === "true";
-  const limitParam = Number(url.searchParams.get("limit") ?? "200");
-  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.trunc(limitParam), 1), MAX_FETCH) : 200;
-
   const requestedIds = parseMultiValue(url.searchParams, "userId").map((value) => value.trim()).filter(Boolean);
   const requestedEmails = parseMultiValue(url.searchParams, "email")
     .map((value) => value.trim().toLowerCase())
     .filter(Boolean);
 
-  let bannedRows: BannedRow[] = [];
+  const limitParamRaw = Number(url.searchParams.get("limit") ?? "200");
+  const effectiveLimit = Number.isFinite(limitParamRaw)
+    ? Math.min(Math.max(Math.trunc(limitParamRaw), 1), MAX_FETCH)
+    : 200;
+
+  let resolvedEmailIds: string[] = [];
+  if (requestedEmails.length) {
+    try {
+      resolvedEmailIds = await resolveProfileIdsByEmails(requestedEmails);
+    } catch (err) {
+      console.warn("No se pudieron resolver IDs desde correos", err);
+    }
+  }
+  const lookupIds = Array.from(new Set([...requestedIds, ...resolvedEmailIds]));
+
+  const userFilter = lookupIds.length ? lookupIds : null;
+  const fetchLimit = Math.min(
+    MAX_FETCH,
+    userFilter && userFilter.length > effectiveLimit ? userFilter.length : effectiveLimit,
+  );
+  let viewRows: ViewRow[] = [];
   try {
-    bannedRows = await fetchBannedRows(requestedIds.length ? requestedIds : null);
+    viewRows = await fetchViewRows(userFilter, fetchLimit);
   } catch (err) {
     console.error(
-      "banned_users query error",
+      `${VIEW_NAME} query error`,
       err instanceof Error ? err.message : err,
     );
     return new Response(
-      JSON.stringify({ error: "No se pudo leer la tabla banned_users. Verifica que exista y que el servicio tenga acceso." }),
+      JSON.stringify({
+        error: "No se pudo leer la vista v_profiles_banned. Verifica que exista y que el servicio tenga acceso.",
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8" } },
     );
   }
 
   const allProfileIds = new Set<string>();
-  for (const row of bannedRows) {
-    const candidate = row.user_id ?? row.userId ?? row.profile_id ?? row.profileId;
+  for (const row of viewRows) {
+    const candidate = row.profile_id ?? row.profileId;
     if (candidate) {
       allProfileIds.add(String(candidate));
     }
   }
   requestedIds.forEach((id) => allProfileIds.add(id));
+  resolvedEmailIds.forEach((id) => allProfileIds.add(id));
 
   const profileMap = await fetchProfiles(Array.from(allProfileIds));
 
   const payloadRows: BlockedPayloadRow[] = [];
-  bannedRows.forEach((row) => {
-    const candidate = row.user_id ?? row.userId ?? row.profile_id ?? row.profileId;
+  viewRows.forEach((row) => {
+    const candidate = row.profile_id ?? row.profileId;
     if (!candidate) return;
     const key = String(candidate);
     const profile = profileMap.get(key) ?? null;
@@ -360,14 +428,15 @@ serve(async (req) => {
   });
 
   const total = searched.length;
-  const sliced = searched.slice(0, limit);
+  const sliceLimit = userFilter && userFilter.length > effectiveLimit ? Math.min(MAX_FETCH, userFilter.length) : effectiveLimit;
+  const sliced = searched.slice(0, sliceLimit);
 
   const body = {
     blockedUsers: sliced,
     blockedTotal: total,
     includeExpired,
     query: search,
-    source: "banned_users",
+    source: VIEW_NAME,
     generatedAt: new Date().toISOString(),
   };
 

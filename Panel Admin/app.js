@@ -38,6 +38,8 @@ const activeBlockCache = new Map();
 let filterMode = 'all';
 let blockedUsers = [];
 let blockedLoading = false;
+let blockedLoadPromise = null;
+let unblockModalState = null;
 
 const DEFAULT_BLOCK_AMOUNT = 12;
 
@@ -90,6 +92,14 @@ const blockError = qs('#blockError');
 const btnBlockConfirm = qs('#btnBlockConfirm');
 const btnBlockCancel = qs('#blockModalCancel');
 const btnBlockClose = qs('#blockModalClose');
+const unblockModal = qs('#unblockModal');
+const unblockModalTitle = qs('#unblockModalTitle');
+const unblockModalSubtitle = qs('#unblockModalSubtitle');
+const unblockModalDescription = qs('#unblockModalDescription');
+const unblockModalMeta = qs('#unblockModalMeta');
+const btnUnblockConfirm = qs('#btnUnblockConfirm');
+const btnUnblockCancel = qs('#unblockModalCancel');
+const btnUnblockClose = qs('#unblockModalClose');
 const filterButtons = Array.from(document.querySelectorAll('[data-filter-mode]'));
 const blockedDrawer = qs('#blockedDrawer');
 const blockedListEl = qs('#blockedList');
@@ -612,9 +622,18 @@ function setBlockedDrawerVisible(show){
   updateBlockedToggleButton(visible);
   if (!visible) {
     setBlockedStatus('');
+    return;
   }
-  if (visible && !blockedUsers.length && !blockedLoading) {
-    loadBlockedUsers();
+  renderBlockedUsers();
+  if (blockedLoading) {
+    setBlockedStatus('Consultando bloqueos…');
+    return;
+  }
+  if (!blockedUsers.length) {
+    setBlockedStatus('Consultando bloqueos…');
+    loadBlockedUsers({ force: true });
+  } else {
+    setBlockedStatus(`Total: ${blockedUsers.length}`);
   }
 }
 
@@ -639,8 +658,12 @@ function renderBlockedUsers(){
     const sinceText = record.since ? formatDateTime(record.since) : '—';
     const untilText = record.until ? formatDateTime(record.until) : 'Indefinido';
     const detailText = composeBanTitle({ until: record.until, since: record.since });
+    const elapsedText = record.since ? formatElapsedDuration(record.since) : '';
     const reasonText = record.reason
       ? `<span class="detail-line">Motivo: ${escapeHTML(record.reason)}</span>`
+      : '';
+    const elapsedLine = elapsedText
+      ? `<span class="elapsed-line">Transcurrido: <strong>${escapeHTML(elapsedText)}</strong></span>`
       : '';
     const metaParts = [];
     if (record.plan) metaParts.push(`Plan: <strong>${escapeHTML(record.plan)}</strong>`);
@@ -667,6 +690,7 @@ function renderBlockedUsers(){
         ${contactLine}
         ${reasonText}
         <span class="detail-line">${escapeHTML(detailText)}</span>
+        ${elapsedLine}
       </div>
       <div class="blocked-card__dates">
         <span>Desde: ${escapeHTML(sinceText)}</span>
@@ -709,59 +733,82 @@ async function fetchBlocksByIdentifiers({ ids = [], emails = [] } = {}){
   }
 }
 
-async function loadBlockedUsers(){
-  if (blockedLoading) return;
-  blockedLoading = true;
-  setBlockedStatus('Consultando bloqueos…');
-  try {
-    const res = await api(ENDPOINTS.blockedList, { method: 'GET', query: { limit: 500 } });
-    if (res.networkError) {
-      setBlockedStatus('No se pudo conectar con Supabase.');
-      return;
+async function loadBlockedUsers({ force = false, silent = false } = {}){
+  if (blockedLoading) {
+    if (!force) return blockedLoadPromise;
+    try {
+      await blockedLoadPromise;
+    } catch (_) {
+      // ignore previous failure and retry
     }
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      console.error('blockedList error:', txt);
-      setBlockedStatus('Error al consultar usuarios bloqueados.');
-      return;
-    }
-    const payload = await res.json();
-    let rawList = extractBlockedArray(payload);
-    if (!Array.isArray(rawList)) rawList = [];
-    const normalized = rawList.map(normalizeBlockedRecord).filter(Boolean);
-    normalized.sort((a, b) => {
-      const untilA = a.until instanceof Date ? a.until.getTime() : 0;
-      const untilB = b.until instanceof Date ? b.until.getTime() : 0;
-      if (untilA !== untilB) return untilB - untilA;
-      const sinceA = a.since instanceof Date ? a.since.getTime() : 0;
-      const sinceB = b.since instanceof Date ? b.since.getTime() : 0;
-      return sinceB - sinceA;
-    });
-    blockedUsers = normalized;
-    applyBlockedDataset(normalized);
-    if (Number.isFinite(Number(payload.blockedTotal))) {
-      blockedSummaryOverride = Number(payload.blockedTotal);
-    } else {
-      blockedSummaryOverride = normalized.length;
-    }
-    renderBlockedUsers();
-    if (normalized.length) {
-      setBlockedStatus(`Total: ${normalized.length}`);
-    } else {
-      setBlockedStatus('Sin bloqueos activos');
-    }
-    if (currentRows.length) {
-      await enrichUsersWithActiveBlocks(currentRows, { blockedUsers: rawList });
-      renderRows();
-    }
-  } catch (err) {
-    console.error('Error obteniendo bloqueados', err);
-    blockedUsers = [];
-    renderBlockedUsers();
-    setBlockedStatus('Error obteniendo bloqueados.');
-  } finally {
-    blockedLoading = false;
   }
+
+  if (!silent) {
+    setBlockedStatus('Consultando bloqueos…');
+  }
+
+  const task = (async () => {
+    blockedLoading = true;
+    if(blockedEmptyEl) blockedEmptyEl.hidden = true;
+    try {
+      const res = await api(ENDPOINTS.blockedList, { method: 'GET', query: { limit: 500 } });
+      if (res.networkError) {
+        setBlockedStatus('No se pudo conectar con Supabase.');
+        blockedUsers = [];
+        blockedSummaryOverride = 0;
+        renderBlockedUsers();
+        return [];
+      }
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        console.error('blockedList error:', txt);
+        setBlockedStatus('Error al consultar usuarios bloqueados.');
+        return [];
+      }
+      const payload = await res.json();
+      let rawList = extractBlockedArray(payload);
+      if (!Array.isArray(rawList)) rawList = [];
+      const normalized = rawList.map(normalizeBlockedRecord).filter(Boolean);
+      normalized.sort((a, b) => {
+        const untilA = a.until instanceof Date ? a.until.getTime() : 0;
+        const untilB = b.until instanceof Date ? b.until.getTime() : 0;
+        if (untilA !== untilB) return untilB - untilA;
+        const sinceA = a.since instanceof Date ? a.since.getTime() : 0;
+        const sinceB = b.since instanceof Date ? b.since.getTime() : 0;
+        return sinceB - sinceA;
+      });
+      blockedUsers = normalized;
+      applyBlockedDataset(normalized);
+      const totalCount = Number.isFinite(Number(payload.blockedTotal))
+        ? Number(payload.blockedTotal)
+        : normalized.length;
+      blockedSummaryOverride = totalCount;
+      renderBlockedUsers();
+      if (totalCount) {
+        setBlockedStatus(`Total: ${numberFmt.format(totalCount)}`);
+      } else {
+        setBlockedStatus('Sin bloqueos activos');
+      }
+      if (currentRows.length) {
+        await enrichUsersWithActiveBlocks(currentRows, { blockedUsers: rawList });
+        renderRows();
+      }
+      return normalized;
+    } catch (err) {
+      console.error('Error obteniendo bloqueados', err);
+      blockedUsers = [];
+      blockedSummaryOverride = 0;
+      renderBlockedUsers();
+      setBlockedStatus('Error obteniendo bloqueados.');
+      return [];
+    } finally {
+      blockedLoading = false;
+      blockedLoadPromise = null;
+    }
+  })();
+
+  blockedLoadPromise = task;
+  return task;
 }
 
 async function enrichUsersWithActiveBlocks(users, payload){
@@ -893,6 +940,32 @@ function composeBanTitle({ until, since } = {}){
   return parts.join(' · ');
 }
 
+function formatElapsedDuration(since, now = new Date()){
+  const start = since instanceof Date ? since : parseDate(since);
+  if(!(start instanceof Date) || Number.isNaN(start.valueOf())) return '';
+  const end = now instanceof Date && !Number.isNaN(now.valueOf()) ? now : new Date();
+  let diff = end.getTime() - start.getTime();
+  if(!Number.isFinite(diff) || diff <= 0) return 'Menos de un minuto';
+  const units = [
+    { label: 'año', plural: 'años', ms: 365 * 24 * 60 * 60 * 1000 },
+    { label: 'mes', plural: 'meses', ms: 30 * 24 * 60 * 60 * 1000 },
+    { label: 'día', plural: 'días', ms: 24 * 60 * 60 * 1000 },
+    { label: 'hora', plural: 'horas', ms: 60 * 60 * 1000 },
+    { label: 'minuto', plural: 'minutos', ms: 60 * 1000 },
+  ];
+  const parts = [];
+  for(const unit of units){
+    if(diff >= unit.ms){
+      const value = Math.floor(diff / unit.ms);
+      diff -= value * unit.ms;
+      parts.push(`${value} ${value === 1 ? unit.label : unit.plural}`);
+      if(parts.length === 2) break;
+    }
+  }
+  if(!parts.length) return 'Menos de un minuto';
+  return parts.join(' · ');
+}
+
 function pluralizeDuration(unit, amount){
   const value = Math.max(0, Math.round(Number(amount) || 0));
   const abs = Math.abs(value);
@@ -994,7 +1067,8 @@ function setSelectedBlockUnit(unit){
 function allowBodyScrollIfNoModal(){
   const editOpen = modal && modal.style.display === 'flex';
   const blockOpen = blockModal && blockModal.style.display === 'flex';
-  if(!editOpen && !blockOpen){
+  const unblockOpen = unblockModal && unblockModal.style.display === 'flex';
+  if(!editOpen && !blockOpen && !unblockOpen){
     document.body.style.overflow = '';
   }
 }
@@ -1115,6 +1189,99 @@ function closeBlockModal(){
   allowBodyScrollIfNoModal();
 }
 
+function openUnblockModalForUser({ id, displayName, email, since, until } = {}){
+  if(!unblockModal){
+    toast('No se pudo abrir el modal de desbloqueo', 'err');
+    return;
+  }
+  if(!id){
+    toast('No se pudo identificar al usuario', 'err');
+    return;
+  }
+
+  const key = String(id);
+  const listEntry = blockedUsers.find((entry) => entry && entry.id === key);
+  const cached = (listEntry && listEntry.raw) || activeBlockCache.get(key) || {};
+  const sinceDate = since instanceof Date
+    ? since
+    : listEntry?.since instanceof Date
+      ? listEntry.since
+      : parseDate(cached.blocked_at || cached.banned_at || cached.created_at);
+  const untilDate = until instanceof Date
+    ? until
+    : listEntry?.until instanceof Date
+      ? listEntry.until
+      : parseDate(cached.blocked_until || cached.banned_until);
+  const reason = listEntry?.reason || cached.reason || cached.block_reason || cached.notes || null;
+  const actor = listEntry?.actorEmail || cached.actor_email || cached.actorEmail || null;
+  const summary = composeBanTitle({ since: sinceDate, until: untilDate });
+  const subtitlePieces = [];
+  if (displayName) subtitlePieces.push(displayName);
+  const baseEmail =
+    email ||
+    listEntry?.email ||
+    listEntry?.contactEmail ||
+    listEntry?.authEmail ||
+    cached.email ||
+    cached.user_email ||
+    cached.contact_email ||
+    cached.auth_email ||
+    '';
+  if (baseEmail) subtitlePieces.push(baseEmail);
+  if (unblockModalTitle) unblockModalTitle.textContent = 'Desbloquear usuario';
+  if (unblockModalSubtitle) unblockModalSubtitle.textContent = subtitlePieces.length ? subtitlePieces.join(' • ') : '—';
+  if (unblockModalDescription) {
+    unblockModalDescription.textContent = summary && summary !== 'Bloqueo activo'
+      ? summary
+      : 'El usuario recuperará el acceso de inmediato.';
+  }
+  if (unblockModalMeta) {
+    unblockModalMeta.innerHTML = '';
+    const metaRows = [];
+    if (sinceDate) metaRows.push({ label: 'Bloqueado desde', value: formatDateTime(sinceDate) });
+    if (untilDate) metaRows.push({ label: 'Bloqueado hasta', value: formatDateTime(untilDate) });
+    const elapsed = sinceDate ? formatElapsedDuration(sinceDate) : '';
+    if (elapsed) metaRows.push({ label: 'Tiempo transcurrido', value: elapsed });
+    if (reason) metaRows.push({ label: 'Motivo', value: reason });
+    if (actor) metaRows.push({ label: 'Registrado por', value: actor });
+    if (!metaRows.length) {
+      const row = document.createElement('div');
+      row.className = 'muted';
+      row.textContent = 'Sin detalles adicionales del bloqueo.';
+      unblockModalMeta.append(row);
+    } else {
+      metaRows.forEach(({ label, value }) => {
+        const row = document.createElement('span');
+        const labelEl = document.createElement('strong');
+        labelEl.textContent = label;
+        const valueEl = document.createElement('span');
+        valueEl.textContent = value;
+        row.append(labelEl, valueEl);
+        unblockModalMeta.append(row);
+      });
+    }
+  }
+
+  unblockModalState = {
+    id: key,
+    displayName: displayName || '',
+    email: baseEmail || '',
+    since: sinceDate || null,
+    until: untilDate || null,
+  };
+
+  document.body.style.overflow = 'hidden';
+  unblockModal.style.display = 'flex';
+}
+
+function closeUnblockModal(){
+  if(!unblockModal) return;
+  unblockModal.style.display = 'none';
+  if(unblockModalMeta) unblockModalMeta.innerHTML = '';
+  unblockModalState = null;
+  allowBodyScrollIfNoModal();
+}
+
 function applyBlockStateForUser(userId, { isBlocked, until = null, since = null } = {}){
   if(!userId) return;
   const detail = composeBanTitle({ until, since });
@@ -1153,6 +1320,10 @@ function applyBlockStateForUser(userId, { isBlocked, until = null, since = null 
     const delta = isBlocked ? 1 : -1;
     const nextValue = blockedSummaryOverride + delta;
     blockedSummaryOverride = nextValue < 0 ? 0 : nextValue;
+  }
+
+  if(!isBlocked){
+    activeBlockCache.delete(userId);
   }
 }
 
@@ -1357,6 +1528,7 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
     hide(loginView);
     show(adminView);
     await fillCurrentUserBox();   // ✅ mostrar datos del admin
+    loadBlockedUsers({ force: true, silent: true });
     loadUsers();
     toast('Bienvenido, admin');
     setTimeout(()=>sessionLoading(false), 320);
@@ -1532,11 +1704,70 @@ btnBlockConfirm?.addEventListener('click', async ()=>{
     toast(message);
     applyBlockStateForUser(userId, { isBlocked:true, since: result.since, until: result.until });
     closeBlockModal();
+    await loadBlockedUsers({ force: true });
     loadUsers();
   } else {
     const txt = await res.text().catch(()=>null);
     console.error('block error:', txt);
     toast('No se pudo bloquear al usuario','err');
+  }
+});
+
+btnUnblockCancel?.addEventListener('click', (event)=>{
+  event?.preventDefault?.();
+  closeUnblockModal();
+});
+
+btnUnblockClose?.addEventListener('click', (event)=>{
+  event?.preventDefault?.();
+  closeUnblockModal();
+});
+
+btnUnblockConfirm?.addEventListener('click', async ()=>{
+  if(!unblockModalState?.id){
+    toast('No se pudo identificar al usuario','err');
+    return;
+  }
+  const userId = unblockModalState.id;
+  const original = btnUnblockConfirm?.textContent || 'Desbloquear ahora';
+  if(btnUnblockConfirm){
+    btnUnblockConfirm.disabled = true;
+    btnUnblockConfirm.textContent = 'Desbloqueando…';
+  }
+  let res;
+  try {
+    res = await api(ENDPOINTS.block, { method:'POST', body:{ userId, unblock:true } });
+  } finally {
+    if(btnUnblockConfirm){
+      btnUnblockConfirm.disabled = false;
+      btnUnblockConfirm.textContent = original;
+    }
+  }
+  if(!res || res.networkError){
+    toast('No se pudo conectar con el servicio','err');
+    return;
+  }
+  if(res.ok){
+    toast('Usuario desbloqueado');
+    applyBlockStateForUser(userId, { isBlocked:false });
+    activeBlockCache.delete(userId);
+    blockedUsers = blockedUsers.filter((entry) => entry.id !== userId);
+    blockedSummaryOverride = typeof blockedSummaryOverride === 'number'
+      ? Math.max(0, blockedSummaryOverride - 1)
+      : blockedUsers.length;
+    renderBlockedUsers();
+    if (blockedUsers.length) {
+      setBlockedStatus(`Total: ${numberFmt.format(blockedUsers.length)}`);
+    } else {
+      setBlockedStatus('Sin bloqueos activos');
+    }
+    closeUnblockModal();
+    await loadBlockedUsers({ force: true });
+    loadUsers();
+  } else {
+    const txt = await res.text().catch(()=>null);
+    console.error('unblock error:', txt);
+    toast('No se pudo desbloquear al usuario','err');
   }
 });
 
@@ -1551,6 +1782,7 @@ async function bootstrap(){
         hide(loginView);
         show(adminView);
         await fillCurrentUserBox(); // ✅ también al reingresar con sesión viva
+        loadBlockedUsers({ force: true, silent: true });
         await loadUsers();
         return;
       }
@@ -1622,7 +1854,7 @@ filterButtons.forEach((btn) => {
 
 btnToggleBlocked?.addEventListener('click', () => toggleBlockedDrawer());
 btnCloseBlocked?.addEventListener('click', () => setBlockedDrawerVisible(false));
-btnRefreshBlocked?.addEventListener('click', () => loadBlockedUsers());
+btnRefreshBlocked?.addEventListener('click', () => loadBlockedUsers({ force: true }));
 
 updateFilterButtons();
 updateBlockedToggleButton(false);
@@ -1962,37 +2194,16 @@ document.addEventListener('click', async (e)=>{
     if(!id){ toast('No se pudo identificar al usuario','err'); return; }
     const displayName = btn.dataset.name || btn.dataset.email || 'usuario';
     const isBlocked = btn.dataset.blocked === 'true';
-    const originalText = btn.textContent;
-
     if(isBlocked){
       const blockedUntil = parseDate(btn.dataset.blockedUntil);
       const blockedSince = parseDate(btn.dataset.blockedSince);
-      const detailText = composeBanTitle({ until: blockedUntil, since: blockedSince });
-      const extraLine = detailText && detailText !== 'Bloqueo activo' ? `\n${detailText}` : '';
-      const confirmed = confirm(`¿Desbloquear a ${displayName}?${extraLine}`);
-      if(!confirmed) return;
-      let res;
-      btn.disabled = true;
-      btn.textContent = 'Desbloqueando…';
-      try {
-        res = await api(ENDPOINTS.block, { method:'POST', body:{ userId:id, unblock:true } });
-      } finally {
-        btn.disabled = false;
-        btn.textContent = originalText;
-      }
-      if(!res || res.networkError){
-        toast('No se pudo conectar con el servicio','err');
-        return;
-      }
-      if(res.ok){
-        toast('Usuario desbloqueado');
-        applyBlockStateForUser(id, { isBlocked:false });
-        loadUsers();
-      } else {
-        const txt = await res.text().catch(()=>null);
-        console.error('unblock error:', txt);
-        toast('No se pudo desbloquear al usuario','err');
-      }
+      openUnblockModalForUser({
+        id,
+        displayName,
+        email: btn.dataset.email || '',
+        since: blockedSince,
+        until: blockedUntil,
+      });
       return;
     }
     openBlockModalForUser({ id, displayName, email: btn.dataset.email || '' });
@@ -2043,12 +2254,47 @@ const m_credits = qs('#m_credits');
 const m_password = qs('#m_password');
 const m_pwd_err = qs('#m_pwd_err');
 
+function sanitizeCreditsInput(raw){
+  if(raw == null) return 0;
+  const digits = String(raw).replace(/[^\d]/g, '');
+  return digits ? Number(digits) : 0;
+}
+
+function setCreditsInputValue(value){
+  if(!m_credits) return;
+  const numeric = sanitizeCreditsInput(value);
+  m_credits.dataset.rawValue = String(numeric);
+  m_credits.value = numeric ? numberFmt.format(numeric) : '';
+}
+
+function getCreditsInputValue(){
+  if(!m_credits) return 0;
+  const stored = m_credits.dataset.rawValue;
+  if(stored && /^\d+$/.test(stored)) return Number(stored);
+  return sanitizeCreditsInput(m_credits.value);
+}
+
+function handleCreditsInputEvent(){
+  if(!m_credits) return;
+  const numeric = sanitizeCreditsInput(m_credits.value);
+  m_credits.dataset.rawValue = String(numeric);
+  const formatted = numeric ? numberFmt.format(numeric) : '';
+  m_credits.value = formatted;
+  const pos = formatted.length;
+  requestAnimationFrame(()=>{
+    try { m_credits.setSelectionRange(pos, pos); } catch {}
+  });
+}
+
+m_credits?.addEventListener('input', handleCreditsInputEvent);
+m_credits?.addEventListener('blur', handleCreditsInputEvent);
+
 function openModal(u){
   if(!u) return;
   m_email.value = u.email || '';
   m_name.value = u.full_name || '';
   m_plan.value = u.plan || 'Básico';
-  m_credits.value = u.credits ?? 0;
+  setCreditsInputValue(u.credits ?? 0);
   m_password.value = '';
   m_email.setAttribute('data-current', u.email || '');
   m_email_err.style.display='none'; m_email.setAttribute('aria-invalid','false');
@@ -2102,7 +2348,7 @@ qs('#btnSave')?.addEventListener('click', async()=>{
     email: m_email.value.trim(),
     full_name: (m_name.value.trim() || null),
     plan: m_plan.value,
-    credits: Number(m_credits.value) || 0,
+    credits: getCreditsInputValue(),
     newPassword: (m_password.value.trim() || null)
   };
 
@@ -2141,6 +2387,10 @@ window.addEventListener('keydown', (e)=>{
   if(e.key === 'Escape'){
     if(blockModal && blockModal.style.display === 'flex'){
       closeBlockModal();
+      return;
+    }
+    if(unblockModal && unblockModal.style.display === 'flex'){
+      closeUnblockModal();
       return;
     }
     if(modal && modal.style.display === 'flex'){
