@@ -491,8 +491,8 @@ function normalizeBlockedRecord(entry){
   if (!id) return null;
   const contactEmail = entry.contact_email || entry.contactEmail || null;
   const authEmail = entry.auth_email || entry.authEmail || entry.user_email || entry.userEmail || null;
-  const fallbackEmail = entry.email || entry.identity || null;
-  const email = contactEmail || authEmail || fallbackEmail || '';
+  const baseEmail = entry.email || entry.identity || null;
+  const email = baseEmail || contactEmail || authEmail || '';
   const name =
     entry.full_name ||
     entry.name ||
@@ -528,7 +528,13 @@ function normalizeBlockedRecord(entry){
     if (Number.isFinite(numericCredits)) credits = numericCredits;
   }
   const phone = entry.phone_number || entry.phone || entry.contact_phone || null;
-  const checkedAt = parseDate(entry.checked_at || entry.checkedAt);
+  const actorEmail = entry.actor_email || entry.actorEmail || null;
+  const checkedAt = parseDate(
+    entry.checked_at ||
+      entry.checkedAt ||
+      entry.updated_at ||
+      entry.updatedAt
+  );
   return {
     id: String(id),
     email,
@@ -541,7 +547,9 @@ function normalizeBlockedRecord(entry){
     phone: phone || null,
     authEmail: authEmail || null,
     contactEmail: contactEmail || null,
+    actorEmail: actorEmail || null,
     checkedAt,
+    source: entry.source || entry.origin || null,
     raw: entry,
   };
 }
@@ -559,6 +567,15 @@ function registerBlockedCache(record){
       record.raw?.banned_until || (record.until instanceof Date ? record.until.toISOString() : record.raw?.banned_until),
     auth_email: record.authEmail || record.raw?.auth_email || null,
     contact_email: record.contactEmail || record.raw?.contact_email || null,
+    reason: record.raw?.reason || record.reason || null,
+    actor_email: record.raw?.actor_email || record.actorEmail || null,
+    updated_at:
+      record.raw?.updated_at ||
+      (record.checkedAt instanceof Date ? record.checkedAt.toISOString() : record.raw?.updated_at),
+    checked_at:
+      record.raw?.checked_at ||
+      (record.checkedAt instanceof Date ? record.checkedAt.toISOString() : record.raw?.checked_at),
+    source: record.raw?.source || record.source || record.raw?.origin || null,
   });
   activeBlockCache.set(String(record.id), payload);
 }
@@ -663,19 +680,8 @@ function renderBlockedUsers(){
 
 function extractBlockedArray(payload){
   if (!payload || typeof payload !== 'object') return [];
-  const candidates = [
-    payload.users,
-    payload.blocked,
-    payload.data,
-    payload.results,
-    payload.items,
-    payload.rows,
-    payload.blockedUsers,
-    payload.bannedUsers,
-  ];
-  for (const candidate of candidates) {
-    if (Array.isArray(candidate)) return candidate;
-  }
+  if (Array.isArray(payload.blockedUsers)) return payload.blockedUsers;
+  if (Array.isArray(payload.bannedUsers)) return payload.bannedUsers;
   return [];
 }
 
@@ -732,7 +738,11 @@ async function loadBlockedUsers(){
     });
     blockedUsers = normalized;
     applyBlockedDataset(normalized);
-    blockedSummaryOverride = normalized.length;
+    if (Number.isFinite(Number(payload.blockedTotal))) {
+      blockedSummaryOverride = Number(payload.blockedTotal);
+    } else {
+      blockedSummaryOverride = normalized.length;
+    }
     renderBlockedUsers();
     if (normalized.length) {
       setBlockedStatus(`Total: ${normalized.length}`);
@@ -798,13 +808,7 @@ async function enrichUsersWithActiveBlocks(users, payload){
       blockMap.set(id, cached);
     }
   });
-  const sources = [
-    payload?.activeBlocks,
-    payload?.blockedUsers,
-    payload?.bannedUsers,
-    payload?.blocks,
-    payload?.banList,
-  ];
+  const sources = [payload?.blockedUsers, payload?.bannedUsers];
   sources.forEach((arr) => {
     if (Array.isArray(arr)) arr.forEach(register);
   });
