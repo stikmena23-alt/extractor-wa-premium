@@ -686,9 +686,10 @@ function extractBlockedArray(payload){
 }
 
 async function fetchBlocksByIdentifiers({ ids = [], emails = [] } = {}){
-  const query = {};
   const uniqIds = Array.from(new Set(ids.map((value) => String(value).trim()).filter(Boolean)));
   const uniqEmails = Array.from(new Set(emails.map((value) => String(value).trim()).filter(Boolean)));
+  const desiredLimit = Math.min(Math.max((uniqIds.length + uniqEmails.length) || 1, 10), 200);
+  const query = { limit: desiredLimit };
   if (uniqIds.length) query.userId = uniqIds;
   if (uniqEmails.length) query.email = uniqEmails;
   if (!Object.keys(query).length) return [];
@@ -713,7 +714,7 @@ async function loadBlockedUsers(){
   blockedLoading = true;
   setBlockedStatus('Consultando bloqueos…');
   try {
-    const res = await api(ENDPOINTS.blockedList, { method: 'GET' });
+    const res = await api(ENDPOINTS.blockedList, { method: 'GET', query: { limit: 500 } });
     if (res.networkError) {
       setBlockedStatus('No se pudo conectar con Supabase.');
       return;

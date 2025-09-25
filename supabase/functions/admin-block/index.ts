@@ -2,6 +2,28 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.1";
 
 const allowedMethods = "POST, OPTIONS";
 
+type JsonRecord = Record<string, unknown>;
+
+type SupabaseAdminClient = ReturnType<typeof createClient>;
+
+type UpsertBanArgs = {
+  userId: string;
+  bannedUntilISO: string;
+  reason: string | null;
+  actorEmail: string | null;
+};
+
+type BlockMetadataDetails = {
+  banDuration: string;
+  banExpires: string;
+  blockedAt: string;
+  reason: string | null;
+};
+
+type BanAction = "ban" | "unban";
+
+let banLogUnavailable = false;
+
 function buildCorsHeaders(origin: string | null): Record<string, string> {
   const allowedOrigin = origin ?? "*";
   return {
@@ -42,75 +64,72 @@ function getBearerToken(request: Request): string | null {
   const header = request.headers.get("authorization") ?? request.headers.get("Authorization");
   if (!header) return null;
   const match = header.match(/^Bearer\s+(.*)$/i);
-  return match ? (match[1].trim() || null) : null;
+  return match ? match[1].trim() || null : null;
 }
 
-async function identifyActor(supabase: ReturnType<typeof createSupabaseClient>, request: Request) {
+async function identifyActor(supabase: SupabaseAdminClient, request: Request) {
   const token = getBearerToken(request);
-  if (!token) return { id: null as string | null, email: null as string | null };
+  if (!token) {
+    return {
+      id: null as string | null,
+      email: null as string | null,
+    };
+  }
   try {
     const { data, error } = await supabase.auth.getUser(token);
     if (error || !data?.user) {
-      if (error) console.warn("admin-block actor lookup error:", error.message ?? error);
+      if (error) {
+        console.warn("admin-block actor lookup error:", error.message ?? error);
+      }
       return { id: null, email: null };
     }
-    return { id: data.user.id ?? null, email: data.user.email ?? null };
+    return {
+      id: data.user.id ?? null,
+      email: data.user.email ?? null,
+    };
   } catch (err) {
     console.warn("admin-block actor lookup exception:", err);
     return { id: null, email: null };
   }
 }
 
-async function upsertBannedUser(
-  supabase: ReturnType<typeof createSupabaseClient>,
-  args: {
-    userId: string;
-    bannedUntilISO: string;
-    bannedAtISO: string;
-    reason: string | null;
-    actorEmail: string | null;
-  },
-) {
-  const nowISO = new Date().toISOString();
+async function upsertBannedUser(supabase: SupabaseAdminClient, args: UpsertBanArgs) {
   const row = {
     user_id: args.userId,
     banned_until: args.bannedUntilISO,
-    banned_at: args.bannedAtISO,
+    banned_at: new Date().toISOString(),
     reason: args.reason,
     actor_email: args.actorEmail,
-    updated_at: nowISO,
+    updated_at: new Date().toISOString(),
   };
   const { error } = await supabase.from("banned_users").upsert(row, { onConflict: "user_id" });
   if (error) throw error;
 }
 
-async function deleteBannedUser(supabase: ReturnType<typeof createSupabaseClient>, userId: string) {
+async function deleteBannedUser(supabase: SupabaseAdminClient, userId: string) {
   const { error } = await supabase.from("banned_users").delete().eq("user_id", userId);
   if (error) throw error;
 }
 
-let banLogUnavailable = false;
-
 async function logBanAction(
-  supabase: ReturnType<typeof createSupabaseClient>,
-  action: "ban" | "unban",
-  payload: { userId: string; banDuration?: string | null; bannedUntil?: string | null; reason?: string | null; actorId?: string | null; actorEmail?: string | null },
+  supabase: SupabaseAdminClient,
+  action: BanAction,
+  details: { userId: string; banDuration?: string | null; bannedUntil?: string | null; reason?: string | null; actorEmail?: string | null },
 ) {
   if (banLogUnavailable) return;
   try {
     const { error } = await supabase.from("admin_ban_log").insert({
-      user_id: payload.userId,
+      user_id: details.userId,
       action,
-      ban_duration: payload.banDuration ?? null,
-      banned_until: payload.bannedUntil ?? null,
-      reason: payload.reason ?? null,
-      actor_id: payload.actorId ?? null,
-      actor_email: payload.actorEmail ?? null,
+      ban_duration: details.banDuration ?? null,
+      banned_until: details.bannedUntil ?? null,
+      reason: details.reason ?? null,
+      actor_email: details.actorEmail ?? null,
     });
     if (error) {
       const message = error.message ?? String(error);
       console.warn("admin-block log insert error:", message);
-      if (error.code === "42P01" || /relation .*admin_ban_log/i.test(message) || /table .*admin_ban_log/i.test(message)) {
+      if (error.code === "42P01" || /relation .*admin_ban_log/i.test(message)) {
         banLogUnavailable = true;
       }
     }
@@ -123,8 +142,8 @@ async function logBanAction(
   }
 }
 
-function buildClearedMetadata(base: Record<string, unknown>, clearedAt: string) {
-  const prev = (base as Record<string, unknown>)["ban"] ?? {};
+function buildClearedMetadata(base: JsonRecord, clearedAt: string) {
+  const prev = (base as JsonRecord)["ban"] ?? {};
   return {
     ...base,
     status: "active",
@@ -136,7 +155,7 @@ function buildClearedMetadata(base: Record<string, unknown>, clearedAt: string) 
     blocked_at: null,
     block_reason: null,
     ban: {
-      ...(prev as Record<string, unknown>),
+      ...(prev as JsonRecord),
       status: "active",
       active: false,
       duration: "none",
@@ -148,13 +167,10 @@ function buildClearedMetadata(base: Record<string, unknown>, clearedAt: string) 
   };
 }
 
-function buildBlockedMetadata(
-  base: Record<string, unknown>,
-  details: { banDuration: string; banExpires: string; blockedAt: string; reason: string | null },
-) {
-  const prev = (base as Record<string, unknown>)["ban"] ?? {};
-  const banDetails: Record<string, unknown> = {
-    ...(prev as Record<string, unknown>),
+function buildBlockedMetadata(base: JsonRecord, details: BlockMetadataDetails) {
+  const prev = (base as JsonRecord)["ban"] ?? {};
+  const banDetails: JsonRecord = {
+    ...(prev as JsonRecord),
     status: "blocked",
     active: true,
     duration: details.banDuration,
@@ -174,9 +190,11 @@ function buildBlockedMetadata(
     banned_until: details.banExpires,
     blocked_at: details.blockedAt,
     block_reason:
-      details.reason ?? (typeof (base as Record<string, unknown>)["block_reason"] === "string"
-        ? ((base as Record<string, unknown>)["block_reason"] as string)
-        : null) ?? null,
+      details.reason ??
+      (typeof (base as JsonRecord)["block_reason"] === "string"
+        ? ((base as JsonRecord)["block_reason"] as string)
+        : null) ??
+      null,
     ban: banDetails,
   };
 }
@@ -194,7 +212,9 @@ async function handlePost(request: Request): Promise<Response> {
   const hours = Number(payload.hours ?? 0);
   const providedReason = sanitizeReason(payload.reason);
 
-  if (!userId) return jsonResponse({ error: "userId is required" }, { status: 400 });
+  if (!userId) {
+    return jsonResponse({ error: "userId is required" }, { status: 400 });
+  }
 
   const supabase = createSupabaseClient();
   const actor = await identifyActor(supabase, request);
@@ -205,8 +225,8 @@ async function handlePost(request: Request): Promise<Response> {
     return jsonResponse({ error: "User not found" }, { status: 404 });
   }
 
-  const baseUserMeta = { ...(currentUser.user.user_metadata ?? {}) };
-  const baseAppMeta = { ...(currentUser.user.app_metadata ?? {}) };
+  const baseUserMeta = { ...(currentUser.user.user_metadata ?? {}) } as JsonRecord;
+  const baseAppMeta = { ...(currentUser.user.app_metadata ?? {}) } as JsonRecord;
 
   if (unblock) {
     const clearedAt = new Date().toISOString();
@@ -224,7 +244,7 @@ async function handlePost(request: Request): Promise<Response> {
     try {
       await deleteBannedUser(supabase, userId);
     } catch (dbErr) {
-      console.warn("banned_users delete warning (auth unblocked):", dbErr);
+      console.warn("banned_users delete warning (unblock ok in auth):", dbErr);
     }
 
     await logBanAction(supabase, "unban", {
@@ -232,7 +252,6 @@ async function handlePost(request: Request): Promise<Response> {
       banDuration: "none",
       bannedUntil: null,
       reason: providedReason,
-      actorId: actor.id,
       actorEmail: actor.email,
     });
 
@@ -272,12 +291,11 @@ async function handlePost(request: Request): Promise<Response> {
     await upsertBannedUser(supabase, {
       userId,
       bannedUntilISO: banExpires,
-      bannedAtISO: blockedAt,
       reason: providedReason,
       actorEmail: actor.email,
     });
   } catch (dbErr) {
-    console.warn("banned_users upsert warning (auth blocked):", dbErr);
+    console.warn("banned_users upsert warning (ban ok in auth):", dbErr);
   }
 
   await logBanAction(supabase, "ban", {
@@ -285,7 +303,6 @@ async function handlePost(request: Request): Promise<Response> {
     banDuration,
     bannedUntil: banExpires,
     reason: providedReason,
-    actorId: actor.id,
     actorEmail: actor.email,
   });
 
@@ -299,6 +316,7 @@ Deno.serve(async (request: Request) => {
   if (request.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
+
   if (request.method !== "POST") {
     return new Response("Method Not Allowed", {
       status: 405,
