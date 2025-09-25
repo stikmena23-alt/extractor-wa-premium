@@ -74,7 +74,11 @@ type BanLogAction = {
   actorEmail?: string | null;
 };
 
+let banLogUnavailable = false;
+
 async function logBanAction(supabase: SupabaseClient, entry: BanLogAction): Promise<void> {
+  if (banLogUnavailable) return;
+
   try {
     const payload = {
       user_id: entry.userId,
@@ -87,10 +91,20 @@ async function logBanAction(supabase: SupabaseClient, entry: BanLogAction): Prom
     };
     const { error } = await supabase.from("admin_ban_log").insert(payload);
     if (error) {
-      console.warn("admin-block log insert error:", error.message ?? error);
+      const message = error.message ?? String(error);
+      console.warn("admin-block log insert error:", message);
+      if (error.code === "42P01" || /could not find the table/i.test(message)) {
+        banLogUnavailable = true;
+        console.warn("admin-block log disabled: admin_ban_log relation not found");
+      }
     }
   } catch (err) {
-    console.warn("admin-block log insert exception:", err);
+    const message = err instanceof Error ? err.message : String(err);
+    console.warn("admin-block log insert exception:", message);
+    if (/relation .*admin_ban_log/i.test(message) || /42P01/.test(message)) {
+      banLogUnavailable = true;
+      console.warn("admin-block log disabled: admin_ban_log relation not found");
+    }
   }
 }
 

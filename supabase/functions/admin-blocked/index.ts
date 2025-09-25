@@ -494,39 +494,58 @@ function ensureBlockedMetadata(entry: BlockRow, fallbackSource: string): BlockRo
   return copy;
 }
 
-async function fetchFromView(filter: FilterOptions): Promise<NormalizedBlock[] | null> {
+const VIEW_CANDIDATES = ["v_profiles_banned", "v_banned_profiles"] as const;
+
+type ViewFetchResult = {
+  rows: NormalizedBlock[] | null;
+  viewName: string;
+  errorMessage?: string;
+};
+
+async function fetchFromView(filter: FilterOptions): Promise<ViewFetchResult> {
   const ids = Array.from(new Set(filter.userIds ?? [])).filter(Boolean);
-  const emails = Array.from(new Set((filter.emails ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean)));
+  const emails = Array.from(
+    new Set((filter.emails ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean)),
+  );
 
-  let query = supabase.from("v_banned_profiles").select("*");
-  if (ids.length) {
-    query = query.in("profile_id", ids);
+  let lastErrorMessage: string | undefined;
+  for (const viewName of VIEW_CANDIDATES) {
+    let query = supabase.from(viewName).select("*");
+    if (ids.length) {
+      query = query.in("profile_id", ids);
+    }
+
+    const { data, error } = await query;
+    if (error) {
+      const message = error.message ?? String(error);
+      console.warn(`${viewName} view error`, message);
+      lastErrorMessage = message;
+      continue;
+    }
+    if (!Array.isArray(data)) {
+      return { rows: [], viewName };
+    }
+
+    const rows = data.map((row) => ensureBlockedMetadata(row as BlockRow, "view"));
+    await hydrateEntries(rows);
+
+    let filteredRows = rows;
+    if (!ids.length && emails.length) {
+      const emailSet = new Set(emails);
+      filteredRows = rows.filter((row) =>
+        getEmailCandidates(row).some((value) => emailSet.has(value.toLowerCase())),
+      );
+    }
+
+    const normalized: NormalizedBlock[] = [];
+    for (const row of filteredRows) {
+      const mapped = normalizeRecord(row, "view");
+      if (mapped) normalized.push(mapped);
+    }
+    return { rows: normalized, viewName };
   }
 
-  const { data, error } = await query;
-  if (error) {
-    console.warn("v_banned_profiles view error", error.message ?? error);
-    return null;
-  }
-  if (!Array.isArray(data)) return [];
-
-  const rows = data.map((row) => ensureBlockedMetadata(row as BlockRow, "view"));
-  await hydrateEntries(rows);
-
-  let filteredRows = rows;
-  if (!ids.length && emails.length) {
-    const emailSet = new Set(emails);
-    filteredRows = rows.filter((row) =>
-      getEmailCandidates(row).some((value) => emailSet.has(value.toLowerCase())),
-    );
-  }
-
-  const normalized: NormalizedBlock[] = [];
-  for (const row of filteredRows) {
-    const mapped = normalizeRecord(row, "view");
-    if (mapped) normalized.push(mapped);
-  }
-  return normalized;
+  return { rows: null, viewName: VIEW_CANDIDATES[0], errorMessage: lastErrorMessage };
 }
 
 const corsHeaders = {
@@ -563,11 +582,12 @@ serve(async (req) => {
 
   const filters: FilterOptions = { userIds, emails };
 
-  const data = await fetchFromView(filters);
-  if (data === null) {
+  const viewResult = await fetchFromView(filters);
+  if (viewResult.rows === null) {
+    const errorDetail = viewResult.errorMessage ? ` Detalle: ${viewResult.errorMessage}` : "";
     return new Response(
       JSON.stringify({
-        error: "No se pudo leer la vista v_banned_profiles. Verifica que exista y que el servicio tenga acceso.",
+        error: `No se pudo leer la vista ${viewResult.viewName}. Verifica que exista y que el servicio tenga acceso.${errorDetail}`,
       }),
       {
         status: 500,
@@ -579,7 +599,8 @@ serve(async (req) => {
       },
     );
   }
-  const source = "view";
+  const data = viewResult.rows;
+  const source = viewResult.viewName;
 
   const active = filterActive(data, includeExpired);
   const filtered = applySearch(active, search);

@@ -1,31 +1,35 @@
--- View: v_banned_profiles
--- Mantiene un listado de los perfiles con baneos activos.
--- Requiere permisos de lectura sobre auth.users y profiles.
+-- Vista de compatibilidad: v_profiles_banned
+-- Basada en el historial de admin_ban_log para obtener el último baneo activo por usuario.
 
-create or replace view public.v_banned_profiles as
-with prof as (
-  select
-    p.id,
-    to_jsonb(p.*) as j
-  from profiles p
+create or replace view public.v_profiles_banned as
+with latest as (
+  select distinct on (user_id)
+         user_id,
+         action,
+         ban_duration,
+         banned_until,
+         reason,
+         actor_id,
+         actor_email,
+         created_at
+  from public.admin_ban_log
+  order by user_id, created_at desc
 )
 select
-  prof.id as profile_id,
-  coalesce(
-    prof.j ->> 'full_name',
-    prof.j ->> 'display_name',
-    prof.j ->> 'name',
-    prof.j ->> 'owner_name',
-    prof.j ->> 'contact_name'
-  ) as profile_name,
-  prof.j ->> 'contact_email' as contact_email,
-  prof.j ->> 'phone_number' as phone_number,
-  prof.j ->> 'plan' as plan,
-  (prof.j ->> 'credits')::integer as credits,
-  u.email as auth_email,
-  u.banned_until,
-  now() as checked_at
-from auth.users u
-join prof on prof.id = u.id
-where u.banned_until is not null
-  and u.banned_until > now();
+  p.id             as profile_id,
+  p."Display name" as profile_name,
+  l.banned_until,
+  l.created_at     as banned_at,
+  l.reason,
+  l.actor_email,
+  true             as is_banned_now
+from latest l
+join public.profiles p
+  on p.id = l.user_id
+where l.action = 'ban'
+  and l.banned_until is not null
+  and l.banned_until > now();
+
+-- Alias legado para clientes que aún consultan la vista antigua.
+create or replace view public.v_banned_profiles as
+select * from public.v_profiles_banned;
