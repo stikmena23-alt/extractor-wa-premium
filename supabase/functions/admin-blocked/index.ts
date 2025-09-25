@@ -57,6 +57,18 @@ type NormalizedBlock = {
   blocked_until: string | null;
   reason: string | null;
   source: string;
+  user_email?: string | null;
+  contact_email?: string | null;
+  auth_email?: string | null;
+  identity?: string | null;
+  phone?: string | null;
+  phone_number?: string | null;
+  profile_name?: string | null;
+};
+
+type FilterOptions = {
+  userIds: string[] | null;
+  emails: string[] | null;
 };
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
@@ -90,15 +102,12 @@ function normalizeRecord(entry: BlockRow, fallbackSource: string): NormalizedBlo
     entry.user;
   if (!id) return null;
 
-  const email =
-    entry.email ||
-    entry.user_email ||
-    entry.contact_email ||
-    entry.auth_email ||
-    entry.authEmail ||
-    entry.identity ||
-    null;
-  const name =
+  const contactEmail = entry.contact_email || entry.contactEmail || null;
+  const userEmail = entry.user_email || entry.userEmail || null;
+  const authEmail = entry.auth_email || entry.authEmail || null;
+  const identity = entry.identity || null;
+  const email = entry.email || userEmail || contactEmail || authEmail || identity || null;
+  const displayName =
     entry.full_name ||
     entry.fullName ||
     entry.display_name ||
@@ -129,11 +138,27 @@ function normalizeRecord(entry: BlockRow, fallbackSource: string): NormalizedBlo
   return {
     user_id: String(id),
     email: email ? String(email) : null,
-    name: name ? String(name) : null,
+    name: displayName ? String(displayName) : null,
     blocked_at: since ? since.toISOString() : null,
     blocked_until: until ? until.toISOString() : null,
     reason: reason ? String(reason) : null,
     source: entry.source ? String(entry.source) : fallbackSource,
+    user_email: userEmail ? String(userEmail) : null,
+    contact_email: contactEmail ? String(contactEmail) : null,
+    auth_email: authEmail ? String(authEmail) : null,
+    identity: identity ? String(identity) : null,
+    phone:
+      (entry.phone as string | undefined | null) ||
+      (entry.phone_number as string | undefined | null) ||
+      (entry.phoneNumber as string | undefined | null) ||
+      (entry.contact_phone as string | undefined | null) ||
+      (entry.contactPhone as string | undefined | null) ||
+      null,
+    phone_number:
+      (entry.phone_number as string | undefined | null) ||
+      (entry.phoneNumber as string | undefined | null) ||
+      null,
+    profile_name: displayName ? String(displayName) : null,
   };
 }
 
@@ -174,6 +199,79 @@ function sortBlocks(records: NormalizedBlock[]): NormalizedBlock[] {
     return sinceB - sinceA;
   });
   return copy;
+}
+
+function parseMultiValue(params: URLSearchParams, key: string): string[] {
+  const collected = new Set<string>();
+  const values = params.getAll(key);
+  for (const raw of values) {
+    if (!raw) continue;
+    const pieces = raw
+      .split(",")
+      .map((piece) => piece.trim())
+      .filter(Boolean);
+    for (const piece of pieces) {
+      collected.add(piece);
+    }
+  }
+  return Array.from(collected);
+}
+
+async function resolveProfileIdsByEmails(emails: string[]): Promise<string[]> {
+  const normalized = Array.from(
+    new Set(
+      emails
+        .map((value) => value.trim())
+        .filter(Boolean)
+        .map((value) => value.toLowerCase()),
+    ),
+  );
+  if (!normalized.length) return [];
+
+  const orFilters: string[] = [];
+  for (const email of normalized) {
+    orFilters.push(`email.ilike.${email}`);
+    orFilters.push(`contact_email.ilike.${email}`);
+    orFilters.push(`user_email.ilike.${email}`);
+    orFilters.push(`auth_email.ilike.${email}`);
+    orFilters.push(`identity.ilike.${email}`);
+  }
+
+  let query = supabase
+    .from("profiles")
+    .select("id, email, contact_email, user_email, auth_email, identity");
+  if (orFilters.length) {
+    query = query.or(orFilters.join(","));
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn("profiles email lookup error", error.message ?? error);
+    return [];
+  }
+
+  if (!Array.isArray(data)) return [];
+
+  const candidates = new Set<string>();
+  for (const row of data as BlockRow[]) {
+    const idCandidate = row.id;
+    if (!idCandidate) continue;
+    const id = String(idCandidate);
+    const emailCandidates = [
+      row.email,
+      row.contact_email,
+      row.user_email,
+      row.auth_email,
+      row.identity,
+    ]
+      .filter((value): value is string => typeof value === "string")
+      .map((value) => value.toLowerCase());
+    if (emailCandidates.some((value) => normalized.includes(value))) {
+      candidates.add(id);
+    }
+  }
+
+  return Array.from(candidates);
 }
 
 async function hydrateViewEntries(entries: BlockRow[]): Promise<BlockRow[]> {
@@ -303,10 +401,27 @@ async function hydrateViewEntries(entries: BlockRow[]): Promise<BlockRow[]> {
   return entries;
 }
 
-async function fetchFromView(userIds: string[] | null): Promise<NormalizedBlock[] | null> {
+async function fetchFromView(filter: FilterOptions): Promise<NormalizedBlock[] | null> {
+  const ids = Array.from(new Set(filter.userIds ?? []));
+  const emails = Array.from(
+    new Set((filter.emails ?? []).map((value) => value.trim()).filter(Boolean)),
+  );
+
+  let resolvedIds = [...ids];
+  if (emails.length) {
+    try {
+      const extraIds = await resolveProfileIdsByEmails(emails);
+      if (extraIds.length) {
+        resolvedIds = Array.from(new Set([...resolvedIds, ...extraIds]));
+      }
+    } catch (lookupError) {
+      console.warn("No se pudieron resolver IDs desde correos", lookupError);
+    }
+  }
+
   let query = supabase.from("v_profiles_banned").select("*");
-  if (userIds && userIds.length) {
-    query = query.in("profile_id", userIds);
+  if (resolvedIds.length) {
+    query = query.in("profile_id", resolvedIds);
   }
 
   const { data, error } = await query;
@@ -317,7 +432,24 @@ async function fetchFromView(userIds: string[] | null): Promise<NormalizedBlock[
 
   if (!Array.isArray(data)) return [];
 
-  const viewRows = await hydrateViewEntries(data as BlockRow[]);
+  let viewRows = await hydrateViewEntries(data as BlockRow[]);
+
+  if (emails.length && !ids.length) {
+    const emailSet = new Set(emails.map((value) => value.toLowerCase()));
+    viewRows = viewRows.filter((row) => {
+      const candidates = [
+        row.email,
+        row.user_email,
+        row.contact_email,
+        row.auth_email,
+        row.authEmail,
+        row.identity,
+      ]
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.toLowerCase());
+      return candidates.some((value) => emailSet.has(value));
+    });
+  }
 
   const normalized: NormalizedBlock[] = [];
   for (const row of viewRows) {
@@ -359,10 +491,27 @@ async function fetchFromView(userIds: string[] | null): Promise<NormalizedBlock[
   return normalized;
 }
 
-async function fetchFromProfiles(userIds: string[] | null): Promise<NormalizedBlock[]> {
+async function fetchFromProfiles(filter: FilterOptions): Promise<NormalizedBlock[]> {
+  const ids = Array.from(new Set(filter.userIds ?? []));
+  const emails = Array.from(
+    new Set((filter.emails ?? []).map((value) => value.trim()).filter(Boolean)),
+  );
+
   let query = supabase.from("profiles").select("*");
-  if (userIds && userIds.length) {
-    query = query.in("id", userIds);
+  if (ids.length) {
+    query = query.in("id", ids);
+  } else if (emails.length) {
+    const orFilters: string[] = [];
+    for (const email of emails) {
+      orFilters.push(`email.ilike.${email}`);
+      orFilters.push(`contact_email.ilike.${email}`);
+      orFilters.push(`user_email.ilike.${email}`);
+      orFilters.push(`auth_email.ilike.${email}`);
+      orFilters.push(`identity.ilike.${email}`);
+    }
+    if (orFilters.length) {
+      query = query.or(orFilters.join(","));
+    }
   }
   const { data, error } = await query;
   if (error || !Array.isArray(data)) {
@@ -370,7 +519,22 @@ async function fetchFromProfiles(userIds: string[] | null): Promise<NormalizedBl
     return [];
   }
   const results: NormalizedBlock[] = [];
+  const emailSet = new Set(emails.map((value) => value.toLowerCase()));
   for (const row of data as Record<string, unknown>[]) {
+    if (emailSet.size) {
+      const candidates = [
+        row["email"],
+        row["contact_email"],
+        row["user_email"],
+        row["auth_email"],
+        row["identity"],
+      ]
+        .filter((value): value is string => typeof value === "string")
+        .map((value) => value.toLowerCase());
+      if (!candidates.some((value) => emailSet.has(value))) {
+        continue;
+      }
+    }
     const mapped = normalizeRecord(
       {
         id: row["id"] as string | undefined,
@@ -411,13 +575,21 @@ serve(async (req) => {
   const includeExpired = url.searchParams.get("includeExpired") === "true";
   const limitParam = Number(url.searchParams.get("limit") ?? "200");
   const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.trunc(limitParam), 1), 500) : 200;
-  const idParams = url.searchParams.getAll("userId").map((value) => value.trim()).filter(Boolean);
-  const userIds = idParams.length ? Array.from(new Set(idParams)) : null;
+  const userIds = (() => {
+    const values = parseMultiValue(url.searchParams, "userId");
+    return values.length ? values : null;
+  })();
+  const emails = (() => {
+    const values = parseMultiValue(url.searchParams, "email").map((value) => value.toLowerCase());
+    return values.length ? values : null;
+  })();
 
-  let data = await fetchFromView(userIds);
+  const filters: FilterOptions = { userIds, emails };
+
+  let data = await fetchFromView(filters);
   let source = "view";
   if (!data) {
-    data = await fetchFromProfiles(userIds);
+    data = await fetchFromProfiles(filters);
     source = "profiles";
   }
 
