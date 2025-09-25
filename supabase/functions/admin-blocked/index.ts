@@ -498,14 +498,14 @@ async function fetchFromView(filter: FilterOptions): Promise<NormalizedBlock[] |
   const ids = Array.from(new Set(filter.userIds ?? [])).filter(Boolean);
   const emails = Array.from(new Set((filter.emails ?? []).map((value) => value.trim().toLowerCase()).filter(Boolean)));
 
-  let query = supabase.from("v_profiles_banned").select("*");
+  let query = supabase.from("v_banned_profiles").select("*");
   if (ids.length) {
     query = query.in("profile_id", ids);
   }
 
   const { data, error } = await query;
   if (error) {
-    console.warn("v_profiles_banned view error", error.message ?? error);
+    console.warn("v_banned_profiles view error", error.message ?? error);
     return null;
   }
   if (!Array.isArray(data)) return [];
@@ -567,7 +567,7 @@ serve(async (req) => {
   if (data === null) {
     return new Response(
       JSON.stringify({
-        error: "No se pudo leer la vista v_profiles_banned. Verifica que exista y que el servicio tenga acceso.",
+        error: "No se pudo leer la vista v_banned_profiles. Verifica que exista y que el servicio tenga acceso.",
       }),
       {
         status: 500,
