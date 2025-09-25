@@ -541,6 +541,24 @@
         letter-spacing: .3px;
         white-space: nowrap;
       }
+      .app-entry.logout-entry {
+        border-color: rgba(239,68,68,.32);
+        background:
+          linear-gradient(180deg, rgba(239,68,68,.16), rgba(239,68,68,.04)),
+          var(--bg-card);
+        color: #fee2e2;
+        box-shadow: 0 8px 18px rgba(239,68,68,.32);
+      }
+      .app-entry.logout-entry:hover,
+      .app-entry.logout-entry:focus-visible {
+        box-shadow: 0 14px 26px rgba(239,68,68,.4), 0 0 0 3px rgba(239,68,68,.24);
+      }
+      .app-entry.is-loading,
+      .app-entry.logout-entry.is-loading {
+        opacity: .6;
+        pointer-events: none;
+        box-shadow: 0 6px 16px rgba(0,0,0,.25);
+      }
       .app-entry.admin-entry {
         display: none;
       }
@@ -638,6 +656,10 @@
           <button class="app-entry admin-entry" data-frame="adminFrame">
             <span class="entry-icon">🛡️</span>
             <span class="entry-label">Panel Admin</span>
+          </button>
+          <button class="app-entry logout-entry" data-action="logout" type="button">
+            <span class="entry-icon">🚪</span>
+            <span class="entry-label">Cerrar sesión</span>
           </button>
         </div>
         <!-- Pie de panel con información de versión y descripción -->
@@ -1058,9 +1080,41 @@
             }
           });
         }
+
+        function handleLogoutClick(btn) {
+          if (!btn || btn.classList.contains('is-loading')) return;
+          const labelEl = btn.querySelector('.entry-label');
+          const originalLabel = labelEl ? labelEl.textContent : '';
+          const requestId = `logout-menu-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+          const resetState = () => {
+            btn.classList.remove('is-loading');
+            if (labelEl) labelEl.textContent = originalLabel || 'Cerrar sesión';
+          };
+          btn.classList.add('is-loading');
+          if (labelEl) labelEl.textContent = 'Cerrando…';
+          closeMenu();
+          const timer = registerPendingRequest(pendingLogoutRequests, requestId, (payload) => {
+            resetState();
+            if (!payload || payload.ok !== true) {
+              window.alert('No se pudo cerrar la sesión. Intenta nuevamente.');
+            }
+          });
+          if (!forwardToWfFrame({ type: 'wftools-internal-logout-request', requestId })) {
+            if (timer) clearTimeout(timer);
+            pendingLogoutRequests.delete(requestId);
+            resetState();
+            window.alert('No se pudo cerrar la sesión. Intenta nuevamente.');
+          }
+        }
+
         // Assign click to each entry
         document.querySelectorAll('.app-entry').forEach(function (btn) {
           btn.addEventListener('click', function () {
+            const action = btn.getAttribute('data-action');
+            if (action === 'logout') {
+              handleLogoutClick(btn);
+              return;
+            }
             const frameId = btn.getAttribute('data-frame');
             if (frameId) {
               closeMenu();

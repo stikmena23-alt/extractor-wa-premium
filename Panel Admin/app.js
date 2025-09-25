@@ -489,8 +489,18 @@ function normalizeBlockedRecord(entry){
   if (!entry || typeof entry !== 'object') return null;
   const id = entry.user_id || entry.userId || entry.profile_id || entry.profileId || entry.uid || entry.id;
   if (!id) return null;
-  const email = entry.email || entry.user_email || entry.contact_email || entry.identity || '';
-  const name = entry.full_name || entry.name || entry.display_name || entry.owner_name || '';
+  const contactEmail = entry.contact_email || entry.contactEmail || null;
+  const authEmail = entry.auth_email || entry.authEmail || entry.user_email || entry.userEmail || null;
+  const fallbackEmail = entry.email || entry.identity || null;
+  const email = contactEmail || authEmail || fallbackEmail || '';
+  const name =
+    entry.full_name ||
+    entry.name ||
+    entry.display_name ||
+    entry.profile_name ||
+    entry.owner_name ||
+    entry.contact_name ||
+    '';
   const since = parseDate(
     entry.blocked_at ||
       entry.banned_at ||
@@ -510,6 +520,15 @@ function normalizeBlockedRecord(entry){
       entry.valid_until,
   );
   const reason = entry.reason || entry.note || entry.notes || entry.detail || entry.cause || entry.motive || '';
+  const plan = entry.plan || entry.account_plan || entry.tier || entry.subscription || null;
+  const creditsRaw = entry.credits ?? entry.credit_balance ?? entry.total_credits ?? entry.creditCount;
+  let credits = null;
+  if (creditsRaw !== undefined && creditsRaw !== null && creditsRaw !== '') {
+    const numericCredits = Number(creditsRaw);
+    if (Number.isFinite(numericCredits)) credits = numericCredits;
+  }
+  const phone = entry.phone_number || entry.phone || entry.contact_phone || null;
+  const checkedAt = parseDate(entry.checked_at || entry.checkedAt);
   return {
     id: String(id),
     email,
@@ -517,6 +536,12 @@ function normalizeBlockedRecord(entry){
     since,
     until,
     reason,
+    plan: plan || null,
+    credits,
+    phone: phone || null,
+    authEmail: authEmail || null,
+    contactEmail: contactEmail || null,
+    checkedAt,
     raw: entry,
   };
 }
@@ -530,6 +555,10 @@ function registerBlockedCache(record){
     blocked_at: record.raw?.blocked_at || (record.since instanceof Date ? record.since.toISOString() : record.raw?.blocked_at),
     blocked_until:
       record.raw?.blocked_until || (record.until instanceof Date ? record.until.toISOString() : record.raw?.blocked_until),
+    banned_until:
+      record.raw?.banned_until || (record.until instanceof Date ? record.until.toISOString() : record.raw?.banned_until),
+    auth_email: record.authEmail || record.raw?.auth_email || null,
+    contact_email: record.contactEmail || record.raw?.contact_email || null,
   });
   activeBlockCache.set(String(record.id), payload);
 }
@@ -593,17 +622,39 @@ function renderBlockedUsers(){
     const sinceText = record.since ? formatDateTime(record.since) : '—';
     const untilText = record.until ? formatDateTime(record.until) : 'Indefinido';
     const detailText = composeBanTitle({ until: record.until, since: record.since });
-    const reasonText = record.reason ? `<span class="muted" style="font-size:.82rem">Motivo: ${escapeHTML(record.reason)}</span>` : '';
+    const reasonText = record.reason
+      ? `<span class="detail-line">Motivo: ${escapeHTML(record.reason)}</span>`
+      : '';
+    const metaParts = [];
+    if (record.plan) metaParts.push(`Plan: <strong>${escapeHTML(record.plan)}</strong>`);
+    if (Number.isFinite(record.credits)) metaParts.push(`Créditos: <strong>${escapeHTML(numberFmt.format(record.credits))}</strong>`);
+    if (record.phone) metaParts.push(`Tel: ${escapeHTML(record.phone)}`);
+    const metaLine = metaParts.length ? `<span class="meta-line">${metaParts.join(' · ')}</span>` : '';
+    const normalizedEmail = (record.email || '').toLowerCase();
+    const contactParts = [];
+    if (record.authEmail && record.authEmail.toLowerCase() !== normalizedEmail) {
+      contactParts.push(`Acceso: <strong>${escapeHTML(record.authEmail)}</strong>`);
+    }
+    if (record.contactEmail && record.contactEmail.toLowerCase() !== normalizedEmail) {
+      contactParts.push(`Contacto: <strong>${escapeHTML(record.contactEmail)}</strong>`);
+    }
+    const contactLine = contactParts.length ? `<span class="meta-line">${contactParts.join(' · ')}</span>` : '';
+    const idLine = record.id ? `<span class="meta-line">ID: <strong>${escapeHTML(record.id)}</strong></span>` : '';
+    const checkedLine = record.checkedAt ? `<span>Revisado: ${escapeHTML(formatDateTime(record.checkedAt))}</span>` : '';
     card.innerHTML = `
       <div class="blocked-card__info">
         <span class="email">${email}</span>
         <span class="name">${name}</span>
+        ${idLine}
+        ${metaLine}
+        ${contactLine}
         ${reasonText}
-        <span class="muted" style="font-size:.78rem">${escapeHTML(detailText)}</span>
+        <span class="detail-line">${escapeHTML(detailText)}</span>
       </div>
       <div class="blocked-card__dates">
         <span>Desde: ${escapeHTML(sinceText)}</span>
         <span>Hasta: ${escapeHTML(untilText)}</span>
+        ${checkedLine}
       </div>
     `;
     blockedListEl.append(card);
@@ -628,36 +679,114 @@ function extractBlockedArray(payload){
   return [];
 }
 
+function prepareViewEntry(entry){
+  if (!entry || typeof entry !== 'object') return null;
+  const copy = Object.assign({}, entry);
+  const id =
+    copy.profile_id ||
+    copy.profileId ||
+    copy.user_id ||
+    copy.userId ||
+    copy.uid ||
+    copy.id;
+  if (!id) return null;
+  copy.user_id = String(id);
+  if (!copy.email) {
+    copy.email =
+      copy.contact_email ||
+      copy.auth_email ||
+      copy.user_email ||
+      copy.identity ||
+      null;
+  }
+  if (!copy.user_email && copy.auth_email) {
+    copy.user_email = copy.auth_email;
+  }
+  if (copy.banned_until && !copy.blocked_until) {
+    copy.blocked_until = copy.banned_until;
+  }
+  if (!('blocked' in copy) && !('is_blocked' in copy)) {
+    copy.blocked = true;
+    copy.is_blocked = true;
+  }
+  if (!copy.source) copy.source = 'view';
+  return copy;
+}
+
+async function fetchBlockedViaView(){
+  if (!sb || typeof sb.from !== 'function') return null;
+  try {
+    const { data, error } = await sb
+      .from('v_banned_profiles')
+      .select('*')
+      .order('banned_until', { ascending: false });
+    if (error) throw error;
+    if (!Array.isArray(data)) return [];
+    return data.map(prepareViewEntry).filter(Boolean);
+  } catch (err) {
+    console.warn('v_banned_profiles error', err);
+    throw err;
+  }
+}
+
 async function loadBlockedUsers(){
   if (blockedLoading) return;
   blockedLoading = true;
   setBlockedStatus('Consultando bloqueos…');
   try {
-    const res = await api(ENDPOINTS.blockedList, { method: 'GET' });
-    if (res.networkError) {
-      setBlockedStatus('No se pudo conectar con Supabase.');
-      return;
+    let rawList = [];
+    let usingView = false;
+    try {
+      const fromView = await fetchBlockedViaView();
+      if (Array.isArray(fromView)) {
+        rawList = fromView;
+        usingView = true;
+      }
+    } catch (viewErr) {
+      console.warn('Fallo al consultar la vista de bloqueados', viewErr);
     }
-    if (!res.ok) {
-      const txt = await res.text().catch(() => '');
-      console.error('blockedList error:', txt);
-      setBlockedStatus('Error al consultar usuarios bloqueados.');
-      return;
+    if (!usingView) {
+      const res = await api(ENDPOINTS.blockedList, { method: 'GET' });
+      if (res.networkError) {
+        setBlockedStatus('No se pudo conectar con Supabase.');
+        return;
+      }
+      if (!res.ok) {
+        const txt = await res.text().catch(() => '');
+        console.error('blockedList error:', txt);
+        setBlockedStatus('Error al consultar usuarios bloqueados.');
+        return;
+      }
+      const payload = await res.json();
+      rawList = extractBlockedArray(payload);
     }
-    const payload = await res.json();
-    const rawList = extractBlockedArray(payload);
+    if (!Array.isArray(rawList)) rawList = [];
     const normalized = rawList.map(normalizeBlockedRecord).filter(Boolean);
+    normalized.sort((a, b) => {
+      const untilA = a.until instanceof Date ? a.until.getTime() : 0;
+      const untilB = b.until instanceof Date ? b.until.getTime() : 0;
+      if (untilA !== untilB) return untilB - untilA;
+      const sinceA = a.since instanceof Date ? a.since.getTime() : 0;
+      const sinceB = b.since instanceof Date ? b.since.getTime() : 0;
+      return sinceB - sinceA;
+    });
     blockedUsers = normalized;
     applyBlockedDataset(normalized);
     blockedSummaryOverride = normalized.length;
     renderBlockedUsers();
-    setBlockedStatus(normalized.length ? `Total: ${normalized.length}` : 'Sin bloqueos activos');
+    if (normalized.length) {
+      setBlockedStatus(`Total: ${normalized.length}`);
+    } else {
+      setBlockedStatus('Sin bloqueos activos');
+    }
     if (currentRows.length) {
       await enrichUsersWithActiveBlocks(currentRows, { blockedUsers: rawList });
       renderRows();
     }
   } catch (err) {
     console.error('Error obteniendo bloqueados', err);
+    blockedUsers = [];
+    renderBlockedUsers();
     setBlockedStatus('Error obteniendo bloqueados.');
   } finally {
     blockedLoading = false;
@@ -669,11 +798,37 @@ async function enrichUsersWithActiveBlocks(users, payload){
   const blockMap = new Map();
   const register = (entry) => {
     if (!entry || typeof entry !== 'object') return;
-    const id = entry.user_id || entry.userId || entry.uid || entry.id || entry.user || entry.profile_id;
+    const id =
+      entry.user_id ||
+      entry.userId ||
+      entry.uid ||
+      entry.id ||
+      entry.user ||
+      entry.profile_id ||
+      entry.profileId;
     if (!id) return;
     const key = String(id);
-    blockMap.set(key, entry);
-    activeBlockCache.set(key, entry);
+    const normalized = Object.assign({}, entry, {
+      user_id:
+        entry.user_id ||
+        entry.profile_id ||
+        entry.profileId ||
+        entry.id ||
+        key,
+    });
+    if (normalized.banned_until && !normalized.blocked_until) {
+      normalized.blocked_until = normalized.banned_until;
+    }
+    if (!('blocked' in normalized) && !('is_blocked' in normalized)) {
+      normalized.blocked = true;
+      normalized.is_blocked = true;
+    } else if (!('is_blocked' in normalized)) {
+      normalized.is_blocked = !!normalized.blocked;
+    } else if (!('blocked' in normalized)) {
+      normalized.blocked = !!normalized.is_blocked;
+    }
+    blockMap.set(key, normalized);
+    activeBlockCache.set(key, normalized);
   };
   const ids = Array.from(new Set(users.map((u) => u?.id).filter(Boolean))).map((id) => String(id));
   ids.forEach((id) => {

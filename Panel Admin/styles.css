@@ -274,6 +274,9 @@ a{color:var(--brand)}
 .blocked-card__info{display:flex; flex-direction:column; gap:4px;}
 .blocked-card__info .email{font-weight:700; color:#e6edf3;}
 .blocked-card__info .name{color:var(--muted); font-size:.9rem;}
+.blocked-card__info .meta-line{font-size:.78rem; color:var(--muted); display:flex; gap:6px; flex-wrap:wrap;}
+.blocked-card__info .meta-line strong{color:#e6edf3;}
+.blocked-card__info .detail-line{font-size:.78rem; color:var(--muted);}
 .blocked-card__dates{font-size:.85rem; color:var(--muted); text-align:right; display:flex; flex-direction:column; gap:4px;}
 .blocked-empty{font-size:.9rem;}
 

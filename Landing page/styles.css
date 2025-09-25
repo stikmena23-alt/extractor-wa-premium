@@ -37,21 +37,21 @@ img,svg{max-width:100%; height:auto}
 /* Header */
 .site-header{
   display:flex; flex-direction:column; align-items:center; justify-content:center;
-  text-align:center; gap:14px;
-  padding:clamp(72px,12vw,120px) min(5vw,32px) clamp(20px,4vw,36px);
+  text-align:center; gap:18px;
+  padding:clamp(96px,14vw,140px) min(6vw,36px) clamp(28px,5vw,44px);
   background:linear-gradient(180deg, rgba(7,9,15,.85), transparent 70%);
   position:sticky; top:0; z-index:20; backdrop-filter:blur(6px);
 }
-.site-header > *{ width:min(720px, 100%); }
+.site-header > *{ width:min(720px, 100%); margin-inline:auto; }
 .site-header .brand,
 .site-header .top-actions{ margin-inline:auto; }
 .site-header .top-actions{ justify-content:center; }
-.brand{display:flex; flex-direction:column; align-items:center; gap:12px; text-align:center}
+.brand{display:flex; flex-direction:column; align-items:center; gap:16px; text-align:center}
 .brand-logo{width:52px; height:52px; display:grid; place-items:center}
 .logo-svg{width:100%; height:100%}
-.brand-text{display:flex; flex-direction:column; gap:6px}
-.brand-text .title{margin:0; font-size:clamp(26px,3.4vw,38px)}
-.brand-text .subtitle{margin:0; font-size:clamp(15px,2.4vw,20px); color:var(--muted)}
+.brand-text{display:flex; flex-direction:column; gap:8px; align-items:center}
+.brand-text .title{margin:0; font-size:clamp(28px,4vw,44px)}
+.brand-text .subtitle{margin:0; font-size:clamp(16px,2.6vw,22px); color:var(--muted)}
 .for-app{font-size:clamp(16px,1.8vw,22px); font-weight:700; color:var(--sec)}
 .top-actions{display:flex; gap:12px; align-items:center; justify-content:center; flex-wrap:wrap}
 .top-actions .btn{font-size:clamp(14px,1.8vw,18px); padding:12px 18px}
