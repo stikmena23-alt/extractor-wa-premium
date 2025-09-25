@@ -713,18 +713,123 @@ function prepareViewEntry(entry){
   return copy;
 }
 
+async function hydrateViewEntries(entries){
+  if (!Array.isArray(entries) || !entries.length) return entries;
+  if (!sb || typeof sb.from !== 'function') return entries;
+  const needProfileInfo = entries.filter((entry) => {
+    if (!entry || typeof entry !== 'object') return false;
+    const hasEmail =
+      entry.email ||
+      entry.user_email ||
+      entry.userEmail ||
+      entry.contact_email ||
+      entry.contactEmail ||
+      entry.auth_email ||
+      entry.authEmail;
+    const hasPhone = entry.phone || entry.phone_number || entry.contact_phone;
+    const hasName =
+      entry.full_name ||
+      entry.name ||
+      entry.display_name ||
+      entry.profile_name ||
+      entry.owner_name;
+    return !hasEmail || !hasPhone || !hasName;
+  });
+  if (!needProfileInfo.length) return entries;
+  const ids = Array.from(
+    new Set(
+      needProfileInfo
+        .map((entry) =>
+          entry?.profile_id ||
+          entry?.profileId ||
+          entry?.user_id ||
+          entry?.userId ||
+          entry?.uid ||
+          entry?.id,
+        )
+        .filter(Boolean)
+        .map((id) => String(id)),
+    ),
+  );
+  if (!ids.length) return entries;
+  try {
+    const { data, error } = await sb
+      .from('profiles')
+      .select('id, email, user_email, contact_email, auth_email, identity, phone_number, phone, "Display name"')
+      .in('id', ids);
+    if (error) throw error;
+    if (Array.isArray(data) && data.length) {
+      const profileMap = new Map(
+        data.map((row) => [String(row.id), row]),
+      );
+      needProfileInfo.forEach((entry) => {
+        const key =
+          String(
+            entry?.profile_id ||
+              entry?.profileId ||
+              entry?.user_id ||
+              entry?.userId ||
+              entry?.uid ||
+              entry?.id,
+          );
+        const profile = profileMap.get(key);
+        if (!profile) return;
+        const displayName =
+          profile.profile_name ||
+          profile.profileName ||
+          profile.full_name ||
+          profile.fullName ||
+          profile.name ||
+          profile['Display name'];
+        if (!entry.profile_name && displayName) {
+          entry.profile_name = displayName;
+        }
+        if (!entry.full_name && displayName) {
+          entry.full_name = displayName;
+        }
+        const resolvedEmail =
+          entry.contact_email ||
+          entry.contactEmail ||
+          entry.user_email ||
+          entry.userEmail ||
+          entry.auth_email ||
+          entry.authEmail ||
+          entry.email;
+        if (!resolvedEmail) {
+          entry.contact_email =
+            profile.contact_email || profile.contactEmail || null;
+          entry.user_email =
+            profile.user_email || profile.userEmail || profile.email || null;
+          entry.auth_email =
+            profile.auth_email || profile.authEmail || null;
+          entry.email =
+            profile.email || profile.identity || entry.contact_email || entry.user_email || entry.auth_email || null;
+        }
+        if (!entry.phone && !entry.phone_number && !entry.contact_phone) {
+          entry.phone_number =
+            profile.phone_number || profile.phone || null;
+        }
+      });
+    }
+  } catch (err) {
+    console.warn('No se pudieron hidratar los perfiles de la vista', err);
+  }
+  return entries;
+}
+
 async function fetchBlockedViaView(){
   if (!sb || typeof sb.from !== 'function') return null;
   try {
     const { data, error } = await sb
-      .from('v_banned_profiles')
+      .from('v_profiles_banned')
       .select('*')
       .order('banned_until', { ascending: false });
     if (error) throw error;
     if (!Array.isArray(data)) return [];
+    await hydrateViewEntries(data);
     return data.map(prepareViewEntry).filter(Boolean);
   } catch (err) {
-    console.warn('v_banned_profiles error', err);
+    console.warn('v_profiles_banned error', err);
     throw err;
   }
 }
@@ -742,7 +847,7 @@ async function loadBlockedUsers(){
         rawList = fromView;
         usingView = true;
       } else if (Array.isArray(fromView) && !fromView.length) {
-        console.info('La vista v_banned_profiles no tiene registros activos, consultando función.');
+        console.info('La vista v_profiles_banned no tiene registros activos, consultando función.');
       }
     } catch (viewErr) {
       console.warn('Fallo al consultar la vista de bloqueados', viewErr);
