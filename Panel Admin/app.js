@@ -611,15 +611,17 @@ function applyBlockedDataset(records){
   records.forEach(registerBlockedCache);
 }
 
-function setBlockedStatus(message){
+function setBlockedStatus(message, { loading = false } = {}){
   if (!blockedStatusEl) return;
   if (!message) {
     blockedStatusEl.hidden = true;
     blockedStatusEl.textContent = '';
+    blockedStatusEl.classList.remove('loading');
     return;
   }
   blockedStatusEl.hidden = false;
   blockedStatusEl.textContent = message;
+  blockedStatusEl.classList.toggle('loading', !!loading);
 }
 
 function updateBlockedToggleButton(){
@@ -693,11 +695,11 @@ function setBlockedDrawerVisible(show, { skipRenderRows = false } = {}){
   }
   renderBlockedUsers();
   if (blockedLoading) {
-    setBlockedStatus('Consultando bloqueos…');
+    setBlockedStatus('Consultando bloqueos…', { loading: true });
     return;
   }
   if (!blockedUsers.length) {
-    setBlockedStatus('Consultando bloqueos…');
+    setBlockedStatus('Consultando bloqueos…', { loading: true });
     loadBlockedUsers({ force: true });
   } else {
     setBlockedStatus(`Total: ${numberFmt.format(blockedUsers.length)}`);
@@ -810,7 +812,7 @@ async function loadBlockedUsers({ force = false, silent = false } = {}){
   }
 
   if (!silent) {
-    setBlockedStatus('Consultando bloqueos…');
+    setBlockedStatus('Consultando bloqueos…', { loading: true });
   }
 
   const task = (async () => {
