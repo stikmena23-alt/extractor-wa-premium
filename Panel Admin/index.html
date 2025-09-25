@@ -164,6 +164,40 @@
         <div id="creditSummary" class="stats" style="display:none"></div>
         <div id="overlay" class="overlay"><div class="spinner">🔄 Cargando usuarios…</div></div>
 
+        <div class="view-controls" aria-label="Filtros de listado">
+          <div class="segment" role="tablist">
+            <button type="button" class="segment__btn is-active" data-filter-mode="all" role="tab" aria-selected="true">Todos</button>
+            <button type="button" class="segment__btn" data-filter-mode="admins" role="tab" aria-selected="false">Administradores</button>
+            <button type="button" class="segment__btn" data-filter-mode="clients" role="tab" aria-selected="false">Clientes</button>
+          </div>
+          <button id="btnToggleBlocked" class="btn btn-warning btn-sm" type="button">
+            <span class="icon" aria-hidden="true">🚫</span>
+            <span>Usuarios bloqueados</span>
+          </button>
+        </div>
+
+        <section id="blockedDrawer" class="blocked-drawer" aria-live="polite" hidden>
+          <header class="blocked-drawer__head">
+            <div>
+              <h3>Usuarios bloqueados</h3>
+              <p class="muted">Fechas de bloqueo directo desde Supabase</p>
+            </div>
+            <div class="blocked-drawer__actions">
+              <button id="btnRefreshBlocked" class="btn btn-ghost btn-sm" type="button">
+                <span class="icon" aria-hidden="true">🔄</span>
+                <span>Actualizar</span>
+              </button>
+              <button id="btnCloseBlocked" class="btn btn-ghost btn-sm" type="button">
+                <span class="icon" aria-hidden="true">✕</span>
+                <span>Cerrar</span>
+              </button>
+            </div>
+          </header>
+          <div id="blockedStatus" class="blocked-status muted" hidden>Consultando bloqueos…</div>
+          <div id="blockedList" class="blocked-list"></div>
+          <div id="blockedEmpty" class="blocked-empty muted">No hay usuarios bloqueados activos.</div>
+        </section>
+
         <div id="skeleton" style="display:none">
           <div class="skeleton"></div>
           <div class="skeleton"></div>

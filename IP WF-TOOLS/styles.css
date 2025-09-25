@@ -149,10 +149,12 @@
 .user-info-bar {
         display: flex;
         flex-wrap: wrap;
-        gap: 16px;
+        gap: 16px 20px;
         padding: 12px clamp(16px,4vw,40px);
+        margin: 0 clamp(16px,4vw,40px) 18px;
         background: color-mix(in oklab, var(--panel) 92%, var(--text) 8%);
-        border-bottom: 1px solid var(--border);
+        border: 1px solid var(--border);
+        border-radius: 14px;
         font-size: 14px;
       }
       .user-info-bar span {
@@ -208,21 +210,31 @@
       animation: spin .8s linear infinite;
     }
 
-    /* Centramos encabezado y título. La acción (botón de tema) se posiciona a la derecha. */
-    header {
-      justify-content: center;
-      position: relative;
+    @media (max-width: 900px){
+      header{
+        flex-wrap: wrap;
+        gap: 16px;
+      }
     }
-    .header-actions {
-      position: absolute;
-      right: clamp(16px,4vw,40px);
-      top: 50%;
-      transform: translateY(-50%);
+
+    @media (max-width: 768px){
+      header{
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        gap: 14px;
+      }
+      .brand{flex-direction: column; align-items: center; gap: 12px;}
+      .title h1{white-space: normal;}
+      .title small{display:block; max-width: 28ch;}
+      .header-actions{width: 100%; display:flex; justify-content: center;}
+      .header-actions .btn-outline{width: clamp(180px, 70%, 240px);}
     }
-    .brand {
-      justify-content: center;
-    }
-    .title h1,
-    .title small {
-      text-align: center;
+
+    @media (max-width: 540px){
+      .user-info-bar{
+        margin: 0 16px 16px;
+        border-radius: 12px;
+      }
     }

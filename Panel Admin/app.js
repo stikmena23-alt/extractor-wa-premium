@@ -25,6 +25,7 @@ const ENDPOINTS = {
   setPassword: 'admin-setpassword',
   block: 'admin-block',
   remove: 'admin-delete',
+  blockedList: 'admin-blocked',
 };
 
 /************* STATE *************/
@@ -34,6 +35,9 @@ let lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 
 let blockModalState = null;
 let blockedSummaryOverride = null;
 const activeBlockCache = new Map();
+let filterMode = 'all';
+let blockedUsers = [];
+let blockedLoading = false;
 
 const DEFAULT_BLOCK_AMOUNT = 12;
 
@@ -86,6 +90,14 @@ const blockError = qs('#blockError');
 const btnBlockConfirm = qs('#btnBlockConfirm');
 const btnBlockCancel = qs('#blockModalCancel');
 const btnBlockClose = qs('#blockModalClose');
+const filterButtons = Array.from(document.querySelectorAll('[data-filter-mode]'));
+const blockedDrawer = qs('#blockedDrawer');
+const blockedListEl = qs('#blockedList');
+const blockedEmptyEl = qs('#blockedEmpty');
+const blockedStatusEl = qs('#blockedStatus');
+const btnToggleBlocked = qs('#btnToggleBlocked');
+const btnCloseBlocked = qs('#btnCloseBlocked');
+const btnRefreshBlocked = qs('#btnRefreshBlocked');
 
 // Inyectar logo en login y header (con seguridad si no existen)
 const loginLogoEl = qs('#loginLogo');
@@ -169,6 +181,44 @@ function escapeHTML(str){
   if(str == null) return '';
   const map = { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' };
   return String(str).replace(/[&<>"']/g, ch => map[ch] || ch);
+}
+
+function isAdminRow(user){
+  if(!user) return false;
+  if (user.is_admin === true || user.admin === true || user.isAdmin === true) return true;
+  const email = (user.email || '').toLowerCase();
+  if (email && ADMIN_EMAILS.has(email)) return true;
+  const roleFields = [
+    user.role,
+    user.user_role,
+    user.account_role,
+    user.account_type,
+    user.type,
+    user.kind,
+    user.plan_role,
+    user.app_role,
+    user.segment,
+  ];
+  const normalizedRoles = roleFields
+    .map((value) => (typeof value === 'string' ? value.trim().toLowerCase() : ''))
+    .filter(Boolean);
+  if (normalizedRoles.some((value) => value.includes('admin') || value.includes('staff'))) {
+    return true;
+  }
+  if (Array.isArray(user.tags) && user.tags.some((tag) => typeof tag === 'string' && tag.toLowerCase().includes('admin'))) {
+    return true;
+  }
+  const synthetic = {
+    email: user.email,
+    app_metadata: Object.assign({}, user.app_metadata, user.metadata, user.meta, {
+      role: normalizedRoles[0] || user.app_metadata?.role,
+    }),
+    user_metadata: Object.assign({}, user.user_metadata, {
+      role: normalizedRoles[0] || user.user_metadata?.role,
+      isAdmin: user.is_admin ?? user.admin ?? user.isAdmin,
+    }),
+  };
+  return isAdminUser(synthetic);
 }
 
 function parseDate(value){
@@ -433,6 +483,185 @@ function normalizeBlockEntry(entry){
   if (untilDate) result.until = untilDate;
   if (sinceDate) result.since = sinceDate;
   return result;
+}
+
+function normalizeBlockedRecord(entry){
+  if (!entry || typeof entry !== 'object') return null;
+  const id = entry.user_id || entry.userId || entry.profile_id || entry.profileId || entry.uid || entry.id;
+  if (!id) return null;
+  const email = entry.email || entry.user_email || entry.contact_email || entry.identity || '';
+  const name = entry.full_name || entry.name || entry.display_name || entry.owner_name || '';
+  const since = parseDate(
+    entry.blocked_at ||
+      entry.banned_at ||
+      entry.start_at ||
+      entry.started_at ||
+      entry.since ||
+      entry.created_at ||
+      entry.inserted_at,
+  );
+  const until = parseDate(
+    entry.blocked_until ||
+      entry.banned_until ||
+      entry.end_at ||
+      entry.expires_at ||
+      entry.expires ||
+      entry.until ||
+      entry.valid_until,
+  );
+  const reason = entry.reason || entry.note || entry.notes || entry.detail || entry.cause || entry.motive || '';
+  return {
+    id: String(id),
+    email,
+    name,
+    since,
+    until,
+    reason,
+    raw: entry,
+  };
+}
+
+function registerBlockedCache(record){
+  if (!record || !record.id) return;
+  const payload = Object.assign({}, record.raw || {}, {
+    user_id: record.raw?.user_id || record.raw?.userId || record.raw?.profile_id || record.id,
+    email: record.email,
+    full_name: record.name,
+    blocked_at: record.raw?.blocked_at || (record.since instanceof Date ? record.since.toISOString() : record.raw?.blocked_at),
+    blocked_until:
+      record.raw?.blocked_until || (record.until instanceof Date ? record.until.toISOString() : record.raw?.blocked_until),
+  });
+  activeBlockCache.set(String(record.id), payload);
+}
+
+function applyBlockedDataset(records){
+  if (!Array.isArray(records) || !records.length) return;
+  records.forEach(registerBlockedCache);
+}
+
+function setBlockedStatus(message){
+  if (!blockedStatusEl) return;
+  if (!message) {
+    blockedStatusEl.hidden = true;
+    blockedStatusEl.textContent = '';
+    return;
+  }
+  blockedStatusEl.hidden = false;
+  blockedStatusEl.textContent = message;
+}
+
+function updateBlockedToggleButton(open){
+  if (!btnToggleBlocked) return;
+  btnToggleBlocked.setAttribute('aria-expanded', open ? 'true' : 'false');
+  const label = btnToggleBlocked.querySelector('span:last-child');
+  if (label) {
+    label.textContent = open ? 'Ocultar bloqueados' : 'Usuarios bloqueados';
+  }
+}
+
+function setBlockedDrawerVisible(show){
+  if (!blockedDrawer) return;
+  const visible = !!show;
+  blockedDrawer.hidden = !visible;
+  updateBlockedToggleButton(visible);
+  if (!visible) {
+    setBlockedStatus('');
+  }
+  if (visible && !blockedUsers.length && !blockedLoading) {
+    loadBlockedUsers();
+  }
+}
+
+function toggleBlockedDrawer(){
+  if (!blockedDrawer) return;
+  setBlockedDrawerVisible(blockedDrawer.hidden);
+}
+
+function renderBlockedUsers(){
+  if (!blockedListEl || !blockedEmptyEl) return;
+  blockedListEl.innerHTML = '';
+  if (!blockedUsers.length) {
+    blockedEmptyEl.hidden = false;
+    return;
+  }
+  blockedEmptyEl.hidden = true;
+  blockedUsers.forEach((record) => {
+    const card = document.createElement('div');
+    card.className = 'blocked-card';
+    const email = escapeHTML(record.email || '—');
+    const name = record.name ? escapeHTML(record.name) : '—';
+    const sinceText = record.since ? formatDateTime(record.since) : '—';
+    const untilText = record.until ? formatDateTime(record.until) : 'Indefinido';
+    const detailText = composeBanTitle({ until: record.until, since: record.since });
+    const reasonText = record.reason ? `<span class="muted" style="font-size:.82rem">Motivo: ${escapeHTML(record.reason)}</span>` : '';
+    card.innerHTML = `
+      <div class="blocked-card__info">
+        <span class="email">${email}</span>
+        <span class="name">${name}</span>
+        ${reasonText}
+        <span class="muted" style="font-size:.78rem">${escapeHTML(detailText)}</span>
+      </div>
+      <div class="blocked-card__dates">
+        <span>Desde: ${escapeHTML(sinceText)}</span>
+        <span>Hasta: ${escapeHTML(untilText)}</span>
+      </div>
+    `;
+    blockedListEl.append(card);
+  });
+}
+
+function extractBlockedArray(payload){
+  if (!payload || typeof payload !== 'object') return [];
+  const candidates = [
+    payload.users,
+    payload.blocked,
+    payload.data,
+    payload.results,
+    payload.items,
+    payload.rows,
+    payload.blockedUsers,
+    payload.bannedUsers,
+  ];
+  for (const candidate of candidates) {
+    if (Array.isArray(candidate)) return candidate;
+  }
+  return [];
+}
+
+async function loadBlockedUsers(){
+  if (blockedLoading) return;
+  blockedLoading = true;
+  setBlockedStatus('Consultando bloqueos…');
+  try {
+    const res = await api(ENDPOINTS.blockedList, { method: 'GET' });
+    if (res.networkError) {
+      setBlockedStatus('No se pudo conectar con Supabase.');
+      return;
+    }
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      console.error('blockedList error:', txt);
+      setBlockedStatus('Error al consultar usuarios bloqueados.');
+      return;
+    }
+    const payload = await res.json();
+    const rawList = extractBlockedArray(payload);
+    const normalized = rawList.map(normalizeBlockedRecord).filter(Boolean);
+    blockedUsers = normalized;
+    applyBlockedDataset(normalized);
+    blockedSummaryOverride = normalized.length;
+    renderBlockedUsers();
+    setBlockedStatus(normalized.length ? `Total: ${normalized.length}` : 'Sin bloqueos activos');
+    if (currentRows.length) {
+      await enrichUsersWithActiveBlocks(currentRows, { blockedUsers: rawList });
+      renderRows();
+    }
+  } catch (err) {
+    console.error('Error obteniendo bloqueados', err);
+    setBlockedStatus('Error obteniendo bloqueados.');
+  } finally {
+    blockedLoading = false;
+  }
 }
 
 async function enrichUsersWithActiveBlocks(users, payload){
@@ -1242,6 +1471,19 @@ btnReviewAlerts?.addEventListener('click', ()=>{
 });
 btnDownloadReport?.addEventListener('click', downloadReport);
 
+filterButtons.forEach((btn) => {
+  btn.addEventListener('click', () => {
+    setFilterMode(btn.dataset.filterMode || 'all');
+  });
+});
+
+btnToggleBlocked?.addEventListener('click', () => toggleBlockedDrawer());
+btnCloseBlocked?.addEventListener('click', () => setBlockedDrawerVisible(false));
+btnRefreshBlocked?.addEventListener('click', () => loadBlockedUsers());
+
+updateFilterButtons();
+updateBlockedToggleButton(false);
+
 async function loadUsers(){
   try{
     overlay(true); if($skeleton) $skeleton.style.display='block';
@@ -1278,10 +1520,39 @@ async function loadUsers(){
   }
 }
 
+function getVisibleRows(){
+  if (!Array.isArray(currentRows)) return [];
+  if (filterMode === 'admins') {
+    return currentRows.filter((row) => isAdminRow(row));
+  }
+  if (filterMode === 'clients') {
+    return currentRows.filter((row) => !isAdminRow(row));
+  }
+  return currentRows.slice();
+}
+
+function updateFilterButtons(){
+  filterButtons.forEach((btn) => {
+    const mode = btn.dataset.filterMode || 'all';
+    const active = mode === filterMode;
+    btn.classList.toggle('is-active', active);
+    btn.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+}
+
+function setFilterMode(mode){
+  const normalized = mode === 'admins' || mode === 'clients' ? mode : 'all';
+  if (filterMode === normalized) return;
+  filterMode = normalized;
+  updateFilterButtons();
+  renderRows();
+}
+
 function renderRows(){
   if($rows) $rows.innerHTML=''; if($cards) $cards.innerHTML='';
   if($creditSummary) $creditSummary.style.display='none';
-  if(!currentRows.length){
+  const rows = getVisibleRows();
+  if(!rows.length){
     lastSummary = { creditCount: 0, activeCount: 0, inactiveCount: 0, lowCount: 0, reportingCount: 0, totalRows: 0, blockedCount: 0 };
     if (Number.isFinite(Number(blockedSummaryOverride))) {
       lastSummary.blockedCount = Number(blockedSummaryOverride);
@@ -1300,7 +1571,7 @@ function renderRows(){
 
   let blockedCount = 0;
 
-  for(const u of currentRows){
+  for(const u of rows){
     const meta = creditMeta(u.credits);
     const creditBadgeHtml = creditBadge(meta);
     const displayName = (u.full_name && u.full_name.trim()) || u.email || 'Usuario';
@@ -1402,7 +1673,7 @@ function renderRows(){
 
   updateAccountSummary({ creditCount: reportingCreditCount, activeCount: reportingActiveCount, lowCount: reportingLowCount });
 
-  const resolvedBlockedCount = Number.isFinite(Number(blockedSummaryOverride))
+  const resolvedBlockedCount = Number.isFinite(Number(blockedSummaryOverride)) && filterMode === 'all'
     ? Number(blockedSummaryOverride)
     : blockedCount;
 
@@ -1412,7 +1683,7 @@ function renderRows(){
     inactiveCount: reportingInactiveCount,
     lowCount: reportingLowCount,
     reportingCount,
-    totalRows: currentRows.length,
+    totalRows: rows.length,
     blockedCount: resolvedBlockedCount,
   };
 
@@ -1463,7 +1734,8 @@ function renderRows(){
 }
 
 function downloadReport(){
-  if(!currentRows.length){
+  const rows = getVisibleRows();
+  if(!rows.length){
     toast('No hay usuarios para exportar', 'warn');
     return;
   }
@@ -1485,7 +1757,7 @@ function downloadReport(){
   ];
 
   const summarySheet = window.XLSX.utils.aoa_to_sheet(summaryRows);
-  const userData = currentRows.map((u)=>{
+  const userData = rows.map((u)=>{
     const email = u.email || '';
     const meta = creditMeta(u.credits);
     const excluded = isExcludedFromReport(email);

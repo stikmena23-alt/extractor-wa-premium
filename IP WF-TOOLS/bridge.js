@@ -6,6 +6,46 @@
       const CREDIT_TIMEOUT_MS = 8000;
       let creditLoaderTimer = null;
       let spendInFlight = false;
+      let authWaitPromise = null;
+
+      function sleep(ms){
+        return new Promise((resolve) => setTimeout(resolve, ms));
+      }
+
+      async function waitForAuthMethod(method, timeout = 2500){
+        const start = Date.now();
+        if (authWaitPromise) {
+          try {
+            const cached = await authWaitPromise;
+            if (cached && typeof cached[method] === 'function') {
+              return cached;
+            }
+          } catch (_err) {
+            authWaitPromise = null;
+          }
+        }
+        const runner = (async () => {
+          while (Date.now() - start < timeout) {
+            try {
+              const parentDoc = window.parent?.document;
+              if (!parentDoc) break;
+              const wfFrame = parentDoc.getElementById('wfFrame');
+              const auth = wfFrame?.contentWindow?.Auth;
+              if (auth && typeof auth[method] === 'function') {
+                return auth;
+              }
+            } catch (_err) {}
+            await sleep(120);
+          }
+          return null;
+        })();
+        authWaitPromise = runner.catch(() => null);
+        try {
+          return await runner;
+        } finally {
+          authWaitPromise = null;
+        }
+      }
 
       function redirectToLogin(){
         try {
@@ -146,11 +186,8 @@
 
       async function tryDirectSpend(amount){
         try {
-          const parentDoc = window.parent?.document;
-          if (!parentDoc) return null;
-          const wfFrame = parentDoc.getElementById('wfFrame');
-          const auth = wfFrame?.contentWindow?.Auth;
-          if (!auth || typeof auth.spendCredit !== 'function') return null;
+          const auth = await waitForAuthMethod('spendCredit');
+          if (!auth) return null;
           for (let i = 0; i < amount; i += 1) {
             const ok = await auth.spendCredit();
             if (!ok) return false;
@@ -262,14 +299,27 @@
 
       // Maneja el botón de cierre de sesión (en la barra de usuario)
       const uiLogoutBtn = document.getElementById('uiLogoutBtn');
+
+      async function waitForParentElement(id, timeout = 2500){
+        const start = Date.now();
+        while (Date.now() - start < timeout) {
+          try {
+            const parentDoc = window.parent?.document;
+            if (!parentDoc) break;
+            const wfFrame = parentDoc.getElementById('wfFrame');
+            const frameDoc = wfFrame?.contentWindow?.document;
+            if (!frameDoc) break;
+            const el = frameDoc.getElementById(id);
+            if (el) return el;
+          } catch (_err) {}
+          await sleep(120);
+        }
+        return null;
+      }
+
       async function tryDirectLogout(){
         try {
-          const parentDoc = window.parent?.document;
-          if (!parentDoc) return null;
-          const wfFrame = parentDoc.getElementById('wfFrame');
-          const frameDoc = wfFrame?.contentWindow?.document;
-          if (!frameDoc) return null;
-          const logoutEl = frameDoc.getElementById('logoutBtn');
+          const logoutEl = await waitForParentElement('logoutBtn');
           if (logoutEl && typeof logoutEl.click === 'function') {
             logoutEl.click();
             return true;
