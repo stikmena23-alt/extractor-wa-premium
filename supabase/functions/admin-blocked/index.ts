@@ -1,38 +1,29 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.1";
 
-type ProfileRow = {
-  id: string;
-  email?: string | null;
-  contact_email?: string | null;
-  user_email?: string | null;
-  auth_email?: string | null;
-  identity?: string | null;
-  phone?: string | null;
-  phone_number?: string | null;
-  full_name?: string | null;
-  display_name?: string | null;
-  "Display name"?: string | null;
-};
+type JsonRecord = Record<string, unknown>;
 
-type ViewRow = {
+type BannedRow = {
+  user_id?: string | null;
+  userId?: string | null;
   profile_id?: string | null;
   profileId?: string | null;
-  profile_name?: string | null;
-  profileName?: string | null;
-  banned_at?: string | Date | null;
-  bannedAt?: string | Date | null;
   banned_until?: string | Date | null;
   bannedUntil?: string | Date | null;
+  banned_at?: string | Date | null;
+  bannedAt?: string | Date | null;
+  created_at?: string | Date | null;
+  createdAt?: string | Date | null;
+  updated_at?: string | Date | null;
+  updatedAt?: string | Date | null;
   reason?: string | null;
   actor_email?: string | null;
   actorEmail?: string | null;
-  updated_at?: string | Date | null;
-  updatedAt?: string | Date | null;
-  is_banned_now?: boolean | null;
 };
 
-type BlockedPayloadRow = Record<string, unknown>;
+type ProfileRow = ({ id?: string | null } & JsonRecord) | null;
+
+type BlockedPayloadRow = JsonRecord;
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
 const SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
@@ -45,14 +36,13 @@ const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
-const PROFILE_COLUMNS =
-  'id, email, contact_email, user_email, auth_email, identity, phone_number, phone, full_name, display_name, "Display name"';
-
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
+
+const MAX_FETCH = 500;
 
 function parseMultiValue(params: URLSearchParams, key: string): string[] {
   const collected = new Set<string>();
@@ -68,6 +58,14 @@ function parseMultiValue(params: URLSearchParams, key: string): string[] {
   return Array.from(collected);
 }
 
+function safeString(value: unknown): string | null {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    return trimmed.length ? trimmed : null;
+  }
+  return null;
+}
+
 function isoString(value: unknown): string | null {
   if (!value) return null;
   if (value instanceof Date) {
@@ -76,71 +74,52 @@ function isoString(value: unknown): string | null {
   if (typeof value === "string") {
     const trimmed = value.trim();
     if (!trimmed) return null;
-    return trimmed;
+    const parsed = new Date(trimmed);
+    return Number.isNaN(parsed.valueOf()) ? trimmed : parsed.toISOString();
   }
   const parsed = new Date(String(value));
   if (Number.isNaN(parsed.valueOf())) return null;
   return parsed.toISOString();
 }
 
-function pickProfileName(row: ViewRow, profile: ProfileRow | null): string | null {
-  const candidates = [
-    row.profile_name,
-    row.profileName,
-    profile?.["Display name"],
-    profile?.display_name,
-    profile?.full_name,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-  return null;
-}
-
-function pickFullName(row: ViewRow, profile: ProfileRow | null): string | null {
-  const candidates = [
-    profile?.full_name,
-    profile?.display_name,
-    profile?.["Display name"],
-    row.profile_name,
-    row.profileName,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-  return null;
-}
-
-function pickEmail(profile: ProfileRow | null): string | null {
+function getProfileValue(profile: ProfileRow, keys: string[]): string | null {
   if (!profile) return null;
-  const candidates = [
-    profile.contact_email,
-    profile.email,
-    profile.user_email,
-    profile.auth_email,
-    profile.identity,
-  ];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
+  const record = profile as JsonRecord;
+  for (const key of keys) {
+    const candidate = safeString(record[key]);
+    if (candidate) return candidate;
   }
   return null;
 }
 
-function pickPhone(profile: ProfileRow | null): string | null {
-  if (!profile) return null;
-  const candidates = [profile.phone, profile.phone_number];
-  for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim()) {
-      return candidate.trim();
-    }
-  }
-  return null;
+function pickProfileName(profile: ProfileRow): string | null {
+  return (
+    getProfileValue(profile, [
+      "profile_name",
+      "profileName",
+      "full_name",
+      "fullName",
+      "display_name",
+      "Display name",
+      "name",
+    ]) ?? null
+  );
+}
+
+function pickProfileEmail(profile: ProfileRow): string | null {
+  return (
+    getProfileValue(profile, [
+      "email",
+      "contact_email",
+      "user_email",
+      "auth_email",
+      "identity",
+    ]) ?? null
+  );
+}
+
+function pickProfilePhone(profile: ProfileRow): string | null {
+  return getProfileValue(profile, ["phone", "phone_number", "contact_phone"]);
 }
 
 function matchesSearch(row: BlockedPayloadRow, lowered: string): boolean {
@@ -155,6 +134,7 @@ function matchesSearch(row: BlockedPayloadRow, lowered: string): boolean {
     row.profile_name,
     row.name,
     row.user_id,
+    row.profile_id,
   ];
   for (const value of fields) {
     if (typeof value === "string" && value.trim()) {
@@ -164,117 +144,130 @@ function matchesSearch(row: BlockedPayloadRow, lowered: string): boolean {
   return pieces.some((piece) => piece.includes(lowered));
 }
 
-async function loadProfiles(ids: string[], emails: string[]): Promise<{ profileMap: Map<string, ProfileRow>; resolvedIds: string[] }> {
-  const profileMap = new Map<string, ProfileRow>();
-  const idSet = new Set<string>(ids.map((value) => value.trim()).filter((value) => value.length > 0));
-  const emailSet = new Set<string>(emails.map((value) => value.trim().toLowerCase()).filter((value) => value.length > 0));
-
-  if (emailSet.size) {
-    const orFilters: string[] = [];
-    for (const email of emailSet) {
-      orFilters.push(`email.ilike.${email}`);
-      orFilters.push(`contact_email.ilike.${email}`);
-      orFilters.push(`user_email.ilike.${email}`);
-      orFilters.push(`auth_email.ilike.${email}`);
-      orFilters.push(`identity.ilike.${email}`);
-    }
-    let query = supabase.from("profiles").select(PROFILE_COLUMNS);
-    if (orFilters.length) {
-      query = query.or(orFilters.join(","));
-    }
-    const { data, error } = await query;
-    if (error) {
-      console.warn("profiles email lookup error", error.message ?? error);
-    } else if (Array.isArray(data)) {
-      for (const row of data) {
-        if (!row || !row.id) continue;
-        const key = String(row.id);
-        profileMap.set(key, row as ProfileRow);
-        idSet.add(key);
-      }
+function matchesEmails(row: BlockedPayloadRow, emailSet: Set<string>): boolean {
+  if (!emailSet.size) return true;
+  const candidates = [
+    row.email,
+    row.contact_email,
+    row.user_email,
+    row.auth_email,
+    row.identity,
+  ];
+  for (const value of candidates) {
+    if (typeof value !== "string" || !value.trim()) continue;
+    if (emailSet.has(value.trim().toLowerCase())) {
+      return true;
     }
   }
-
-  const missingIds = Array.from(idSet).filter((id) => !profileMap.has(id));
-  if (missingIds.length) {
-    const { data, error } = await supabase.from("profiles").select(PROFILE_COLUMNS).in("id", missingIds);
-    if (error) {
-      console.warn("profiles id lookup error", error.message ?? error);
-    } else if (Array.isArray(data)) {
-      for (const row of data) {
-        if (!row || !row.id) continue;
-        const key = String(row.id);
-        if (!profileMap.has(key)) {
-          profileMap.set(key, row as ProfileRow);
-        }
-      }
-    }
-  }
-
-  return { profileMap, resolvedIds: Array.from(idSet) };
+  return false;
 }
 
-async function fetchBannedRows(resolvedIds: string[] | null): Promise<ViewRow[]> {
+function isActiveBan(bannedUntil: unknown): boolean {
+  if (!bannedUntil) return true;
+  if (bannedUntil instanceof Date) {
+    return !Number.isNaN(bannedUntil.valueOf()) && bannedUntil.valueOf() > Date.now();
+  }
+  const iso = isoString(bannedUntil);
+  if (!iso) return true;
+  const ts = Date.parse(iso);
+  if (!Number.isFinite(ts)) return true;
+  return ts > Date.now();
+}
+
+async function fetchBannedRows(userIds: string[] | null): Promise<BannedRow[]> {
   let query = supabase
-    .from("v_profiles_banned")
+    .from("banned_users")
     .select("*")
     .order("banned_until", { ascending: false })
-    .limit(500);
-  if (resolvedIds && resolvedIds.length) {
-    query = query.in("profile_id", resolvedIds);
+    .limit(MAX_FETCH);
+  if (userIds && userIds.length) {
+    query = query.in("user_id", userIds);
   }
   const { data, error } = await query;
   if (error) {
     throw new Error(error.message ?? String(error));
   }
   if (!Array.isArray(data)) return [];
-  return data as ViewRow[];
+  return data as BannedRow[];
 }
 
-function buildPayloadRows(rows: ViewRow[], profileMap: Map<string, ProfileRow>): BlockedPayloadRow[] {
-  return rows
-    .map((row) => {
-      const rawId = row.profile_id ?? row.profileId;
-      if (!rawId) return null;
-      const userId = String(rawId);
-      const profile = profileMap.get(userId) ?? null;
-      const email = pickEmail(profile);
-      const fullName = pickFullName(row, profile);
-      const profileName = pickProfileName(row, profile);
-      const phone = pickPhone(profile);
-      const bannedAt = isoString(row.banned_at ?? row.bannedAt);
-      const bannedUntil = isoString(row.banned_until ?? row.bannedUntil);
-      const updatedAt = isoString(row.updated_at ?? row.updatedAt ?? bannedAt ?? bannedUntil);
+async function fetchProfiles(ids: string[]): Promise<Map<string, JsonRecord>> {
+  const map = new Map<string, JsonRecord>();
+  const uniqueIds = Array.from(new Set(ids.map((value) => value.trim()).filter((value) => value.length > 0)));
+  if (!uniqueIds.length) return map;
+  const { data, error } = await supabase.from("profiles").select("*").in("id", uniqueIds);
+  if (error) {
+    console.warn("profiles lookup error", error.message ?? error);
+    return map;
+  }
+  if (!Array.isArray(data)) return map;
+  for (const row of data) {
+    if (!row || typeof row !== "object" || !("id" in row)) continue;
+    const id = safeString((row as JsonRecord)["id"]);
+    if (!id) continue;
+    map.set(id, row as JsonRecord);
+  }
+  return map;
+}
 
-      const payload: BlockedPayloadRow = {
-        user_id: userId,
-        profile_id: userId,
-        email,
-        contact_email: profile?.contact_email ?? null,
-        user_email: profile?.user_email ?? null,
-        auth_email: profile?.auth_email ?? null,
-        identity: profile?.identity ?? null,
-        full_name: fullName,
-        profile_name: profileName,
-        display_name: profileName,
-        name: profileName ?? fullName ?? null,
-        phone,
-        phone_number: profile?.phone_number ?? null,
-        blocked_at: bannedAt,
-        banned_at: bannedAt,
-        blocked_until: bannedUntil,
-        banned_until: bannedUntil,
-        reason: row.reason ?? null,
-        actor_email: row.actor_email ?? row.actorEmail ?? null,
-        updated_at: updatedAt,
-        checked_at: updatedAt,
-        is_banned_now: row.is_banned_now ?? true,
-        source: "v_profiles_banned",
-      };
+function buildPayloadRow(row: BannedRow, profile: ProfileRow): BlockedPayloadRow | null {
+  const idCandidate = row.user_id ?? row.userId ?? row.profile_id ?? row.profileId;
+  if (!idCandidate) return null;
+  const userId = String(idCandidate);
+  const profileRecord = profile as JsonRecord | null;
+  const rowRecord = row as JsonRecord;
 
-      return payload;
-    })
-    .filter((row): row is BlockedPayloadRow => row !== null);
+  const profileName = pickProfileName(profile);
+  const profileEmail = pickProfileEmail(profile);
+  const profilePhone = pickProfilePhone(profile);
+  const rowEmail =
+    safeString(rowRecord["email"]) ??
+    safeString(rowRecord["user_email"]) ??
+    safeString(rowRecord["contact_email"]) ??
+    safeString(rowRecord["auth_email"]) ??
+    safeString(rowRecord["identity"]);
+
+  const bannedAt =
+    isoString(row.banned_at ?? row.bannedAt ?? row.created_at ?? row.createdAt) ?? null;
+  const bannedUntil = isoString(row.banned_until ?? row.bannedUntil) ?? null;
+  const updatedAt = isoString(row.updated_at ?? row.updatedAt ?? bannedAt ?? bannedUntil) ?? null;
+
+  const contactEmail = profileRecord ? safeString(profileRecord["contact_email"]) : null;
+  const userEmail = profileRecord ? safeString(profileRecord["user_email"]) : null;
+  const authEmail = profileRecord ? safeString(profileRecord["auth_email"]) : null;
+  const identity = profileRecord ? safeString(profileRecord["identity"]) : null;
+  const phoneNumber = profileRecord ? safeString(profileRecord["phone_number"]) : null;
+
+  const reason = safeString(row.reason);
+  const actorEmail = safeString(row.actor_email ?? row.actorEmail);
+
+  const payload: BlockedPayloadRow = {
+    user_id: userId,
+    profile_id: userId,
+    email: rowEmail ?? profileEmail ?? contactEmail ?? userEmail ?? authEmail ?? identity ?? null,
+    contact_email: contactEmail,
+    user_email: userEmail,
+    auth_email: authEmail,
+    identity,
+    full_name: profileName,
+    profile_name: profileName,
+    display_name: profileName,
+    name: profileName,
+    phone: profilePhone,
+    phone_number: phoneNumber ?? profilePhone,
+    blocked_at: bannedAt,
+    banned_at: bannedAt,
+    blocked_until: bannedUntil,
+    banned_until: bannedUntil,
+    reason,
+    actor_email: actorEmail,
+    updated_at: updatedAt,
+    checked_at: updatedAt,
+    is_banned_now: isActiveBan(bannedUntil),
+    source: "banned_users",
+  };
+
+  return payload;
 }
 
 serve(async (req) => {
@@ -290,52 +283,91 @@ serve(async (req) => {
 
   const url = new URL(req.url);
   const search = url.searchParams.get("q");
+  const includeExpired = url.searchParams.get("includeExpired") === "true";
   const limitParam = Number(url.searchParams.get("limit") ?? "200");
-  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.trunc(limitParam), 1), 500) : 200;
+  const limit = Number.isFinite(limitParam) ? Math.min(Math.max(Math.trunc(limitParam), 1), MAX_FETCH) : 200;
 
-  const requestedIds = parseMultiValue(url.searchParams, "userId");
-  const requestedEmails = parseMultiValue(url.searchParams, "email");
+  const requestedIds = parseMultiValue(url.searchParams, "userId").map((value) => value.trim()).filter(Boolean);
+  const requestedEmails = parseMultiValue(url.searchParams, "email")
+    .map((value) => value.trim().toLowerCase())
+    .filter(Boolean);
 
-  const { profileMap, resolvedIds } = await loadProfiles(requestedIds, requestedEmails);
-
-  if (requestedEmails.length && !resolvedIds.length) {
-    const emptyBody = {
-      blockedUsers: [] as BlockedPayloadRow[],
-      blockedTotal: 0,
-      includeExpired: false,
-      query: search,
-      source: "v_profiles_banned",
-      generatedAt: new Date().toISOString(),
-    };
-    return new Response(JSON.stringify(emptyBody), {
-      status: 200,
-      headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
-    });
-  }
-
-  let viewRows: ViewRow[] = [];
+  let bannedRows: BannedRow[] = [];
   try {
-    viewRows = await fetchBannedRows(resolvedIds.length ? resolvedIds : null);
+    bannedRows = await fetchBannedRows(requestedIds.length ? requestedIds : null);
   } catch (err) {
-    console.error("v_profiles_banned view error", err instanceof Error ? err.message : err);
+    console.error(
+      "banned_users query error",
+      err instanceof Error ? err.message : err,
+    );
     return new Response(
-      JSON.stringify({ error: "No se pudo leer la vista v_profiles_banned. Verifica que exista y que el servicio tenga acceso." }),
+      JSON.stringify({ error: "No se pudo leer la tabla banned_users. Verifica que exista y que el servicio tenga acceso." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json; charset=utf-8" } },
     );
   }
 
-  const payloadRows = buildPayloadRows(viewRows, profileMap);
+  const allProfileIds = new Set<string>();
+  for (const row of bannedRows) {
+    const candidate = row.user_id ?? row.userId ?? row.profile_id ?? row.profileId;
+    if (candidate) {
+      allProfileIds.add(String(candidate));
+    }
+  }
+  requestedIds.forEach((id) => allProfileIds.add(id));
+
+  const profileMap = await fetchProfiles(Array.from(allProfileIds));
+
+  const payloadRows: BlockedPayloadRow[] = [];
+  bannedRows.forEach((row) => {
+    const candidate = row.user_id ?? row.userId ?? row.profile_id ?? row.profileId;
+    if (!candidate) return;
+    const key = String(candidate);
+    const profile = profileMap.get(key) ?? null;
+    const mapped = buildPayloadRow(row, profile);
+    if (mapped) {
+      if (!mapped.email && profile) {
+        const fallbackEmail = pickProfileEmail(profile);
+        if (fallbackEmail) mapped.email = fallbackEmail;
+      }
+      payloadRows.push(mapped);
+    }
+  });
+
+  const emailSet = new Set(requestedEmails);
+  const filteredByEmail = payloadRows.filter((row) => matchesEmails(row, emailSet));
+  const effectiveRows = emailSet.size ? filteredByEmail : payloadRows;
+
+  const activeFiltered = includeExpired
+    ? effectiveRows
+    : effectiveRows.filter((row) => isActiveBan(row.blocked_until ?? row.banned_until ?? null));
+
   const lowered = typeof search === "string" ? search.trim().toLowerCase() : "";
-  const filtered = lowered ? payloadRows.filter((row) => matchesSearch(row, lowered)) : payloadRows;
-  const total = filtered.length;
-  const sliced = filtered.slice(0, limit);
+  const searched = lowered ? activeFiltered.filter((row) => matchesSearch(row, lowered)) : activeFiltered;
+
+  searched.sort((a, b) => {
+    const untilA = isoString(a.blocked_until ?? a.banned_until);
+    const untilB = isoString(b.blocked_until ?? b.banned_until);
+    const untilTsA = untilA ? Date.parse(untilA) : Number.POSITIVE_INFINITY;
+    const untilTsB = untilB ? Date.parse(untilB) : Number.POSITIVE_INFINITY;
+    if (untilTsA !== untilTsB) {
+      return untilTsB - untilTsA;
+    }
+    const sinceA = isoString(a.blocked_at ?? a.banned_at);
+    const sinceB = isoString(b.blocked_at ?? b.banned_at);
+    const sinceTsA = sinceA ? Date.parse(sinceA) : 0;
+    const sinceTsB = sinceB ? Date.parse(sinceB) : 0;
+    return sinceTsB - sinceTsA;
+  });
+
+  const total = searched.length;
+  const sliced = searched.slice(0, limit);
 
   const body = {
     blockedUsers: sliced,
     blockedTotal: total,
-    includeExpired: false,
+    includeExpired,
     query: search,
-    source: "v_profiles_banned",
+    source: "banned_users",
     generatedAt: new Date().toISOString(),
   };
 
