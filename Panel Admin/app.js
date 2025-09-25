@@ -956,11 +956,18 @@ async function enrichUsersWithActiveBlocks(users, payload){
     if (Array.isArray(arr)) arr.forEach(register);
   });
   const missingIds = ids.filter((id) => !blockMap.has(id));
-  if (missingIds.length && sb?.rpc) {
+  if (missingIds.length && sb?.from) {
     try {
-      const { data, error } = await sb.rpc('admin_list_active_blocks', { user_ids: missingIds });
+      const { data, error } = await sb
+        .from('v_profiles_banned')
+        .select('*')
+        .in('profile_id', missingIds);
       if (!error && Array.isArray(data)) {
-        data.forEach(register);
+        await hydrateViewEntries(data);
+        data
+          .map(prepareViewEntry)
+          .filter(Boolean)
+          .forEach(register);
       }
     } catch (err) {
       console.warn('No se pudieron consultar los bloqueos activos', err);

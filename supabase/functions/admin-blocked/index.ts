@@ -8,20 +8,45 @@ type BlockRow = {
   profileId?: string;
   uid?: string;
   id?: string;
+  user?: string;
   email?: string;
   user_email?: string;
   contact_email?: string;
+  auth_email?: string;
+  authEmail?: string;
+  identity?: string;
   full_name?: string;
+  fullName?: string;
   display_name?: string;
   name?: string;
+  profile_name?: string;
+  profileName?: string;
   blocked_at?: string | Date | null;
   blocked_until?: string | Date | null;
+  blockedAt?: string | Date | null;
+  blockedUntil?: string | Date | null;
+  banned_at?: string | Date | null;
+  bannedAt?: string | Date | null;
+  banned_until?: string | Date | null;
+  bannedUntil?: string | Date | null;
+  created_at?: string | Date | null;
+  createdAt?: string | Date | null;
   reason?: string | null;
   note?: string | null;
   detail?: string | null;
   motive?: string | null;
   notes?: string | null;
+  actor_email?: string | null;
+  actorEmail?: string | null;
   source?: string | null;
+  phone?: string | null;
+  phone_number?: string | null;
+  phoneNumber?: string | null;
+  contact_phone?: string | null;
+  contactPhone?: string | null;
+  is_banned_now?: boolean;
+  isBannedNow?: boolean;
+  [key: string]: unknown;
 };
 
 type NormalizedBlock = {
@@ -61,25 +86,38 @@ function normalizeRecord(entry: BlockRow, fallbackSource: string): NormalizedBlo
     entry.profile_id ||
     entry.profileId ||
     entry.uid ||
-    entry.id;
+    entry.id ||
+    entry.user;
   if (!id) return null;
 
   const email =
     entry.email ||
     entry.user_email ||
     entry.contact_email ||
+    entry.auth_email ||
+    entry.authEmail ||
+    entry.identity ||
     null;
   const name =
     entry.full_name ||
+    entry.fullName ||
     entry.display_name ||
+    entry.profile_name ||
+    entry.profileName ||
     entry.name ||
     null;
   const since =
     parseDate(entry.blocked_at) ||
-    parseDate((entry as Record<string, unknown>)["blockedAt"]);
+    parseDate(entry.blockedAt) ||
+    parseDate(entry.banned_at) ||
+    parseDate(entry.bannedAt) ||
+    parseDate(entry.created_at) ||
+    parseDate(entry.createdAt);
   const until =
     parseDate(entry.blocked_until) ||
-    parseDate((entry as Record<string, unknown>)["blockedUntil"]);
+    parseDate(entry.blockedUntil) ||
+    parseDate(entry.banned_until) ||
+    parseDate(entry.bannedUntil);
   const reason =
     entry.reason ||
     entry.note ||
@@ -138,18 +176,186 @@ function sortBlocks(records: NormalizedBlock[]): NormalizedBlock[] {
   return copy;
 }
 
-async function fetchViaRpc(userIds: string[] | null): Promise<NormalizedBlock[] | null> {
-  const payload = userIds && userIds.length ? { user_ids: userIds } : { user_ids: null };
-  const { data, error } = await supabase.rpc("admin_list_active_blocks", payload as Record<string, unknown>);
-  if (error || !Array.isArray(data)) {
-    console.warn("admin_list_active_blocks RPC fallback", error?.message || error);
+async function hydrateViewEntries(entries: BlockRow[]): Promise<BlockRow[]> {
+  if (!Array.isArray(entries) || !entries.length) return entries;
+
+  const needProfileInfo = entries.filter((entry) => {
+    if (!entry || typeof entry !== "object") return false;
+    const hasEmail =
+      entry.email ||
+      entry.user_email ||
+      entry.contact_email ||
+      entry.auth_email ||
+      entry.authEmail ||
+      entry.identity;
+    const hasPhone = entry.phone || entry.phone_number || entry.phoneNumber || entry.contact_phone || entry.contactPhone;
+    const hasName =
+      entry.full_name ||
+      entry.fullName ||
+      entry.display_name ||
+      entry.profile_name ||
+      entry.profileName ||
+      entry.name;
+    return !hasEmail || !hasPhone || !hasName;
+  });
+
+  if (!needProfileInfo.length) return entries;
+
+  const ids = Array.from(
+    new Set(
+      needProfileInfo
+        .map((entry) =>
+          entry.profile_id ||
+          entry.profileId ||
+          entry.user_id ||
+          entry.userId ||
+          entry.uid ||
+          entry.id,
+        )
+        .filter(Boolean)
+        .map((value) => String(value)),
+    ),
+  );
+
+  if (!ids.length) return entries;
+
+  const { data, error } = await supabase
+    .from("profiles")
+    .select(
+      "id, email, user_email, contact_email, auth_email, identity, phone_number, phone, full_name, display_name, \"Display name\"",
+    )
+    .in("id", ids);
+
+  if (error) {
+    console.warn("profiles hydrate error", error.message ?? error);
+    return entries;
+  }
+
+  if (!Array.isArray(data) || !data.length) return entries;
+
+  const profileMap = new Map<string, BlockRow>(
+    (data as BlockRow[]).map((row) => [String(row.id), row]),
+  );
+
+  needProfileInfo.forEach((entry) => {
+    const key =
+      entry.profile_id ||
+      entry.profileId ||
+      entry.user_id ||
+      entry.userId ||
+      entry.uid ||
+      entry.id;
+    if (!key) return;
+    const profile = profileMap.get(String(key));
+    if (!profile) return;
+
+    const displayName =
+      profile.profile_name ||
+      profile.profileName ||
+      profile.full_name ||
+      profile.fullName ||
+      profile.display_name ||
+      profile.name ||
+      (profile["Display name"] as string | undefined) ||
+      null;
+    if (displayName) {
+      if (!entry.profile_name) entry.profile_name = displayName;
+      if (!entry.full_name) entry.full_name = displayName;
+      if (!entry.display_name) entry.display_name = displayName;
+      if (!entry.name) entry.name = displayName;
+    }
+
+    const resolvedEmail =
+      entry.email ||
+      entry.user_email ||
+      entry.contact_email ||
+      entry.auth_email ||
+      entry.authEmail ||
+      entry.identity;
+
+    if (!resolvedEmail) {
+      entry.contact_email = (profile.contact_email as string | null | undefined) ?? entry.contact_email ?? null;
+      entry.user_email =
+        (profile.user_email as string | null | undefined) ||
+        (profile.email as string | null | undefined) ||
+        entry.user_email ||
+        null;
+      entry.auth_email = (profile.auth_email as string | null | undefined) ?? entry.auth_email ?? null;
+      entry.identity = (profile.identity as string | null | undefined) ?? entry.identity ?? null;
+      entry.email =
+        (profile.email as string | null | undefined) ||
+        (profile.contact_email as string | null | undefined) ||
+        (profile.user_email as string | null | undefined) ||
+        (profile.auth_email as string | null | undefined) ||
+        (profile.identity as string | null | undefined) ||
+        null;
+    }
+
+    if (!entry.phone && !entry.phone_number && !entry.phoneNumber && !entry.contact_phone && !entry.contactPhone) {
+      entry.phone_number =
+        (profile.phone_number as string | null | undefined) ||
+        (profile.phone as string | null | undefined) ||
+        entry.phone_number ||
+        null;
+    }
+  });
+
+  return entries;
+}
+
+async function fetchFromView(userIds: string[] | null): Promise<NormalizedBlock[] | null> {
+  let query = supabase.from("v_profiles_banned").select("*");
+  if (userIds && userIds.length) {
+    query = query.in("profile_id", userIds);
+  }
+
+  const { data, error } = await query;
+  if (error) {
+    console.warn("v_profiles_banned view error", error.message ?? error);
     return null;
   }
+
+  if (!Array.isArray(data)) return [];
+
+  const viewRows = await hydrateViewEntries(data as BlockRow[]);
+
   const normalized: NormalizedBlock[] = [];
-  for (const row of data as BlockRow[]) {
-    const mapped = normalizeRecord(row, "rpc");
+  for (const row of viewRows) {
+    const candidate: BlockRow = { ...row };
+    const idCandidate =
+      candidate.user_id ||
+      candidate.profile_id ||
+      candidate.profileId ||
+      candidate.userId ||
+      candidate.uid ||
+      candidate.id;
+    if (!idCandidate) continue;
+    candidate.user_id = String(idCandidate);
+
+    if (!candidate.blocked_at) {
+      candidate.blocked_at =
+        candidate.banned_at ||
+        candidate.bannedAt ||
+        candidate.blockedAt ||
+        candidate.created_at ||
+        candidate.createdAt ||
+        null;
+    }
+
+    if (!candidate.blocked_until) {
+      candidate.blocked_until = candidate.banned_until || candidate.bannedUntil || candidate.blockedUntil || null;
+    }
+
+    if (!candidate.source) candidate.source = "view";
+
+    if (!candidate.reason) {
+      candidate.reason = candidate.note || candidate.detail || candidate.motive || candidate.notes || null;
+    }
+
+    const mapped = normalizeRecord(candidate, "view");
     if (mapped) normalized.push(mapped);
   }
+
   return normalized;
 }
 
@@ -208,8 +414,8 @@ serve(async (req) => {
   const idParams = url.searchParams.getAll("userId").map((value) => value.trim()).filter(Boolean);
   const userIds = idParams.length ? Array.from(new Set(idParams)) : null;
 
-  let data = await fetchViaRpc(userIds);
-  let source = "rpc";
+  let data = await fetchFromView(userIds);
+  let source = "view";
   if (!data) {
     data = await fetchFromProfiles(userIds);
     source = "profiles";
