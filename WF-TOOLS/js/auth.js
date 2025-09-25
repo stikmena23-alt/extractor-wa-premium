@@ -16,15 +16,17 @@
   const FUNCTIONS_BASE = SUPABASE_URL.replace(".supabase.co", ".functions.supabase.co");
   const CLIENT_ACCOUNT_ENDPOINT = `${FUNCTIONS_BASE}/client-account`;
 
-  const loginScreen = document.getElementById("loginScreen");
-  const loginForm = document.getElementById("loginForm");
-  const loginEmail = document.getElementById("loginEmail");
-  const loginPassword = document.getElementById("loginPassword");
-  const loginTogglePassword = document.getElementById("loginTogglePassword");
-  const loginRemember = document.getElementById("loginRemember");
-  const loginBtn = document.getElementById("loginBtn");
-  const loginError = document.getElementById("loginError");
-  const loginLoading = document.getElementById("loginLoading");
+  const loginModule = global.WFLoginModule?.init?.({ storage: global.localStorage }) || null;
+  const loginEls = (loginModule && loginModule.elements) || {};
+  const loginScreen = loginEls.screen || document.getElementById("loginScreen");
+  const loginForm = loginEls.form || document.getElementById("loginForm");
+  const loginEmail = loginEls.email || document.getElementById("loginEmail");
+  const loginPassword = loginEls.password || document.getElementById("loginPassword");
+  const loginTogglePassword = loginEls.togglePassword || document.getElementById("loginTogglePassword");
+  const loginRemember = loginEls.remember || document.getElementById("loginRemember");
+  const loginBtn = loginEls.button || document.getElementById("loginBtn");
+  const loginError = loginEls.error || document.getElementById("loginError");
+  const loginLoading = loginEls.loading || document.getElementById("loginLoading");
   const adminPanelBtn = document.getElementById("adminPanelBtn");
   const adminPanelBtnInline = document.getElementById("adminPanelBtnInline");
   const accountAdminShortcut = document.getElementById("accountAdminShortcut");
@@ -51,18 +53,91 @@
   const bodyEl = document.body;
   const sessionLoading = document.getElementById("sessionLoading");
   const sessionLoadingMessage = document.getElementById("sessionLoadingMessage");
-  const registerForm = document.getElementById("registerForm");
-  const showRegisterBtn = document.getElementById("showRegisterBtn");
-  const btnBackLogin = document.getElementById("btnBackLogin");
-  const btnRegister = document.getElementById("btnRegister");
-  const registerError = document.getElementById("registerError");
-  const registerSuccess = document.getElementById("registerSuccess");
-  const registerUsernameEl = document.getElementById("registerUsername");
-  const registerUserEmailEl = document.getElementById("registerUserEmail");
-  const regNameInput = document.getElementById("reg_name");
-  const regEmailInput = document.getElementById("reg_email");
-  const regPhoneInput = document.getElementById("reg_phone");
-  const regPasswordInput = document.getElementById("reg_password");
+  const registerModule = global.WFRegisterModule?.init?.() || null;
+  const registerEls = (registerModule && registerModule.elements) || {};
+  const registerForm = registerEls.form || document.getElementById("registerForm");
+  const showRegisterBtn = registerEls.showButton || document.getElementById("showRegisterBtn");
+  const btnBackLogin = registerEls.backButton || document.getElementById("btnBackLogin");
+  const btnRegister = registerEls.submitButton || document.getElementById("btnRegister");
+  const registerErrorEl = registerEls.error || document.getElementById("registerError");
+  const registerSuccessEl = registerEls.success || document.getElementById("registerSuccess");
+  const registerUsernameEl = registerEls.username || document.getElementById("registerUsername");
+  const registerUserEmailEl = registerEls.userEmail || document.getElementById("registerUserEmail");
+  const regNameInput = registerEls.nameInput || document.getElementById("reg_name");
+  const regEmailInput = registerEls.emailInput || document.getElementById("reg_email");
+  const regPhoneInput = registerEls.phoneInput || document.getElementById("reg_phone");
+  const regPasswordInput = registerEls.passwordInput || document.getElementById("reg_password");
+
+  const storageAvailable = loginModule?.isStorageAvailable?.() ?? false;
+  const setRememberedEmail = loginModule?.setRememberedEmail?.bind(loginModule) || (() => {});
+  const getRememberedEmail = loginModule?.getRememberedEmail?.bind(loginModule) || (() => "");
+  const clearRememberedEmail = loginModule?.clearRememberedEmail?.bind(loginModule) || (() => {});
+  const restoreRememberedEmail = loginModule?.restoreRememberedEmail?.bind(loginModule) || (() => {});
+  const resetPasswordToggle = loginModule?.resetPasswordToggle?.bind(loginModule) || (() => {
+    if (loginTogglePassword) {
+      loginTogglePassword.textContent = "Mostrar";
+      loginTogglePassword.setAttribute("aria-pressed", "false");
+      loginTogglePassword.setAttribute("aria-label", "Mostrar contraseña");
+    }
+    if (loginPassword) {
+      loginPassword.type = "password";
+    }
+  });
+  const toggleLoginButton = loginModule?.toggleButton?.bind(loginModule) || ((disabled) => {
+    if (loginBtn) loginBtn.disabled = !!disabled;
+  });
+  const showLoading = loginModule?.showLoading?.bind(loginModule) || ((show) => {
+    if (loginLoading) loginLoading.style.display = show ? "block" : "none";
+  });
+  const showError = loginModule?.showError?.bind(loginModule) || ((message) => {
+    if (!loginError) return;
+    const text = message || "";
+    loginError.textContent = text;
+    loginError.style.display = text ? "block" : "none";
+  });
+  const resetLoginForm = loginModule?.resetForm?.bind(loginModule) || (() => {
+    loginForm?.reset?.();
+    showError("");
+    showLoading(false);
+    toggleLoginButton(false);
+    restoreRememberedEmail();
+    resetPasswordToggle();
+  });
+  const clearRegisterFeedback = registerModule?.clearFeedback?.bind(registerModule) || ((options = {}) => {
+    const { keepSuccess = false } = options;
+    if (registerErrorEl) {
+      registerErrorEl.textContent = "";
+      registerErrorEl.style.display = "none";
+    }
+    if (!keepSuccess && registerSuccessEl) {
+      registerSuccessEl.hidden = true;
+    }
+  });
+  const showRegisterError = registerModule?.showError?.bind(registerModule) || ((message) => {
+    if (!registerErrorEl) return;
+    const text = message || "";
+    registerErrorEl.textContent = text;
+    registerErrorEl.style.display = text ? "block" : "none";
+    if (text) {
+      registerErrorEl.focus?.();
+    }
+  });
+  const setRegisterLoading = registerModule?.setLoading?.bind(registerModule) || ((isLoading) => {
+    if (btnRegister) {
+      btnRegister.disabled = !!isLoading;
+      btnRegister.classList.toggle("loading", !!isLoading);
+    }
+  });
+  const toggleRegisterInputs = registerModule?.toggleInputs?.bind(registerModule) || ((disabled) => {
+    [regNameInput, regEmailInput, regPhoneInput, regPasswordInput].forEach((input) => {
+      if (input) input.disabled = !!disabled;
+    });
+  });
+  const showRegisterSuccess = registerModule?.showSuccess?.bind(registerModule) || ((payload = {}) => {
+    if (registerUsernameEl) registerUsernameEl.textContent = payload.username || "-";
+    if (registerUserEmailEl) registerUserEmailEl.textContent = payload.email || "-";
+    if (registerSuccessEl) registerSuccessEl.hidden = false;
+  });
 
   let lastCreditsValue = null;
   let maxCreditsSeen = 0;
@@ -73,30 +148,11 @@
   let currentProfile = null;
   let sessionActive = false;
   let revalidationPromise = null;
+  let lastBroadcastedCredits = null;
   const ADMIN_PREFIXES = ["admin.", "sup."];
   const creditFormatter = new Intl.NumberFormat("es-CO");
-  const REMEMBER_KEY = "wf-tools.login.remembered-email";
-  const STORAGE_TEST_KEY = "wf-tools.login.storage-test";
-  const storage = global.localStorage;
-  let storageAvailable = false;
-
-  try {
-    if (storage) {
-      const testValue = String(Date.now());
-      storage.setItem(STORAGE_TEST_KEY, testValue);
-      const storedValue = storage.getItem(STORAGE_TEST_KEY);
-      storage.removeItem(STORAGE_TEST_KEY);
-      storageAvailable = storedValue === testValue;
-    }
-  } catch (_err) {
-    storageAvailable = false;
-  }
 
   updateAdminAccessUI(getRememberedEmail());
-
-  function toggleLoginButton(disabled) {
-    if (loginBtn) loginBtn.disabled = !!disabled;
-  }
 
   function toggleLogoutButton(disabled) {
     if (logoutBtn) logoutBtn.disabled = !!disabled;
@@ -282,6 +338,70 @@
     updateAdminAccessUI(candidateEmail);
   }
 
+  function resolveDisplayName(profileOverride) {
+    const profileSource = profileOverride || currentProfile || {};
+    let displayName =
+      profileSource.full_name ||
+      profileSource.display_name ||
+      profileSource.name ||
+      profileSource.owner_name ||
+      profileSource.contact_name ||
+      null;
+    if (!displayName && currentAuthUser) {
+      displayName =
+        currentAuthUser.user_metadata?.full_name ||
+        currentAuthUser.user_metadata?.name ||
+        currentAuthUser.user_metadata?.display_name ||
+        null;
+    }
+    if (!displayName && currentSessionEmail) {
+      displayName = deriveNameFromEmail(currentSessionEmail);
+    }
+    return (displayName || "-").toString().trim();
+  }
+
+  function broadcastUserInfo({ profileOverride = null, creditsOverride, planOverride, force = false } = {}) {
+    if (typeof window === "undefined" || !window.parent || window.parent === window) return;
+    const email = currentSessionEmail || currentAuthUser?.email || "-";
+    const planName = (planOverride || profileOverride?.plan || currentProfile?.plan || planNameEl?.textContent || "-")
+      .toString()
+      .trim();
+    let creditsValue = creditsOverride;
+    if (creditsValue == null) {
+      if (Number.isFinite(lastCreditsValue)) {
+        creditsValue = lastCreditsValue;
+      } else {
+        creditsValue = getCreditsFromUi();
+      }
+    }
+    let numericCredits = Number(creditsValue);
+    let creditsToSend = creditsValue;
+    if (Number.isFinite(numericCredits)) {
+      numericCredits = Math.max(0, Math.floor(numericCredits));
+      creditsToSend = numericCredits;
+    } else {
+      numericCredits = null;
+      creditsToSend = "-";
+    }
+    if (!force && numericCredits !== null && lastBroadcastedCredits !== null && numericCredits === lastBroadcastedCredits) {
+      return;
+    }
+    const payload = {
+      type: "wftools-user-info",
+      name: resolveDisplayName(profileOverride),
+      email: (email || "-").toString().trim() || "-",
+      plan: planName || "-",
+      credits: creditsToSend,
+      isAdmin: isPrivilegedEmail(email),
+    };
+    try {
+      window.parent.postMessage(payload, "*");
+      lastBroadcastedCredits = numericCredits;
+    } catch (err) {
+      console.warn("No se pudo notificar al contenedor principal", err);
+    }
+  }
+
   function renderCreditState(rawCredits) {
     if (!creditStatusEl) return;
     const hasValue = typeof rawCredits === "number" && Number.isFinite(rawCredits);
@@ -301,6 +421,7 @@
       }
       lastCreditsValue = null;
       maxCreditsSeen = 0;
+      lastBroadcastedCredits = null;
       return;
     }
 
@@ -346,80 +467,7 @@
     }
 
     lastCreditsValue = credits;
-  }
-
-  function showLoading(show) {
-    if (loginLoading) loginLoading.style.display = show ? "block" : "none";
-  }
-
-  function showError(message) {
-    if (!loginError) return;
-    loginError.textContent = message || "";
-    loginError.style.display = message ? "block" : "none";
-  }
-
-  function resetLoginForm() {
-    loginForm?.reset();
-    showError("");
-    showLoading(false);
-    toggleLoginButton(false);
-    restoreRememberedEmail();
-    resetPasswordToggle();
-  }
-
-  function setRememberedEmail(value) {
-    if (!storageAvailable) return;
-    try {
-      if (value) {
-        storage.setItem(REMEMBER_KEY, value);
-      }
-    } catch (err) {
-      console.warn("No se pudo recordar el correo", err);
-    }
-  }
-
-  function getRememberedEmail() {
-    if (!storageAvailable) return "";
-    try {
-      return storage.getItem(REMEMBER_KEY) || "";
-    } catch (_err) {
-      return "";
-    }
-  }
-
-  function clearRememberedEmail() {
-    if (!storageAvailable) return;
-    try {
-      storage.removeItem(REMEMBER_KEY);
-    } catch (err) {
-      console.warn("No se pudo limpiar el correo recordado", err);
-    }
-  }
-
-  function restoreRememberedEmail() {
-    if (!storageAvailable || !loginEmail) return;
-    try {
-      const remembered = getRememberedEmail();
-      if (remembered) {
-        loginEmail.value = remembered;
-        if (loginRemember) loginRemember.checked = true;
-      } else if (loginRemember) {
-        loginRemember.checked = false;
-      }
-    } catch (err) {
-      if (loginRemember) loginRemember.checked = false;
-    }
-  }
-
-  function resetPasswordToggle() {
-    if (loginTogglePassword) {
-      loginTogglePassword.textContent = "Mostrar";
-      loginTogglePassword.setAttribute("aria-pressed", "false");
-      loginTogglePassword.setAttribute("aria-label", "Mostrar contraseña");
-    }
-    if (loginPassword) {
-      loginPassword.type = "password";
-    }
+    broadcastUserInfo({ creditsOverride: credits });
   }
 
   function clearCreditsUI() {
@@ -431,6 +479,7 @@
     if (userPlanEl) userPlanEl.textContent = "-";
     if (creditsChip) creditsChip.style.display = "none";
     renderCreditState(null);
+    lastBroadcastedCredits = null;
     if (logoutBtn) {
       logoutBtn.style.display = "none";
       logoutBtn.disabled = false;
@@ -504,53 +553,7 @@
     global.AppCore?.setCreditDependentActionsEnabled((safeCredits || 0) > 0);
     applyProfileIdentity(profile);
     updateAdminAccessUI(currentSessionEmail);
-
-    // After updating the UI with profile information, send the current user info to the parent
-    // frame so it can update its menu display.  We compute a display name similar to
-    // applyProfileIdentity logic: first try the profile's explicit name fields, then metadata,
-    // and finally derive from the email.  Credits are sent as a numeric value or a hyphen
-    // if unavailable.  The admin flag is determined by the privileged email prefixes.
-    try {
-      if (typeof window !== "undefined" && window.parent && window.parent !== window) {
-        let displayName = null;
-        if (profile) {
-          displayName =
-            profile.full_name ||
-            profile.display_name ||
-            profile.name ||
-            profile.owner_name ||
-            profile.contact_name ||
-            null;
-        }
-        if (!displayName && currentAuthUser) {
-          displayName =
-            currentAuthUser.user_metadata?.full_name ||
-            currentAuthUser.user_metadata?.name ||
-            currentAuthUser.user_metadata?.display_name ||
-            null;
-        }
-        if (!displayName) {
-          displayName = currentSessionEmail ? deriveNameFromEmail(currentSessionEmail) : null;
-        }
-        const nameToSend = (displayName || "-").toString().trim();
-        const emailToSend = currentSessionEmail || "-";
-        const creditsToSend = safeCredits != null ? safeCredits : "-";
-        const isAdmin = isPrivilegedEmail(emailToSend);
-        window.parent.postMessage(
-          {
-            type: "wftools-user-info",
-            name: nameToSend,
-            email: emailToSend,
-            plan: planName,
-            credits: creditsToSend,
-            isAdmin: isAdmin,
-          },
-          "*"
-        );
-      }
-    } catch (_err) {
-      /* noop */
-    }
+    broadcastUserInfo({ profileOverride: profile, creditsOverride: safeCredits, planOverride: planName, force: true });
   }
 
   function applyProfileIdentity(profile) {
@@ -873,46 +876,16 @@
     throw lastError || new Error("No se pudo generar un usuario único.");
   }
 
-  function toggleRegisterInputs(disabled) {
-    [regNameInput, regEmailInput, regPhoneInput, regPasswordInput].forEach((input) => {
-      if (input) input.disabled = !!disabled;
-    });
-  }
-
-  function setRegisterLoading(isLoading) {
-    if (!btnRegister) return;
-    btnRegister.disabled = !!isLoading;
-    btnRegister.classList.toggle("loading", !!isLoading);
-  }
-
-  function clearRegisterFeedback(options = {}) {
-    const { keepSuccess = false } = options;
-    if (registerError) {
-      registerError.textContent = "";
-      registerError.style.display = "none";
-    }
-    if (!keepSuccess && registerSuccess) {
-      registerSuccess.hidden = true;
-    }
-  }
-
-  function showRegisterError(message) {
-    if (!registerError) return;
-    registerError.textContent = message || "";
-    registerError.style.display = message ? "block" : "none";
-    if (message) {
-      registerError.focus?.();
-    }
-  }
-
-  function showRegisterSuccess({ username, email }) {
-    if (registerUsernameEl) registerUsernameEl.textContent = username || "-";
-    if (registerUserEmailEl) registerUserEmailEl.textContent = email || "-";
-    if (registerSuccess) registerSuccess.hidden = false;
-  }
-
   function switchAuthView(view) {
     if (!loginForm || !registerForm) return;
+    if (registerModule && typeof registerModule.switchView === "function") {
+      registerModule.switchView(view, {
+        loginForm,
+        loginEmail,
+        onShowLogin: () => updateAdminAccessUI(loginEmail?.value || getRememberedEmail()),
+      });
+      return;
+    }
     const showRegister = view === "register";
     loginForm.classList.toggle("is-hidden", showRegister);
     registerForm.classList.toggle("is-hidden", !showRegister);
@@ -923,19 +896,19 @@
       try {
         regNameInput?.focus({ preventScroll: true });
       } catch (_err) {
-        regNameInput?.focus();
+        regNameInput?.focus?.();
       }
-    } else {
-      clearRegisterFeedback();
-      setRegisterLoading(false);
-      toggleRegisterInputs(false);
-      registerForm.reset?.();
-      try {
-        loginEmail?.focus({ preventScroll: true });
-      } catch (_err) {
-        loginEmail?.focus();
-      }
-      updateAdminAccessUI(loginEmail?.value || getRememberedEmail());
+      return;
+    }
+    clearRegisterFeedback();
+    setRegisterLoading(false);
+    toggleRegisterInputs(false);
+    registerForm.reset?.();
+    updateAdminAccessUI(loginEmail?.value || getRememberedEmail());
+    try {
+      loginEmail?.focus({ preventScroll: true });
+    } catch (_err) {
+      loginEmail?.focus?.();
     }
   }
 
@@ -1151,32 +1124,50 @@
     }
   }
 
-  async function spendCredit() {
-    const session = await ensureActiveSession();
+  async function performSpendCredit() {
+    try {
+      const session = await ensureActiveSession();
 
-    if (!session) {
-      showSessionToast("Tu sesión expiró. Inicia sesión para continuar.", "danger");
-      showLoginUI("Tu sesión expiró. Inicia sesión para continuar.", "closed");
-      return false;
-    }
-
-    const { error } = await supabase.rpc("spend_credit");
-    if (error) {
-      if ((error.message || "").includes("NO_CREDITS")) {
-        showSessionToast("Sin créditos disponibles. Pulsa el botón en la esquina inferior izquierda para recargar.", "danger");
-        global.AppCore?.setCreditDependentActionsEnabled(false);
-      } else {
-        showSessionToast(error.message || "No se pudo consumir un crédito.", "danger");
+      if (!session) {
+        showSessionToast("Tu sesión expiró. Inicia sesión para continuar.", "danger");
+        showLoginUI("Tu sesión expiró. Inicia sesión para continuar.", "closed");
+        return false;
       }
+
+      const { error } = await supabase.rpc("spend_credit");
+      if (error) {
+        if ((error.message || "").includes("NO_CREDITS")) {
+          showSessionToast("Sin créditos disponibles. Pulsa el botón en la esquina inferior izquierda para recargar.", "danger");
+          global.AppCore?.setCreditDependentActionsEnabled(false);
+        } else {
+          showSessionToast(error.message || "No se pudo consumir un crédito.", "danger");
+        }
+        await updateCredits();
+        return false;
+      }
+
+      const currentUi = getCreditsFromUi();
+      const next = Math.max(0, currentUi - 1);
+      renderCreditState(next);
+      global.AppCore?.setCreditDependentActionsEnabled(next > 0);
+      return true;
+    } catch (err) {
+      console.error("Error inesperado al consumir créditos", err);
+      showSessionToast("No se pudo consumir un crédito. Intenta nuevamente.", "danger");
       await updateCredits();
       return false;
     }
+  }
 
-    const currentUi = getCreditsFromUi();
-    const next = Math.max(0, currentUi - 1);
-    renderCreditState(next);
-    global.AppCore?.setCreditDependentActionsEnabled(next > 0);
-    return true;
+  let spendCreditChain = Promise.resolve();
+
+  function spendCredit() {
+    const next = spendCreditChain.then(() => performSpendCredit());
+    spendCreditChain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
   }
 
   async function init() {
@@ -1299,4 +1290,88 @@
     revalidateSessionState,
     getCurrentUserEmail: () => currentSessionEmail,
   };
+
+  function sendBridgeResponse(type, requestId, payload){
+    if (!requestId) return;
+    try {
+      window.parent?.postMessage(Object.assign({ type, requestId }, payload), '*');
+    } catch (err) {
+      console.warn('No se pudo enviar la respuesta al contenedor principal', err);
+    }
+  }
+
+  window.addEventListener('message', (event)=>{
+    if (!event.data || typeof event.data !== 'object') return;
+    const { type } = event.data;
+    if (type === 'wftools-internal-spend-credits') {
+      const requestId = event.data.requestId;
+      const amount = Number.parseInt(event.data.amount, 10);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        sendBridgeResponse('wftools-internal-spend-result', requestId, { ok:false, reason:'invalid-amount' });
+        return;
+      }
+      (async () => {
+        if (!global.Auth || typeof global.Auth.spendCredit !== 'function') {
+          sendBridgeResponse('wftools-internal-spend-result', requestId, { ok:false, reason:'unavailable' });
+          return;
+        }
+        let ok = true;
+        for (let i = 0; i < amount; i += 1) {
+          try {
+            const result = await global.Auth.spendCredit();
+            if (!result) {
+              ok = false;
+              break;
+            }
+          } catch (err) {
+            console.error('Error al consumir créditos desde el puente', err);
+            ok = false;
+            break;
+          }
+        }
+        const refresh = typeof global.Auth.revalidateSessionState === 'function'
+          ? global.Auth.revalidateSessionState()
+          : null;
+        if (refresh && typeof refresh.then === 'function') {
+          try {
+            await refresh;
+          } catch (err) {
+            console.warn('No se pudo revalidar la sesión tras consumir créditos', err);
+          }
+        }
+        sendBridgeResponse('wftools-internal-spend-result', requestId, {
+          ok,
+          reason: ok ? null : 'denied',
+        });
+      })();
+    } else if (type === 'wftools-internal-logout-request') {
+      const requestId = event.data.requestId;
+      (async () => {
+        let ok = false;
+        try {
+          if (typeof handleLogout === 'function') {
+            await handleLogout();
+            ok = true;
+          } else if (logoutBtn && typeof logoutBtn.click === 'function') {
+            logoutBtn.click();
+            ok = true;
+          }
+        } catch (err) {
+          console.error('Error al cerrar sesión desde el puente', err);
+        }
+        if (!ok && logoutBtn && typeof logoutBtn.click === 'function') {
+          try {
+            logoutBtn.click();
+            ok = true;
+          } catch (err) {
+            console.warn('No se pudo disparar el cierre de sesión automáticamente', err);
+          }
+        }
+        sendBridgeResponse('wftools-internal-logout-result', requestId, {
+          ok,
+          reason: ok ? null : 'unavailable',
+        });
+      })();
+    }
+  });
 })(window);
