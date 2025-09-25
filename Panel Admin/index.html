@@ -170,9 +170,10 @@
             <button type="button" class="segment__btn" data-filter-mode="admins" role="tab" aria-selected="false">Administradores</button>
             <button type="button" class="segment__btn" data-filter-mode="clients" role="tab" aria-selected="false">Clientes</button>
           </div>
-          <button id="btnToggleBlocked" class="btn btn-warning btn-sm" type="button">
+          <button id="btnToggleBlocked" class="btn btn-warning btn-sm" type="button" aria-pressed="false">
             <span class="icon" aria-hidden="true">🚫</span>
-            <span>Usuarios bloqueados</span>
+            <span class="btn-text">Mostrar bloqueados</span>
+            <span class="btn-spinner" style="display:none">⏳</span>
           </button>
         </div>
 
@@ -185,11 +186,13 @@
             <div class="blocked-drawer__actions">
               <button id="btnRefreshBlocked" class="btn btn-ghost btn-sm" type="button">
                 <span class="icon" aria-hidden="true">🔄</span>
-                <span>Actualizar</span>
+                <span class="btn-text">Actualizar</span>
+                <span class="btn-spinner" style="display:none">⏳</span>
               </button>
               <button id="btnCloseBlocked" class="btn btn-ghost btn-sm" type="button">
                 <span class="icon" aria-hidden="true">✕</span>
-                <span>Cerrar</span>
+                <span class="btn-text">Cerrar</span>
+                <span class="btn-spinner" style="display:none">⏳</span>
               </button>
             </div>
           </header>
@@ -407,6 +410,81 @@
         <div class="foot">
           <button id="unblockModalCancel" type="button" class="btn btn-ghost">Cancelar</button>
           <button id="btnUnblockConfirm" type="button" class="btn btn-success">Desbloquear ahora</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL PASSWORD -->
+    <div
+      id="passwordModal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="passwordModalTitle"
+    >
+      <div class="content confirm-modal">
+        <div class="head">
+          <div class="confirm-modal__head">
+            <strong id="passwordModalTitle">Cambiar contraseña</strong>
+            <div id="passwordModalSubtitle" class="confirm-modal__subtitle">—</div>
+          </div>
+          <button id="passwordModalClose" class="btn btn-ghost btn-sm" type="button">✕</button>
+        </div>
+        <div class="body">
+          <p class="confirm-modal__intro">
+            Define una nueva contraseña segura para el usuario seleccionado. Debe tener al menos 12 caracteres.
+          </p>
+          <div class="field">
+            <label for="passwordModalInput">Nueva contraseña</label>
+            <input
+              id="passwordModalInput"
+              class="input"
+              type="password"
+              autocomplete="new-password"
+              minlength="12"
+              placeholder="Mínimo 12 caracteres"
+            />
+          </div>
+          <div id="passwordModalError" class="msg-inline" style="display:none; color:var(--danger)"></div>
+        </div>
+        <div class="foot">
+          <button id="passwordModalCancel" class="btn btn-ghost btn-sm" type="button">Cancelar</button>
+          <button id="passwordModalConfirm" class="btn btn-primary btn-sm" type="button">
+            <span class="btn-text">Actualizar contraseña</span>
+            <span class="btn-spinner" style="display:none">⏳</span>
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL DELETE -->
+    <div
+      id="deleteModal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="deleteModalTitle"
+    >
+      <div class="content confirm-modal">
+        <div class="head">
+          <div class="confirm-modal__head">
+            <strong id="deleteModalTitle">Eliminar usuario</strong>
+            <div id="deleteModalSubtitle" class="confirm-modal__subtitle">—</div>
+          </div>
+          <button id="deleteModalClose" class="btn btn-ghost btn-sm" type="button">✕</button>
+        </div>
+        <div class="body">
+          <p class="confirm-modal__intro">
+            Esta acción eliminará al usuario de forma permanente en Supabase. No podrá recuperarse y se perderán todos sus datos asociados.
+          </p>
+          <div id="deleteModalMeta" class="confirm-modal__meta"></div>
+        </div>
+        <div class="foot">
+          <button id="deleteModalCancel" class="btn btn-ghost btn-sm" type="button">Cancelar</button>
+          <button id="deleteModalConfirm" class="btn btn-danger btn-sm" type="button">
+            <span class="btn-text">Eliminar definitivamente</span>
+            <span class="btn-spinner" style="display:none">⏳</span>
+          </button>
         </div>
       </div>
     </div>

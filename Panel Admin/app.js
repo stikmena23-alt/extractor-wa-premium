@@ -40,6 +40,9 @@ let blockedUsers = [];
 let blockedLoading = false;
 let blockedLoadPromise = null;
 let unblockModalState = null;
+let blockedViewActive = false;
+let passwordModalState = null;
+let deleteModalState = null;
 
 const DEFAULT_BLOCK_AMOUNT = 12;
 
@@ -108,6 +111,19 @@ const blockedStatusEl = qs('#blockedStatus');
 const btnToggleBlocked = qs('#btnToggleBlocked');
 const btnCloseBlocked = qs('#btnCloseBlocked');
 const btnRefreshBlocked = qs('#btnRefreshBlocked');
+const passwordModal = qs('#passwordModal');
+const passwordModalSubtitle = qs('#passwordModalSubtitle');
+const passwordModalInput = qs('#passwordModalInput');
+const passwordModalError = qs('#passwordModalError');
+const btnPasswordConfirm = qs('#passwordModalConfirm');
+const btnPasswordCancel = qs('#passwordModalCancel');
+const btnPasswordClose = qs('#passwordModalClose');
+const deleteModal = qs('#deleteModal');
+const deleteModalSubtitle = qs('#deleteModalSubtitle');
+const deleteModalMeta = qs('#deleteModalMeta');
+const btnDeleteConfirm = qs('#deleteModalConfirm');
+const btnDeleteCancel = qs('#deleteModalCancel');
+const btnDeleteClose = qs('#deleteModalClose');
 
 // Inyectar logo en login y header (con seguridad si no existen)
 const loginLogoEl = qs('#loginLogo');
@@ -606,21 +622,72 @@ function setBlockedStatus(message){
   blockedStatusEl.textContent = message;
 }
 
-function updateBlockedToggleButton(open){
+function updateBlockedToggleButton(){
   if (!btnToggleBlocked) return;
-  btnToggleBlocked.setAttribute('aria-expanded', open ? 'true' : 'false');
-  const label = btnToggleBlocked.querySelector('span:last-child');
+  btnToggleBlocked.setAttribute('aria-expanded', blockedViewActive ? 'true' : 'false');
+  btnToggleBlocked.setAttribute('aria-pressed', blockedViewActive ? 'true' : 'false');
+  const label = btnToggleBlocked.querySelector('.btn-text') || btnToggleBlocked.querySelector('span:last-child');
   if (label) {
-    label.textContent = open ? 'Ocultar bloqueados' : 'Usuarios bloqueados';
+    label.textContent = blockedViewActive ? 'Ocultar bloqueados' : 'Mostrar bloqueados';
   }
 }
 
-function setBlockedDrawerVisible(show){
+async function withButtonLoading(button, action, { loadingText = 'Procesando…', spinnerText = '⏳', minDelay = 0 } = {}){
+  if (typeof action !== 'function') return;
+  if (!button) {
+    return action();
+  }
+  const textEl = button.querySelector('.btn-text');
+  const spinnerEl = button.querySelector('.btn-spinner');
+  const originalText = textEl ? textEl.textContent : '';
+  const originalSpinnerText = spinnerEl ? spinnerEl.textContent : '';
+  const originalDisplay = spinnerEl ? spinnerEl.style.display : '';
+  const wasDisabled = button.disabled;
+  button.disabled = true;
+  if (textEl && typeof loadingText === 'string') {
+    textEl.textContent = loadingText;
+  }
+  if (spinnerEl) {
+    if (typeof spinnerText === 'string') spinnerEl.textContent = spinnerText;
+    spinnerEl.style.display = 'inline-flex';
+  }
+  const getNow = () => (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now());
+  const started = getNow();
+  let result;
+  let caughtError;
+  try {
+    result = await action();
+  } catch (err) {
+    caughtError = err;
+  } finally {
+    const elapsed = getNow() - started;
+    if (minDelay && elapsed < minDelay) {
+      await new Promise((resolve) => setTimeout(resolve, minDelay - elapsed));
+    }
+    if (textEl) {
+      textEl.textContent = originalText ?? '';
+    }
+    if (spinnerEl) {
+      spinnerEl.textContent = originalSpinnerText ?? '';
+      spinnerEl.style.display = originalDisplay || 'none';
+    }
+    button.disabled = wasDisabled;
+  }
+  if (caughtError !== undefined) {
+    throw caughtError;
+  }
+  return result;
+}
+
+function setBlockedDrawerVisible(show, { skipRenderRows = false } = {}){
   if (!blockedDrawer) return;
-  const visible = !!show;
-  blockedDrawer.hidden = !visible;
-  updateBlockedToggleButton(visible);
-  if (!visible) {
+  blockedViewActive = !!show;
+  blockedDrawer.hidden = !blockedViewActive;
+  updateBlockedToggleButton();
+  if (!skipRenderRows) {
+    renderRows();
+  }
+  if (!blockedViewActive) {
     setBlockedStatus('');
     return;
   }
@@ -633,13 +700,12 @@ function setBlockedDrawerVisible(show){
     setBlockedStatus('Consultando bloqueos…');
     loadBlockedUsers({ force: true });
   } else {
-    setBlockedStatus(`Total: ${blockedUsers.length}`);
+    setBlockedStatus(`Total: ${numberFmt.format(blockedUsers.length)}`);
   }
 }
 
 function toggleBlockedDrawer(){
-  if (!blockedDrawer) return;
-  setBlockedDrawerVisible(blockedDrawer.hidden);
+  setBlockedDrawerVisible(!blockedViewActive);
 }
 
 function renderBlockedUsers(){
@@ -1068,7 +1134,9 @@ function allowBodyScrollIfNoModal(){
   const editOpen = modal && modal.style.display === 'flex';
   const blockOpen = blockModal && blockModal.style.display === 'flex';
   const unblockOpen = unblockModal && unblockModal.style.display === 'flex';
-  if(!editOpen && !blockOpen && !unblockOpen){
+  const passwordOpen = passwordModal && passwordModal.style.display === 'flex';
+  const deleteOpen = deleteModal && deleteModal.style.display === 'flex';
+  if(!editOpen && !blockOpen && !unblockOpen && !passwordOpen && !deleteOpen){
     document.body.style.overflow = '';
   }
 }
@@ -1280,6 +1348,180 @@ function closeUnblockModal(){
   if(unblockModalMeta) unblockModalMeta.innerHTML = '';
   unblockModalState = null;
   allowBodyScrollIfNoModal();
+}
+
+function openPasswordModal({ id, email, name } = {}){
+  if(!passwordModal) return;
+  if(!id){
+    toast('No se pudo identificar al usuario','err');
+    return;
+  }
+  const user = currentRows.find((row) => row?.id === id) || null;
+  const resolvedName = name || user?.full_name || user?.display_name || '';
+  const resolvedEmail = email || user?.email || user?.contact_email || '';
+  passwordModalState = {
+    id,
+    email: resolvedEmail,
+    name: resolvedName,
+  };
+  const parts = [];
+  if(resolvedName) parts.push(resolvedName);
+  if(resolvedEmail) parts.push(resolvedEmail);
+  if(passwordModalSubtitle) passwordModalSubtitle.textContent = parts.length ? parts.join(' • ') : '—';
+  if(passwordModalInput){
+    passwordModalInput.value = '';
+    passwordModalInput.removeAttribute('aria-invalid');
+  }
+  if(passwordModalError){
+    passwordModalError.textContent = '';
+    passwordModalError.style.display = 'none';
+  }
+  document.body.style.overflow = 'hidden';
+  passwordModal.style.display = 'flex';
+  setTimeout(()=> passwordModalInput?.focus(), 50);
+}
+
+function closePasswordModal(){
+  if(!passwordModal) return;
+  passwordModal.style.display = 'none';
+  if(passwordModalInput){
+    passwordModalInput.value = '';
+    passwordModalInput.removeAttribute('aria-invalid');
+  }
+  if(passwordModalError){
+    passwordModalError.textContent = '';
+    passwordModalError.style.display = 'none';
+  }
+  if(passwordModalSubtitle) passwordModalSubtitle.textContent = '—';
+  passwordModalState = null;
+  allowBodyScrollIfNoModal();
+}
+
+async function handlePasswordSubmit(){
+  if(!passwordModalState || !passwordModalState.id){
+    toast('No se pudo identificar al usuario','err');
+    return;
+  }
+  const value = passwordModalInput?.value?.trim() || '';
+  if(value.length < 12){
+    if(passwordModalError){
+      passwordModalError.textContent = 'La contraseña debe tener al menos 12 caracteres.';
+      passwordModalError.style.display = 'block';
+    }
+    passwordModalInput?.setAttribute('aria-invalid','true');
+    passwordModalInput?.focus();
+    return;
+  }
+  if(passwordModalError){
+    passwordModalError.textContent = '';
+    passwordModalError.style.display = 'none';
+  }
+  passwordModalInput?.removeAttribute('aria-invalid');
+
+  await withButtonLoading(btnPasswordConfirm, async () => {
+    const res = await api(ENDPOINTS.setPassword, { method:'POST', body:{ userId: passwordModalState.id, password: value } });
+    if(!res || res.networkError){
+      toast('No se pudo conectar con el servicio','err');
+      return;
+    }
+    if(!res.ok){
+      const txt = await res.text().catch(()=>null);
+      console.error('password update error:', txt);
+      if(passwordModalError){
+        passwordModalError.textContent = 'No se pudo actualizar la contraseña. Intenta de nuevo.';
+        passwordModalError.style.display = 'block';
+      }
+      toast('No se pudo cambiar la contraseña','err');
+      return;
+    }
+    toast('Contraseña actualizada');
+    closePasswordModal();
+  }, { loadingText: 'Actualizando…', minDelay: 300 });
+}
+
+function openDeleteModal({ id, email, name } = {}){
+  if(!deleteModal) return;
+  if(!id){
+    toast('No se pudo identificar al usuario','err');
+    return;
+  }
+  deleteModalState = {
+    id,
+    email: email || '',
+    name: name || '',
+  };
+  const user = currentRows.find((row) => row?.id === id) || null;
+  const parts = [];
+  const resolvedName = (name && name.trim()) || user?.full_name || user?.display_name || '';
+  const resolvedEmail = email || user?.email || user?.contact_email || '';
+  if(resolvedName) parts.push(resolvedName);
+  if(resolvedEmail) parts.push(resolvedEmail);
+  if(deleteModalSubtitle) deleteModalSubtitle.textContent = parts.length ? parts.join(' • ') : '—';
+
+  if(deleteModalMeta){
+    deleteModalMeta.innerHTML = '';
+    const detailRows = [];
+    if(resolvedEmail) detailRows.push({ label: 'Correo', value: resolvedEmail });
+    if(resolvedName) detailRows.push({ label: 'Nombre', value: resolvedName });
+    if(user?.plan) detailRows.push({ label: 'Plan', value: user.plan });
+    const numericCredits = Number(user?.credits);
+    if(Number.isFinite(numericCredits)) detailRows.push({ label: 'Créditos', value: numberFmt.format(numericCredits) });
+    if(user?.id) detailRows.push({ label: 'ID', value: user.id });
+    if(!detailRows.length){
+      const empty = document.createElement('div');
+      empty.className = 'muted';
+      empty.textContent = 'Sin información adicional disponible.';
+      deleteModalMeta.append(empty);
+    } else {
+      detailRows.forEach(({ label, value }) => {
+        const row = document.createElement('span');
+        const labelEl = document.createElement('strong');
+        labelEl.textContent = label;
+        const valueEl = document.createElement('span');
+        valueEl.textContent = value;
+        row.append(labelEl, valueEl);
+        deleteModalMeta.append(row);
+      });
+    }
+  }
+
+  document.body.style.overflow = 'hidden';
+  deleteModal.style.display = 'flex';
+}
+
+function closeDeleteModal(){
+  if(!deleteModal) return;
+  deleteModal.style.display = 'none';
+  if(deleteModalMeta) deleteModalMeta.innerHTML = '';
+  if(deleteModalSubtitle) deleteModalSubtitle.textContent = '—';
+  deleteModalState = null;
+  allowBodyScrollIfNoModal();
+}
+
+async function handleDeleteConfirm(){
+  if(!deleteModalState || !deleteModalState.id){
+    toast('No se pudo identificar al usuario','err');
+    return;
+  }
+  await withButtonLoading(btnDeleteConfirm, async () => {
+    const res = await api(ENDPOINTS.remove, { method:'POST', body:{ userId: deleteModalState.id } });
+    if(!res || res.networkError){
+      toast('No se pudo conectar con el servicio','err');
+      return;
+    }
+    if(res.ok){
+      toast('Usuario eliminado');
+      closeDeleteModal();
+      loadUsers();
+      if(blockedViewActive || blockedUsers.length){
+        loadBlockedUsers({ force: true }).catch(()=>{});
+      }
+    } else {
+      const txt = await res.text().catch(()=>null);
+      console.error('delete error:', txt);
+      toast('No se pudo eliminar al usuario','err');
+    }
+  }, { loadingText: 'Eliminando…', minDelay: 300 });
 }
 
 function applyBlockStateForUser(userId, { isBlocked, until = null, since = null } = {}){
@@ -1853,11 +2095,35 @@ filterButtons.forEach((btn) => {
 });
 
 btnToggleBlocked?.addEventListener('click', () => toggleBlockedDrawer());
-btnCloseBlocked?.addEventListener('click', () => setBlockedDrawerVisible(false));
-btnRefreshBlocked?.addEventListener('click', () => loadBlockedUsers({ force: true }));
+btnCloseBlocked?.addEventListener('click', () => {
+  if(!blockedViewActive) return;
+  withButtonLoading(btnCloseBlocked, async () => {
+    setBlockedDrawerVisible(false);
+  }, { loadingText: 'Cerrando…', minDelay: 200 }).catch(()=>{});
+});
+btnRefreshBlocked?.addEventListener('click', () => {
+  withButtonLoading(btnRefreshBlocked, () => loadBlockedUsers({ force: true }), {
+    loadingText: 'Actualizando…',
+    minDelay: 350,
+  }).catch(()=>{});
+});
+
+btnPasswordCancel?.addEventListener('click', () => closePasswordModal());
+btnPasswordClose?.addEventListener('click', () => closePasswordModal());
+btnPasswordConfirm?.addEventListener('click', () => handlePasswordSubmit());
+passwordModalInput?.addEventListener('keydown', (event) => {
+  if(event.key === 'Enter'){
+    event.preventDefault();
+    handlePasswordSubmit();
+  }
+});
+
+btnDeleteCancel?.addEventListener('click', () => closeDeleteModal());
+btnDeleteClose?.addEventListener('click', () => closeDeleteModal());
+btnDeleteConfirm?.addEventListener('click', () => handleDeleteConfirm());
 
 updateFilterButtons();
-updateBlockedToggleButton(false);
+updateBlockedToggleButton();
 
 async function loadUsers(){
   try{
@@ -1897,13 +2163,21 @@ async function loadUsers(){
 
 function getVisibleRows(){
   if (!Array.isArray(currentRows)) return [];
+  let rows;
   if (filterMode === 'admins') {
-    return currentRows.filter((row) => isAdminRow(row));
+    rows = currentRows.filter((row) => isAdminRow(row));
+  } else if (filterMode === 'clients') {
+    rows = currentRows.filter((row) => !isAdminRow(row));
+  } else {
+    rows = currentRows.slice();
   }
-  if (filterMode === 'clients') {
-    return currentRows.filter((row) => !isAdminRow(row));
+  if (blockedViewActive) {
+    rows = rows.filter((row) => {
+      const { isBlocked } = getBanState(row);
+      return isBlocked;
+    });
   }
-  return currentRows.slice();
+  return rows;
 }
 
 function updateFilterButtons(){
@@ -2000,7 +2274,7 @@ function renderRows(){
           <div class="actions">
             <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
             <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Link recuperación</button>
-            <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Cambiar contraseña</button>
+            <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Cambiar contraseña</button>
             <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" ${blockBtnExtraData} title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
             <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
           </div>
@@ -2032,7 +2306,7 @@ function renderRows(){
         <div class="row-actions">
           <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
           <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Recuperación</button>
-          <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}">Contraseña</button>
+          <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Contraseña</button>
           <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" ${blockBtnExtraData} title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
         </div>`;
@@ -2048,9 +2322,12 @@ function renderRows(){
 
   updateAccountSummary({ creditCount: reportingCreditCount, activeCount: reportingActiveCount, lowCount: reportingLowCount });
 
-  const resolvedBlockedCount = Number.isFinite(Number(blockedSummaryOverride)) && filterMode === 'all'
+  let resolvedBlockedCount = Number.isFinite(Number(blockedSummaryOverride)) && filterMode === 'all'
     ? Number(blockedSummaryOverride)
     : blockedCount;
+  if (blockedViewActive) {
+    resolvedBlockedCount = rows.length;
+  }
 
   lastSummary = {
     creditCount: reportingCreditCount,
@@ -2177,16 +2454,10 @@ document.addEventListener('click', async (e)=>{
   }
 
   if(act==='password'){
-    const id = btn.dataset.id; const pwd = prompt('Nueva contraseña (mín 12, segura):'); if(!pwd) return;
-    if(pwd.length < 12){ toast('La contraseña debe tener al menos 12 caracteres','warn'); return; }
-    btn.disabled = true;
-    const res = await api(ENDPOINTS.setPassword, { method:'POST', body:{ userId:id, password:pwd } });
-    btn.disabled = false;
-    if(res?.networkError){
-      toast('No se pudo conectar con el servicio','err');
-      return;
-    }
-    if(res.ok) toast('Contraseña actualizada'); else toast('No se pudo cambiar','err');
+    const id = btn.dataset.id;
+    if(!id){ toast('No se pudo identificar al usuario','err'); return; }
+    openPasswordModal({ id, email: btn.dataset.email, name: btn.dataset.name });
+    return;
   }
 
   if(act==='block'){
@@ -2213,30 +2484,8 @@ document.addEventListener('click', async (e)=>{
   if(act==='delete'){
     const id = btn.dataset.id;
     if(!id){ toast('No se pudo identificar al usuario','err'); return; }
-    const email = btn.dataset.email || 'este usuario';
-    const confirmed = confirm(`¿Eliminar definitivamente a ${email}? Esta acción no se puede deshacer.`);
-    if(!confirmed) return;
-    let res;
-    btn.disabled = true;
-    btn.textContent = 'Eliminando…';
-    try {
-      res = await api(ENDPOINTS.remove, { method:'POST', body:{ userId:id } });
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Eliminar';
-    }
-    if(!res || res.networkError){
-      toast('No se pudo conectar con el servicio','err');
-      return;
-    }
-    if(res.ok){
-      toast('Usuario eliminado');
-      loadUsers();
-    } else {
-      const txt = await res.text().catch(()=>null);
-      console.error('delete error:', txt);
-      toast('No se pudo eliminar al usuario','err');
-    }
+    openDeleteModal({ id, email: btn.dataset.email, name: btn.dataset.name });
+    return;
   }
 
   if(act==='edit'){
@@ -2391,6 +2640,14 @@ window.addEventListener('keydown', (e)=>{
     }
     if(unblockModal && unblockModal.style.display === 'flex'){
       closeUnblockModal();
+      return;
+    }
+    if(passwordModal && passwordModal.style.display === 'flex'){
+      closePasswordModal();
+      return;
+    }
+    if(deleteModal && deleteModal.style.display === 'flex'){
+      closeDeleteModal();
       return;
     }
     if(modal && modal.style.display === 'flex'){

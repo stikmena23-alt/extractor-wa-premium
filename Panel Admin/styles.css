@@ -98,6 +98,8 @@ a{color:var(--brand)}
 
 .btn{cursor:pointer; user-select:none; border:0; border-radius:14px; padding:12px 14px; font-weight:700; letter-spacing:.02em; display:inline-flex; align-items:center; justify-content:center; gap:8px}
 .btn[disabled]{opacity:.6; cursor:not-allowed}
+.btn .btn-text{display:inline-flex; align-items:center; justify-content:center; gap:6px}
+.btn .btn-spinner{display:none; align-items:center; font-size:.85rem; margin-left:4px}
 .btn-primary{background:linear-gradient(135deg, var(--brand), var(--brand-2)); color:#00131f; box-shadow:0 10px 25px rgba(14,165,233,.35)}
 .btn-ghost{background:#0b0f15; color:#fff; border:1px solid var(--border)}
 .btn-warning{background:rgba(245,158,11,.16); color:#facc15; border:1px solid rgba(245,158,11,.35)}
@@ -351,7 +353,9 @@ a{color:var(--brand)}
 /* Table (desktop) */
 .table-wrap{width:100%; overflow:auto; padding-bottom:6px}
 table{width:100%; border-collapse:separate; border-spacing:0 10px; min-width:940px}
-thead th{font-size:.85rem; text-align:left; color:#cdd6e1; padding:0 10px; white-space:nowrap}
+table thead tr{background:rgba(12,18,26,.9);}
+thead th{font-size:.95rem; font-weight:700; text-align:center; color:#e0e9f6; padding:14px 12px; white-space:nowrap; border-bottom:1px solid var(--border); letter-spacing:.01em; text-transform:uppercase}
+thead th + th{border-left:1px solid rgba(148,163,184,.18)}
 tbody tr{background:var(--card); border:1px solid var(--border)}
 tbody td{padding:12px 10px; vertical-align:middle}
 tbody td:first-child{border-radius:12px 0 0 12px}
@@ -603,6 +607,15 @@ tbody tr td{border-top:1px solid rgba(255,255,255,.03); border-bottom:1px solid 
 .unblock-modal__meta{display:grid; gap:10px; padding:16px; border:1px solid var(--border); border-radius:14px; background:#0b0f15; font-size:.85rem; color:#cfd8e6;}
 .unblock-modal__meta span{display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;}
 .unblock-modal__meta strong{color:#e6edf3; font-weight:600;}
+
+/* ======== MODALES DE CONFIRMACIÓN (contraseña / eliminar) ======== */
+.confirm-modal{width:min(520px, 94vw);}
+.confirm-modal__head{display:flex; flex-direction:column; gap:4px; max-width:100%;}
+.confirm-modal__subtitle{font-size:.9rem; color:var(--muted); font-weight:500; word-break:break-word;}
+.confirm-modal__intro{margin:0 0 18px; color:var(--muted); line-height:1.45;}
+.confirm-modal__meta{display:grid; gap:10px; padding:16px; border:1px solid var(--border); border-radius:14px; background:#0b0f15; font-size:.85rem; color:#cfd8e6;}
+.confirm-modal__meta span{display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap;}
+.confirm-modal__meta strong{color:#e6edf3; font-weight:600;}
 
 @media (max-width: 640px){
   .block-summary{grid-template-columns:1fr;}
