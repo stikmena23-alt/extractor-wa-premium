@@ -67,6 +67,19 @@
   const regEmailInput = registerEls.emailInput || document.getElementById("reg_email");
   const regPhoneInput = registerEls.phoneInput || document.getElementById("reg_phone");
   const regPasswordInput = registerEls.passwordInput || document.getElementById("reg_password");
+  const recoveryForm = document.getElementById("recoveryForm");
+  const showRecoveryBtn = document.getElementById("showRecoveryBtn");
+  const btnRecoveryBack = document.getElementById("btnRecoveryBack");
+  const recoveryEmailInput = document.getElementById("recoveryEmail");
+  const recoveryCodeInput = document.getElementById("recoveryCode");
+  const recoveryTokenInput = document.getElementById("recoveryToken");
+  const recoveryPasswordInput = document.getElementById("recoveryPassword");
+  const recoveryPasswordConfirmInput = document.getElementById("recoveryPasswordConfirm");
+  const recoveryErrorEl = document.getElementById("recoveryError");
+  const recoverySuccessEl = document.getElementById("recoverySuccess");
+  const btnRecoverySubmit = document.getElementById("btnRecoverySubmit");
+  const recoverySubmitSpinner = btnRecoverySubmit?.querySelector(".btn-spinner");
+  const recoverySubmitText = btnRecoverySubmit?.querySelector(".btn-text");
 
   const storageAvailable = loginModule?.isStorageAvailable?.() ?? false;
   const setRememberedEmail = loginModule?.setRememberedEmail?.bind(loginModule) || (() => {});
@@ -905,18 +918,39 @@
   }
 
   function switchAuthView(view) {
-    if (!loginForm || !registerForm) return;
+    if (!loginForm) return;
+
+    const showRegister = view === "register";
+    const showRecovery = view === "recovery";
+
+    if (recoveryForm) {
+      recoveryForm.classList.toggle("is-hidden", !showRecovery);
+    }
+
+    if (showRecovery) {
+      loginForm.classList.add("is-hidden");
+      registerForm?.classList.add("is-hidden");
+      prepareRecoveryView();
+      return;
+    }
+
     if (registerModule && typeof registerModule.switchView === "function") {
       registerModule.switchView(view, {
         loginForm,
         loginEmail,
         onShowLogin: () => updateAdminAccessUI(loginEmail?.value || getRememberedEmail()),
       });
+      if (view === "login") {
+        resetRecoveryState();
+      }
       return;
     }
-    const showRegister = view === "register";
+
+    if (registerForm) {
+      registerForm.classList.toggle("is-hidden", !showRegister);
+    }
     loginForm.classList.toggle("is-hidden", showRegister);
-    registerForm.classList.toggle("is-hidden", !showRegister);
+
     if (showRegister) {
       clearRegisterFeedback();
       setRegisterLoading(false);
@@ -928,15 +962,208 @@
       }
       return;
     }
+
     clearRegisterFeedback();
     setRegisterLoading(false);
     toggleRegisterInputs(false);
-    registerForm.reset?.();
+    registerForm?.reset?.();
+    resetRecoveryState();
     updateAdminAccessUI(loginEmail?.value || getRememberedEmail());
     try {
       loginEmail?.focus({ preventScroll: true });
     } catch (_err) {
       loginEmail?.focus?.();
+    }
+  }
+
+  function resetRecoveryFeedback() {
+    if (recoveryErrorEl) {
+      recoveryErrorEl.textContent = "";
+      recoveryErrorEl.style.display = "none";
+    }
+    if (recoverySuccessEl) {
+      recoverySuccessEl.textContent = "";
+      recoverySuccessEl.hidden = true;
+      recoverySuccessEl.classList.remove("is-visible");
+    }
+  }
+
+  function showRecoveryError(message) {
+    if (!recoveryErrorEl) return;
+    const text = message || "";
+    recoveryErrorEl.textContent = text;
+    recoveryErrorEl.style.display = text ? "block" : "none";
+  }
+
+  function showRecoverySuccess(message) {
+    if (!recoverySuccessEl) return;
+    const text = message || "";
+    recoverySuccessEl.textContent = text;
+    const visible = !!text;
+    recoverySuccessEl.hidden = !visible;
+    recoverySuccessEl.classList.toggle("is-visible", visible);
+  }
+
+  function toggleRecoveryInputs(disabled) {
+    [
+      recoveryEmailInput,
+      recoveryCodeInput,
+      recoveryTokenInput,
+      recoveryPasswordInput,
+      recoveryPasswordConfirmInput,
+    ].forEach((input) => {
+      if (input) input.disabled = !!disabled;
+    });
+  }
+
+  function setRecoveryLoading(isLoading) {
+    if (btnRecoverySubmit) btnRecoverySubmit.disabled = !!isLoading;
+    btnRecoverySubmit?.classList.toggle("loading", !!isLoading);
+    if (recoverySubmitSpinner) {
+      recoverySubmitSpinner.style.display = isLoading ? "inline-block" : "none";
+    }
+    if (recoverySubmitText) {
+      recoverySubmitText.style.opacity = isLoading ? "0.65" : "1";
+    }
+    toggleRecoveryInputs(isLoading);
+  }
+
+  function resetRecoveryState({ preserveEmail = false } = {}) {
+    if (!recoveryForm) return;
+    const emailValue = preserveEmail ? recoveryEmailInput?.value || "" : "";
+    recoveryForm.reset?.();
+    if (preserveEmail && recoveryEmailInput) {
+      recoveryEmailInput.value = emailValue;
+    }
+    setRecoveryLoading(false);
+    resetRecoveryFeedback();
+  }
+
+  function extractRecoveryToken(rawValue) {
+    if (!rawValue) return "";
+    const value = rawValue.trim();
+    if (!value) return "";
+    try {
+      const url = new URL(value);
+      const tokenParam = url.searchParams.get("token");
+      if (tokenParam) return tokenParam.trim();
+    } catch (_err) {
+      // Ignorar: no es una URL completa
+    }
+    const match = value.match(/token=([^&]+)/i);
+    if (match && match[1]) {
+      try {
+        return decodeURIComponent(match[1]).trim();
+      } catch (_err) {
+        return match[1].trim();
+      }
+    }
+    return value;
+  }
+
+  function prepareRecoveryView() {
+    const remembered = loginEmail?.value?.trim() || getRememberedEmail();
+    resetRecoveryState({ preserveEmail: false });
+    if (remembered && recoveryEmailInput) {
+      recoveryEmailInput.value = remembered;
+    }
+    const focusTarget = remembered ? recoveryCodeInput || recoveryTokenInput : recoveryEmailInput;
+    try {
+      focusTarget?.focus?.({ preventScroll: true });
+    } catch (_err) {
+      focusTarget?.focus?.();
+    }
+  }
+
+  async function handleRecoverySubmit(event) {
+    event.preventDefault();
+    resetRecoveryFeedback();
+
+    const email = recoveryEmailInput?.value.trim() || "";
+    const codeInput = recoveryCodeInput?.value.trim() || "";
+    const linkInput = recoveryTokenInput?.value.trim() || "";
+    const password = recoveryPasswordInput?.value || "";
+    const confirmPassword = recoveryPasswordConfirmInput?.value || "";
+
+    if (!password || password.length < 12) {
+      showRecoveryError("La contraseña debe tener al menos 12 caracteres.");
+      try {
+        recoveryPasswordInput?.focus?.({ preventScroll: true });
+      } catch (_err) {
+        recoveryPasswordInput?.focus?.();
+      }
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      showRecoveryError("Las contraseñas no coinciden.");
+      try {
+        recoveryPasswordConfirmInput?.focus?.({ preventScroll: true });
+      } catch (_err) {
+        recoveryPasswordConfirmInput?.focus?.();
+      }
+      return;
+    }
+
+    const code = codeInput ? codeInput.replace(/\s+/g, "").toUpperCase() : "";
+    const token = extractRecoveryToken(linkInput);
+
+    if (!code && !token) {
+      showRecoveryError("Ingresa el código corto o el enlace de recuperación.");
+      try {
+        (recoveryCodeInput || recoveryTokenInput)?.focus?.({ preventScroll: true });
+      } catch (_err) {
+        (recoveryCodeInput || recoveryTokenInput)?.focus?.();
+      }
+      return;
+    }
+
+    const payload = { password };
+    if (code) payload.code = code;
+    if (token) payload.token = token;
+    if (email) payload.email = email;
+
+    setRecoveryLoading(true);
+    try {
+      const response = await fetch(`${FUNCTIONS_BASE}/admin-setpassword`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: SUPABASE_ANON_KEY,
+          Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        },
+        body: JSON.stringify(payload),
+      });
+      const data = await response.json().catch(() => null);
+      if (!response.ok) {
+        const message =
+          data?.message ||
+          data?.error ||
+          "No se pudo actualizar la contraseña. Verifica el código o enlace.";
+        showRecoveryError(message);
+        return;
+      }
+
+      showRecoverySuccess("Contraseña actualizada. Ya puedes iniciar sesión.");
+      if (email && loginEmail) {
+        loginEmail.value = email;
+        updateAdminAccessUI(email);
+      }
+
+      setTimeout(() => {
+        switchAuthView("login");
+        showSessionToast("Contraseña actualizada con éxito.", "success");
+        try {
+          loginPassword?.focus?.({ preventScroll: true });
+        } catch (_err) {
+          loginPassword?.focus?.();
+        }
+      }, 1600);
+    } catch (error) {
+      console.error("Error completando recuperación", error);
+      showRecoveryError("No se pudo conectar con el servicio. Intenta nuevamente.");
+    } finally {
+      setRecoveryLoading(false);
     }
   }
 
@@ -1227,6 +1454,16 @@
 
     showRegisterBtn?.addEventListener("click", () => switchAuthView("register"));
     btnBackLogin?.addEventListener("click", () => switchAuthView("login"));
+    showRecoveryBtn?.addEventListener("click", () => switchAuthView("recovery"));
+    btnRecoveryBack?.addEventListener("click", () => {
+      switchAuthView("login");
+      try {
+        loginEmail?.focus?.({ preventScroll: true });
+      } catch (_err) {
+        loginEmail?.focus?.();
+      }
+    });
+    recoveryForm?.addEventListener("submit", handleRecoverySubmit);
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {

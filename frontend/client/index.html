@@ -50,6 +50,7 @@
           </label>
         </div>
         <button id="loginBtn" class="btn login-primary">Entrar</button>
+        <button id="showRecoveryBtn" class="btn login-secondary" type="button">Restablecer contraseña</button>
         <button id="adminPanelBtn" class="btn admin-portal-btn" type="button" hidden>
           <span aria-hidden="true" class="icon">🛡️</span>
           <span>Abrir panel administrador</span>
@@ -64,6 +65,43 @@
         </div>
         <p id="loginLoading" class="loading-msg">Iniciando sesión...</p>
         <p id="loginError" class="error-msg"></p>
+      </form>
+
+      <form id="recoveryForm" class="login-card is-hidden" data-view="recovery" novalidate>
+        <h2 class="title-heading">
+          <img class="title-logo" src="./assets/logo.png" alt="WF TOOLS">
+          <span class="title-text">Restablecer contraseña</span>
+        </h2>
+        <p class="muted">Usa el código corto o el enlace enviado por el administrador para definir una nueva contraseña.</p>
+        <label class="field">
+          <span>Correo</span>
+          <input type="email" id="recoveryEmail" placeholder="admin@tudominio.com" autocomplete="email" />
+        </label>
+        <label class="field">
+          <span>Código corto</span>
+          <input type="text" id="recoveryCode" placeholder="ABC123" autocomplete="one-time-code" />
+          <span class="field-hint">Es el código de 6 caracteres mostrado en el panel.</span>
+        </label>
+        <label class="field">
+          <span>Enlace completo</span>
+          <input type="text" id="recoveryToken" placeholder="https://..." autocomplete="off" />
+          <span class="field-hint">Pega el enlace generado desde el panel o escaneado desde el QR.</span>
+        </label>
+        <label class="field">
+          <span>Nueva contraseña</span>
+          <input type="password" id="recoveryPassword" placeholder="Mínimo 12 caracteres" autocomplete="new-password" required />
+        </label>
+        <label class="field">
+          <span>Confirmar contraseña</span>
+          <input type="password" id="recoveryPasswordConfirm" placeholder="Repite la contraseña" autocomplete="new-password" required />
+        </label>
+        <p id="recoveryError" class="error-msg" role="alert"></p>
+        <p id="recoverySuccess" class="success-msg" hidden></p>
+        <button id="btnRecoverySubmit" class="btn login-primary" type="submit">
+          <span class="btn-spinner" aria-hidden="true"></span>
+          <span class="btn-text">Actualizar contraseña</span>
+        </button>
+        <button type="button" id="btnRecoveryBack" class="link-button">Volver al inicio de sesión</button>
       </form>
 
       <form id="registerForm" class="login-card is-hidden" data-view="register" novalidate>

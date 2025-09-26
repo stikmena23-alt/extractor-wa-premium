@@ -143,6 +143,8 @@ const recoveryModalDone = qs('#recoveryModalDone');
 const recoveryModalQrCanvas = qs('#recoveryModalQr');
 const recoveryModalExpiration = qs('#recoveryModalExpiration');
 const recoveryModalError = qs('#recoveryModalError');
+const recoveryModalSendEmail = qs('#recoveryModalSendEmail');
+const recoveryModalSendWhatsapp = qs('#recoveryModalSendWhatsapp');
 const deleteModal = qs('#deleteModal');
 const deleteModalSubtitle = qs('#deleteModalSubtitle');
 const deleteModalMeta = qs('#deleteModalMeta');
@@ -2281,6 +2283,8 @@ recoveryModalCopyLink?.addEventListener('click', async () => {
   const ok = await copyToClipboard(url);
   toast(ok ? 'Enlace copiado' : 'No se pudo copiar el enlace', ok ? 'ok' : 'err');
 });
+recoveryModalSendEmail?.addEventListener('click', () => shareRecoveryLink('email'));
+recoveryModalSendWhatsapp?.addEventListener('click', () => shareRecoveryLink('whatsapp'));
 recoveryModalDownload?.addEventListener('click', () => {
   if(!recoveryModalQrCanvas){ toast('No hay QR para descargar', 'warn'); return; }
   const url = recoveryModalQrCanvas.toDataURL('image/png');
@@ -2377,12 +2381,15 @@ function resetRecoveryModal(){
   if(recoveryModalLink){
     recoveryModalLink.value = '';
     recoveryModalLink.dataset.url = '';
+    recoveryModalLink.removeAttribute('aria-label');
   }
   if(recoveryModalExpiration) recoveryModalExpiration.textContent = '';
   if(recoveryModalError){
     recoveryModalError.textContent = '';
     recoveryModalError.style.display = 'none';
   }
+  if(recoveryModalSendEmail) recoveryModalSendEmail.disabled = true;
+  if(recoveryModalSendWhatsapp) recoveryModalSendWhatsapp.disabled = true;
   if(recoveryModalQrCanvas){
     const ctx = recoveryModalQrCanvas.getContext('2d');
     if(ctx){
@@ -2430,6 +2437,7 @@ async function openRecoveryModal(data){
   recoveryModalState = { email, shortCode, resetUrl, expiresAt, qrData };
   const subtitlePieces = [];
   if(email) subtitlePieces.push(email);
+  if(shortCode) subtitlePieces.push(`Código ${String(shortCode).toUpperCase()}`);
   if(expiresAt){
     const expiryDate = parseDate(expiresAt);
     if(expiryDate && recoveryModalExpiration){
@@ -2442,16 +2450,70 @@ async function openRecoveryModal(data){
     recoveryModalLink.value = resetUrl || '';
     if(resetUrl){
       recoveryModalLink.dataset.url = resetUrl;
+      recoveryModalLink.setAttribute('aria-label', `Enlace de recuperación para ${email || 'usuario'}`);
+    } else {
+      delete recoveryModalLink.dataset.url;
+      recoveryModalLink.removeAttribute('aria-label');
     }
   }
   if(recoveryModalError){
     recoveryModalError.textContent = '';
     recoveryModalError.style.display = 'none';
   }
+  if(recoveryModalSendEmail) recoveryModalSendEmail.disabled = false;
+  if(recoveryModalSendWhatsapp) recoveryModalSendWhatsapp.disabled = false;
   const qrSource = qrData || resetUrl || '';
   await renderRecoveryQr(qrSource);
   document.body.style.overflow = 'hidden';
   recoveryModal.style.display = 'flex';
+}
+
+function buildRecoveryShareMessage(state){
+  if(!state) return '';
+  const { shortCode, resetUrl, expiresAt } = state;
+  const lines = [
+    'Hola,',
+    'Usa estos datos para restablecer tu contraseña de WF-TOOLS:',
+  ];
+  if(shortCode){
+    lines.push(`Código: ${String(shortCode).toUpperCase()}`);
+  }
+  if(resetUrl){
+    lines.push(`Enlace directo: ${resetUrl}`);
+  }
+  if(expiresAt){
+    const expiry = parseDate(expiresAt);
+    if(expiry){
+      lines.push(`Disponible hasta: ${formatDateTime(expiry)}`);
+    }
+  }
+  lines.push('Si no solicitaste el cambio, ignora este mensaje.');
+  return lines.filter(Boolean).join('\n');
+}
+
+function shareRecoveryLink(channel){
+  if(!recoveryModalState){
+    toast('Genera un enlace de recuperación antes de compartirlo', 'warn');
+    return;
+  }
+  const message = buildRecoveryShareMessage(recoveryModalState);
+  if(!message){
+    toast('No hay información para compartir', 'warn');
+    return;
+  }
+  if(channel === 'email'){
+    const target = recoveryModalState.email ? encodeURIComponent(recoveryModalState.email) : '';
+    const subject = encodeURIComponent('WF-TOOLS · Restablecer contraseña');
+    const body = encodeURIComponent(message);
+    const mailtoUrl = `mailto:${target}?subject=${subject}&body=${body}`;
+    window.open(mailtoUrl, '_blank', 'noopener');
+    return;
+  }
+  if(channel === 'whatsapp'){
+    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank', 'noopener');
+    return;
+  }
 }
 
 async function handleRecoveryFormSubmit(event){

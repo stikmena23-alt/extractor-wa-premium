@@ -73,7 +73,6 @@
         <span class="btn-text">Entrar</span>
         <span class="btn-spinner" style="display:none">⏳ Iniciando sesión…</span>
       </button>
-      <button id="btnShowRecovery" class="btn btn-ghost" type="button">Cambiar contraseña</button>
       <button id="btnLoginGoClient" class="btn btn-admin-portal" type="button">
         <span class="icon" aria-hidden="true">🛠️</span>
         <span>Abrir WF-TOOLS</span>
@@ -555,7 +554,17 @@
           <div id="recoveryModalExpiration" class="hint"></div>
           <div id="recoveryModalError" class="msg-inline" style="display:none; color:var(--danger)"></div>
         </div>
-        <div class="foot">
+        <div class="foot recovery-modal__footer">
+          <div class="recovery-modal__share">
+            <button id="recoveryModalSendEmail" class="btn btn-ghost btn-sm" type="button" disabled>
+              <span class="icon" aria-hidden="true">✉️</span>
+              <span>Enviar por correo</span>
+            </button>
+            <button id="recoveryModalSendWhatsapp" class="btn btn-ghost btn-sm" type="button" disabled>
+              <span class="icon" aria-hidden="true">💬</span>
+              <span>Enviar por WhatsApp</span>
+            </button>
+          </div>
           <button id="recoveryModalDone" class="btn btn-primary" type="button">Entendido</button>
         </div>
       </div>

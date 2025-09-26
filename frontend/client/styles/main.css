@@ -2580,6 +2580,45 @@ body[data-theme="light"] .session-modal-icon{
   box-shadow: 0 12px 30px rgba(14,165,233,.28);
 }
 
+.login-secondary{
+  margin-top:12px;
+  width:100%;
+  justify-content:center;
+  border-radius:14px;
+  height:48px;
+  font-weight:700;
+  padding:0 18px;
+  border:1px solid rgba(148,163,184,.35);
+  background: rgba(15,23,42,.28);
+  color: var(--text-1);
+  transition: transform .1s ease, box-shadow .18s ease, background .18s ease;
+}
+
+[data-theme="light"] .login-secondary{
+  background: rgba(255,255,255,.9);
+  color: #0f172a;
+  border-color: rgba(148,163,184,.45);
+}
+
+.login-secondary:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 10px 24px rgba(14,165,233,.12);
+}
+
+.login-secondary:active{
+  transform: translateY(0);
+}
+
+.login-secondary:focus-visible{
+  outline:none;
+  box-shadow:0 0 0 3px rgba(14,165,233,.32);
+}
+
+.login-secondary:disabled{
+  opacity:.55;
+  cursor:not-allowed;
+}
+
 .login-primary:hover{ transform: translateY(-1px); }
 .login-primary:active{ transform: translateY(0); }
 .login-primary:disabled{ opacity:.55; cursor:not-allowed; }
@@ -2689,6 +2728,30 @@ html[data-theme="light"] .admin-portal-btn{
   color: var(--danger);
   font-weight:700;
   display:none;
+}
+
+.success-msg{
+  margin:0;
+  text-align:center;
+  color: var(--success);
+  font-weight:700;
+  display:none;
+}
+
+.success-msg[hidden]{
+  display:none;
+}
+
+.success-msg.is-visible{
+  display:block;
+}
+
+.field-hint{
+  display:block;
+  margin-top:4px;
+  font-size:.85rem;
+  font-weight:500;
+  color: var(--text-2);
 }
 
 .admin-access-link{
