@@ -6,9 +6,9 @@
   <title>WF-TOOLS ADMIN</title>
 
   <!-- ✅ Favicon -->
-  <link rel="icon" type="image/png" sizes="32x32" href="WF TOOLS.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="WF TOOLS.png" />
-  <link rel="apple-touch-icon" sizes="180x180" href="WF TOOLS.png?v=1" />
+  <link rel="icon" type="image/png" sizes="32x32" href="./assets/logo.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="./assets/logo.png" />
+  <link rel="apple-touch-icon" sizes="180x180" href="./assets/logo.png?v=1" />
   <meta name="theme-color" content="#0a0b0f" />
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -17,12 +17,13 @@
     href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Orbitron:wght@500;700&display=swap"
     rel="stylesheet"
   />
-  <link rel="stylesheet" href="styles.css" />
+  <link rel="stylesheet" href="./styles/main.css" />
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="session-utils.js"></script>
-  <script src="app.js" defer></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+  <script src="./scripts/session-utils.js"></script>
+  <script src="./scripts/main.js" defer></script>
 </head>
 <body>
   <div class="wrap">
@@ -72,6 +73,7 @@
         <span class="btn-text">Entrar</span>
         <span class="btn-spinner" style="display:none">⏳ Iniciando sesión…</span>
       </button>
+      <button id="btnShowRecovery" class="btn btn-ghost" type="button">Cambiar contraseña</button>
       <button id="btnLoginGoClient" class="btn btn-admin-portal" type="button">
         <span class="icon" aria-hidden="true">🛠️</span>
         <span>Abrir WF-TOOLS</span>
@@ -80,6 +82,58 @@
         <span id="loginHint" class="hint">Zona de administradores WF-TOOLS</span>
       </div>
       <div id="loginError" class="error" style="display:none"></div>
+    </section>
+
+    <!-- RECOVERY VIEW -->
+    <section id="recoveryView" class="card view" data-display="flex" style="display:none">
+      <div class="brand">
+        <div class="logo">
+          <img src="./assets/logo.png" alt="WF TOOLS logo" />
+        </div>
+        <h1>Restablecer contraseña</h1>
+        <p class="muted">Usa el código enviado por el administrador para definir una nueva contraseña segura.</p>
+      </div>
+      <form id="recoveryForm" class="recovery-form" novalidate>
+        <div class="field">
+          <label for="recoveryEmail">Correo</label>
+          <input id="recoveryEmail" class="input" type="email" autocomplete="email" placeholder="admin@tudominio.com" required />
+        </div>
+        <div class="field">
+          <label for="recoveryCode">Código de recuperación</label>
+          <input
+            id="recoveryCode"
+            class="input"
+            type="text"
+            inputmode="text"
+            autocomplete="one-time-code"
+            placeholder="ABC123"
+            required
+          />
+          <div class="hint">Puedes escribir el código corto o escanear el QR del enlace.</div>
+        </div>
+        <div class="field">
+          <label for="recoveryPassword">Nueva contraseña</label>
+          <input id="recoveryPassword" class="input" type="password" autocomplete="new-password" placeholder="••••••••••••" required />
+        </div>
+        <div class="field">
+          <label for="recoveryPasswordConfirm">Confirmar contraseña</label>
+          <input
+            id="recoveryPasswordConfirm"
+            class="input"
+            type="password"
+            autocomplete="new-password"
+            placeholder="Repite la contraseña"
+            required
+          />
+        </div>
+        <div id="recoveryError" class="error" style="display:none"></div>
+        <div id="recoverySuccess" class="success" style="display:none"></div>
+        <button id="btnRecoverySubmit" class="btn btn-primary" type="submit">
+          <span class="btn-text">Actualizar contraseña</span>
+          <span class="btn-spinner" style="display:none">⏳ Guardando…</span>
+        </button>
+        <button id="btnCancelRecovery" class="btn btn-ghost" type="button">Volver al inicio de sesión</button>
+      </form>
     </section>
 
     <!-- ADMIN VIEW -->
@@ -451,8 +505,58 @@
           <button id="passwordModalCancel" class="btn btn-ghost btn-sm" type="button">Cancelar</button>
           <button id="passwordModalConfirm" class="btn btn-primary btn-sm" type="button">
             <span class="btn-text">Actualizar contraseña</span>
-            <span class="btn-spinner" style="display:none">⏳</span>
+            <span class="btn-spinner" style="display:none">⏳ Guardando…</span>
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- MODAL RECOVERY SUMMARY -->
+    <div
+      id="recoveryModal"
+      class="modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="recoveryModalTitle"
+    >
+      <div class="content recovery-modal">
+        <div class="head">
+          <div>
+            <strong id="recoveryModalTitle">Recuperación generada</strong>
+            <div id="recoveryModalSubtitle" class="recovery-modal__subtitle">—</div>
+          </div>
+          <button id="recoveryModalClose" class="btn btn-ghost btn-sm" type="button">✕</button>
+        </div>
+        <div class="body">
+          <div class="recovery-modal__section">
+            <span class="label">Código corto</span>
+            <div id="recoveryModalCode" class="recovery-modal__code">—</div>
+            <button id="recoveryModalCopyCode" class="btn btn-ghost btn-sm" type="button">
+              <span class="icon" aria-hidden="true">📋</span>
+              <span>Copiar código</span>
+            </button>
+          </div>
+          <div class="recovery-modal__section">
+            <span class="label">Enlace directo</span>
+            <div class="recovery-modal__link-row">
+              <input id="recoveryModalLink" class="input" type="text" readonly />
+              <button id="recoveryModalCopyLink" class="btn btn-ghost btn-sm" type="button" aria-label="Copiar enlace">
+                <span class="icon" aria-hidden="true">🔗</span>
+              </button>
+            </div>
+          </div>
+          <div class="recovery-modal__qr">
+            <canvas id="recoveryModalQr" aria-label="Código QR de recuperación"></canvas>
+            <button id="recoveryModalDownloadQr" class="btn btn-ghost btn-sm" type="button">
+              <span class="icon" aria-hidden="true">⬇️</span>
+              <span>Descargar QR</span>
+            </button>
+          </div>
+          <div id="recoveryModalExpiration" class="hint"></div>
+          <div id="recoveryModalError" class="msg-inline" style="display:none; color:var(--danger)"></div>
+        </div>
+        <div class="foot">
+          <button id="recoveryModalDone" class="btn btn-primary" type="button">Entendido</button>
         </div>
       </div>
     </div>

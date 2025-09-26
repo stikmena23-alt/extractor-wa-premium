@@ -8,13 +8,13 @@
 
 
 <!-- Iconos -->
-<link rel="icon" type="image/png" href="WF%20TOOLS 2.png?v=1">
-<link rel="apple-touch-icon" href="WF%20TOOLS 2.png?v=1">
+  <link rel="icon" type="image/png" href="./assets/logo-alt.png?v=1">
+  <link rel="apple-touch-icon" href="./assets/logo-alt.png?v=1">
 <meta name="theme-color" content="#0ea5e9">
 
 
   <!-- Estilos -->
-  <link rel="stylesheet" href="styles.css"/>
+  <link rel="stylesheet" href="./styles/main.css"/>
   
 </head>
 <body class="is-checking-session">
@@ -28,7 +28,7 @@
     <div class="login-card-stack">
       <form id="loginForm" class="login-card" data-view="login">
         <h2 class="title-heading">
-          <img class="title-logo" src="WF%20TOOLS.png" alt="WF TOOLS">
+          <img class="title-logo" src="./assets/logo.png" alt="WF TOOLS">
           <span class="title-text">Bienvenido a WF-TOOLS</span>
         </h2>
         <label class="field">
@@ -68,7 +68,7 @@
 
       <form id="registerForm" class="login-card is-hidden" data-view="register" novalidate>
         <h2 class="title-heading">
-          <img class="title-logo" src="WF%20TOOLS.png" alt="WF TOOLS">
+          <img class="title-logo" src="./assets/logo.png" alt="WF TOOLS">
           <span class="title-text">Crea tu acceso</span>
         </h2>
         <p class="register-intro">Registra tus datos para generar tu usuario WF TOOLS. Recibirás un usuario automático con el formato <strong>clien.&lt;nombre&gt;@wftools.com</strong>.</p>
@@ -506,18 +506,18 @@
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
 
   <!-- App -->
-  <script src="js/app-core.js"></script>
-  <script src="js/session-utils.js"></script>
-  <script src="js/auth/login.js"></script>
-  <script src="js/auth/register.js"></script>
-  <script src="js/auth.js"></script>
+  <script src="./scripts/app-core.js"></script>
+  <script src="./scripts/session-utils.js"></script>
+  <script src="./scripts/auth/login.js"></script>
+  <script src="./scripts/auth/register.js"></script>
+  <script src="./scripts/auth.js"></script>
   <!-- Añadimos un parámetro de versión al script main.js para evitar que los cambios queden en caché -->
-  <script src="js/main.js?v=2"></script>
+  <script src="./scripts/main.js?v=2"></script>
 
   <!--
     Botón flotante para recargar créditos.  Se añade al final del cuerpo
     para no interferir con el flujo principal de la aplicación.  El botón
-    utiliza los estilos definidos en styles.css y apunta al archivo
+    utiliza los estilos definidos en styles/main.css y apunta al archivo
     principal unificado (index.html) para mostrar la página de recarga.
   -->
   <!--

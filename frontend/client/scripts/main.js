@@ -9,7 +9,7 @@ const ADMIN_EMAILS = [
   'admin3@example.com'  // correo adicional (puedes cambiarlo)
 ];
 const ADMIN_PREFIXES = ['admin.', 'sup.'];
-const ADMIN_PORTAL_URL = 'https://stikmena23-alt.github.io/wf-toolsadmin/';
+const ADMIN_PORTAL_URL = '../admin/index.html';
 
 function isPrivilegedEmail(email){
   if (!email) return false;

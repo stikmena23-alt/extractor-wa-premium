@@ -15,8 +15,8 @@ const ADMIN_EMAILS = new Set([
 const FUNCTIONS_BASE = SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co');
 
 // ✅ Ruta del LOGO (PNG) para el UI
-const LOGO_URL = './WF TOOLS.png';
-const CLIENT_APP_URL = '../WF-TOOLS/index.html';
+const LOGO_URL = './assets/logo.png';
+const CLIENT_APP_URL = '../client/index.html';
 
 const ENDPOINTS = {
   list: 'admin-list',
@@ -43,12 +43,13 @@ let unblockModalState = null;
 let blockedViewActive = false;
 let passwordModalState = null;
 let deleteModalState = null;
+let recoveryModalState = null;
 
 const DEFAULT_BLOCK_AMOUNT = 12;
 
 const qs = sel => document.querySelector(sel);
 const $rows = qs('#rows'), $cards = qs('#cards'), $empty = qs('#empty'), $skeleton = qs('#skeleton');
-const loginView = qs('#loginView'), adminView = qs('#adminView'), loginError = qs('#loginError');
+const loginView = qs('#loginView'), recoveryView = qs('#recoveryView'), adminView = qs('#adminView'), loginError = qs('#loginError');
 const btnLogin = qs('#btnLogin'), btnLoginText = btnLogin?.querySelector('.btn-text'), btnLoginSpinner = btnLogin?.querySelector('.btn-spinner');
 const emailInput = qs('#email');
 const passwordInput = qs('#password');
@@ -56,6 +57,18 @@ const rememberCheck = qs('#rememberUser');
 const togglePasswordBtn = qs('#togglePassword');
 const togglePasswordText = togglePasswordBtn?.querySelector('.toggle-text');
 const togglePasswordIcon = togglePasswordBtn?.querySelector('.icon');
+const btnShowRecovery = qs('#btnShowRecovery');
+const btnCancelRecovery = qs('#btnCancelRecovery');
+const recoveryForm = qs('#recoveryForm');
+const recoveryEmailInput = qs('#recoveryEmail');
+const recoveryCodeInput = qs('#recoveryCode');
+const recoveryPasswordInput = qs('#recoveryPassword');
+const recoveryPasswordConfirmInput = qs('#recoveryPasswordConfirm');
+const recoveryError = qs('#recoveryError');
+const recoverySuccess = qs('#recoverySuccess');
+const btnRecoverySubmit = qs('#btnRecoverySubmit');
+const recoverySubmitText = btnRecoverySubmit?.querySelector('.btn-text');
+const recoverySubmitSpinner = btnRecoverySubmit?.querySelector('.btn-spinner');
 const $overlay = qs('#overlay');
 const $creditSummary = qs('#creditSummary');
 const sessionOverlay = qs('#sessionOverlay');
@@ -118,6 +131,18 @@ const passwordModalError = qs('#passwordModalError');
 const btnPasswordConfirm = qs('#passwordModalConfirm');
 const btnPasswordCancel = qs('#passwordModalCancel');
 const btnPasswordClose = qs('#passwordModalClose');
+const recoveryModal = qs('#recoveryModal');
+const recoveryModalSubtitle = qs('#recoveryModalSubtitle');
+const recoveryModalCode = qs('#recoveryModalCode');
+const recoveryModalLink = qs('#recoveryModalLink');
+const recoveryModalCopyCode = qs('#recoveryModalCopyCode');
+const recoveryModalCopyLink = qs('#recoveryModalCopyLink');
+const recoveryModalDownload = qs('#recoveryModalDownloadQr');
+const recoveryModalClose = qs('#recoveryModalClose');
+const recoveryModalDone = qs('#recoveryModalDone');
+const recoveryModalQrCanvas = qs('#recoveryModalQr');
+const recoveryModalExpiration = qs('#recoveryModalExpiration');
+const recoveryModalError = qs('#recoveryModalError');
 const deleteModal = qs('#deleteModal');
 const deleteModalSubtitle = qs('#deleteModalSubtitle');
 const deleteModalMeta = qs('#deleteModalMeta');
@@ -178,6 +203,36 @@ function hide(v){
   }
 }
 
+function goToLoginView(){
+  hide(recoveryView);
+  hide(adminView);
+  show(loginView);
+  resetRecoveryFeedback();
+  recoveryForm?.reset();
+}
+
+function goToRecoveryView(){
+  hide(loginView);
+  hide(adminView);
+  show(recoveryView);
+  resetRecoveryFeedback();
+}
+
+function goToAdminView(){
+  hide(loginView);
+  hide(recoveryView);
+  show(adminView);
+}
+
+function focusLoginEmail(){
+  setTimeout(()=> emailInput?.focus(), 120);
+}
+
+function focusRecoveryStart(){
+  const target = recoveryCodeInput || recoveryEmailInput;
+  setTimeout(()=> target?.focus(), 140);
+}
+
 function overlay(on){ $overlay?.classList.toggle('show', !!on); }
 function sessionLoading(on, text='Gestionando sesión…'){
   if(!sessionOverlay) return;
@@ -202,6 +257,74 @@ function toast(msg, type='ok'){
 }
 
 function avatarFor(){ return `<div class="avatar"><img src="${LOGO_URL}" alt="WF TOOLS" /></div>` }
+
+async function copyToClipboard(value){
+  if(!value) return false;
+  try {
+    if(navigator?.clipboard && typeof navigator.clipboard.writeText === 'function'){
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch(err){
+    console.warn('No se pudo copiar usando Clipboard API', err);
+  }
+  try {
+    const textarea = document.createElement('textarea');
+    textarea.value = value;
+    textarea.setAttribute('readonly', 'true');
+    textarea.style.position = 'fixed';
+    textarea.style.opacity = '0';
+    document.body.append(textarea);
+    textarea.select();
+    const ok = document.execCommand('copy');
+    textarea.remove();
+    return ok;
+  } catch(err){
+    console.warn('No se pudo copiar al portapapeles', err);
+    return false;
+  }
+}
+
+function setButtonBusy(btn, busy, busyLabel='Procesando…'){
+  if(!btn) return;
+  if(busy){
+    if(!btn.dataset.prevHtml){
+      btn.dataset.prevHtml = btn.innerHTML;
+    }
+    btn.disabled = true;
+    btn.innerHTML = `⏳ ${busyLabel}`;
+  } else {
+    if(btn.dataset.prevHtml){
+      btn.innerHTML = btn.dataset.prevHtml;
+      delete btn.dataset.prevHtml;
+    }
+    btn.disabled = false;
+  }
+}
+
+function resetRecoveryFeedback(){
+  if(recoveryError){
+    recoveryError.textContent='';
+    recoveryError.style.display='none';
+  }
+  if(recoverySuccess){
+    recoverySuccess.textContent='';
+    recoverySuccess.style.display='none';
+  }
+}
+
+function setRecoveryLoading(on, label='Guardando…'){
+  if(!btnRecoverySubmit || !recoverySubmitText || !recoverySubmitSpinner) return;
+  btnRecoverySubmit.disabled = !!on;
+  if(on){
+    recoverySubmitText.style.display='none';
+    recoverySubmitSpinner.textContent = `⏳ ${label}`;
+    recoverySubmitSpinner.style.display='inline';
+  } else {
+    recoverySubmitText.style.display='inline';
+    recoverySubmitSpinner.style.display='none';
+  }
+}
 
 function escapeHTML(str){
   if(str == null) return '';
@@ -1138,7 +1261,8 @@ function allowBodyScrollIfNoModal(){
   const unblockOpen = unblockModal && unblockModal.style.display === 'flex';
   const passwordOpen = passwordModal && passwordModal.style.display === 'flex';
   const deleteOpen = deleteModal && deleteModal.style.display === 'flex';
-  if(!editOpen && !blockOpen && !unblockOpen && !passwordOpen && !deleteOpen){
+  const recoveryOpen = recoveryModal && recoveryModal.style.display === 'flex';
+  if(!editOpen && !blockOpen && !unblockOpen && !passwordOpen && !deleteOpen && !recoveryOpen){
     document.body.style.overflow = '';
   }
 }
@@ -1692,15 +1816,13 @@ async function guardAdmin(){
   const { data } = await sb.auth.getUser();
   const user = data?.user;
   if(!user){
-    hide(adminView);
-    show(loginView);
+    goToLoginView();
     resetAccountPanel();
     return false;
   }
   if(!isAdminUser(user)){
     await sb.auth.signOut();
-    hide(adminView);
-    show(loginView);
+    goToLoginView();
     resetAccountPanel();
     if (loginError){
       loginError.style.display='block';
@@ -1708,6 +1830,7 @@ async function guardAdmin(){
     }
     return false;
   }
+  goToAdminView();
   return true;
 }
 
@@ -1769,8 +1892,7 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
   rememberEmail(email);
   const ok = await guardAdmin();
   if(ok){
-    hide(loginView);
-    show(adminView);
+    goToAdminView();
     await fillCurrentUserBox();   // ✅ mostrar datos del admin
     loadBlockedUsers({ force: true, silent: true });
     loadUsers();
@@ -1780,6 +1902,27 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
     sessionLoading(false);
   }
 });
+
+btnShowRecovery?.addEventListener('click', ()=>{
+  if(recoveryForm) recoveryForm.reset();
+  if(recoveryEmailInput){
+    const loginEmail = emailInput?.value?.trim();
+    if(loginEmail){
+      recoveryEmailInput.value = loginEmail;
+    }
+  }
+  resetRecoveryFeedback();
+  goToRecoveryView();
+  focusRecoveryStart();
+});
+
+btnCancelRecovery?.addEventListener('click', ()=>{
+  goToLoginView();
+  resetRecoveryFeedback();
+  focusLoginEmail();
+});
+
+recoveryForm?.addEventListener('submit', handleRecoveryFormSubmit);
 
 qs('#btnLogout')?.addEventListener('click', async()=>{
   sessionLoading(true, 'Cerrando sesión…');
@@ -1817,8 +1960,7 @@ qs('#btnLogout')?.addEventListener('click', async()=>{
     }
 
     if(!hadError && (closed || noSession)){
-      hide(adminView);
-      show(loginView);
+      goToLoginView();
       resetAccountPanel();
       if(passwordInput) passwordInput.value='';
       if(cuBox){ cuBox.style.display = 'none'; }
@@ -2120,6 +2262,44 @@ passwordModalInput?.addEventListener('keydown', (event) => {
   }
 });
 
+recoveryModalClose?.addEventListener('click', () => closeRecoveryModal());
+recoveryModalDone?.addEventListener('click', () => closeRecoveryModal());
+recoveryModal?.addEventListener('click', (event) => {
+  if(event.target === recoveryModal){
+    closeRecoveryModal();
+  }
+});
+recoveryModalCopyCode?.addEventListener('click', async () => {
+  const code = recoveryModalState?.shortCode || recoveryModalCode?.textContent || '';
+  if(!code){ toast('No hay código para copiar', 'warn'); return; }
+  const ok = await copyToClipboard(code);
+  toast(ok ? 'Código copiado' : 'No se pudo copiar el código', ok ? 'ok' : 'err');
+});
+recoveryModalCopyLink?.addEventListener('click', async () => {
+  const url = recoveryModalState?.resetUrl || recoveryModalLink?.value || '';
+  if(!url){ toast('No hay enlace para copiar', 'warn'); return; }
+  const ok = await copyToClipboard(url);
+  toast(ok ? 'Enlace copiado' : 'No se pudo copiar el enlace', ok ? 'ok' : 'err');
+});
+recoveryModalDownload?.addEventListener('click', () => {
+  if(!recoveryModalQrCanvas){ toast('No hay QR para descargar', 'warn'); return; }
+  const url = recoveryModalQrCanvas.toDataURL('image/png');
+  if(!url){ toast('No se pudo generar la imagen del QR', 'err'); return; }
+  const link = document.createElement('a');
+  const code = (recoveryModalState?.shortCode || 'recuperacion').toLowerCase();
+  link.href = url;
+  link.download = `wf-tools-recovery-${code}.png`;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  toast('QR descargado');
+});
+recoveryModalLink?.addEventListener('focus', (event) => {
+  if(event.target instanceof HTMLInputElement){
+    event.target.select();
+  }
+});
+
 btnDeleteCancel?.addEventListener('click', () => closeDeleteModal());
 btnDeleteClose?.addEventListener('click', () => closeDeleteModal());
 btnDeleteConfirm?.addEventListener('click', () => handleDeleteConfirm());
@@ -2189,6 +2369,162 @@ function updateFilterButtons(){
     btn.classList.toggle('is-active', active);
     btn.setAttribute('aria-selected', active ? 'true' : 'false');
   });
+}
+
+function resetRecoveryModal(){
+  if(recoveryModalSubtitle) recoveryModalSubtitle.textContent = '—';
+  if(recoveryModalCode) recoveryModalCode.textContent = '—';
+  if(recoveryModalLink){
+    recoveryModalLink.value = '';
+    recoveryModalLink.dataset.url = '';
+  }
+  if(recoveryModalExpiration) recoveryModalExpiration.textContent = '';
+  if(recoveryModalError){
+    recoveryModalError.textContent = '';
+    recoveryModalError.style.display = 'none';
+  }
+  if(recoveryModalQrCanvas){
+    const ctx = recoveryModalQrCanvas.getContext('2d');
+    if(ctx){
+      ctx.clearRect(0, 0, recoveryModalQrCanvas.width, recoveryModalQrCanvas.height);
+    }
+  }
+  recoveryModalState = null;
+}
+
+function closeRecoveryModal(){
+  if(!recoveryModal) return;
+  recoveryModal.style.display = 'none';
+  resetRecoveryModal();
+  allowBodyScrollIfNoModal();
+}
+
+async function renderRecoveryQr(url){
+  if(!recoveryModalQrCanvas) return;
+  if(!url){
+    const ctx = recoveryModalQrCanvas.getContext('2d');
+    if(ctx){
+      ctx.clearRect(0, 0, recoveryModalQrCanvas.width, recoveryModalQrCanvas.height);
+    }
+    return;
+  }
+  try {
+    if(window.QRCode && typeof window.QRCode.toCanvas === 'function'){
+      await window.QRCode.toCanvas(recoveryModalQrCanvas, url, { width: 220, margin: 1 });
+    } else {
+      throw new Error('QRCode no disponible');
+    }
+  } catch(error){
+    console.warn('No se pudo generar el código QR', error);
+    if(recoveryModalError){
+      recoveryModalError.textContent = 'No se pudo generar el código QR. Usa el enlace directo.';
+      recoveryModalError.style.display = 'block';
+    }
+  }
+}
+
+async function openRecoveryModal(data){
+  if(!recoveryModal) return;
+  const { email, shortCode, resetUrl, expiresAt, qrData } = data || {};
+  resetRecoveryModal();
+  recoveryModalState = { email, shortCode, resetUrl, expiresAt, qrData };
+  const subtitlePieces = [];
+  if(email) subtitlePieces.push(email);
+  if(expiresAt){
+    const expiryDate = parseDate(expiresAt);
+    if(expiryDate && recoveryModalExpiration){
+      recoveryModalExpiration.textContent = `Expira el ${formatDateTime(expiryDate)}`;
+    }
+  }
+  if(recoveryModalSubtitle) recoveryModalSubtitle.textContent = subtitlePieces.length ? subtitlePieces.join(' • ') : '—';
+  if(recoveryModalCode) recoveryModalCode.textContent = shortCode ? String(shortCode).toUpperCase() : '—';
+  if(recoveryModalLink){
+    recoveryModalLink.value = resetUrl || '';
+    if(resetUrl){
+      recoveryModalLink.dataset.url = resetUrl;
+    }
+  }
+  if(recoveryModalError){
+    recoveryModalError.textContent = '';
+    recoveryModalError.style.display = 'none';
+  }
+  const qrSource = qrData || resetUrl || '';
+  await renderRecoveryQr(qrSource);
+  document.body.style.overflow = 'hidden';
+  recoveryModal.style.display = 'flex';
+}
+
+async function handleRecoveryFormSubmit(event){
+  if(event && typeof event.preventDefault === 'function'){ event.preventDefault(); }
+  if(!recoveryForm) return;
+  resetRecoveryFeedback();
+  const email = recoveryEmailInput?.value?.trim().toLowerCase() || '';
+  const code = (recoveryCodeInput?.value || '').trim().toUpperCase();
+  const password = recoveryPasswordInput?.value || '';
+  const confirm = recoveryPasswordConfirmInput?.value || '';
+
+  if(!email || !code || !password || !confirm){
+    if(recoveryError){
+      recoveryError.textContent = 'Completa correo, código y nueva contraseña.';
+      recoveryError.style.display = 'block';
+    }
+    return;
+  }
+  if(password !== confirm){
+    if(recoveryError){
+      recoveryError.textContent = 'Las contraseñas no coinciden.';
+      recoveryError.style.display = 'block';
+    }
+    recoveryPasswordConfirmInput?.focus();
+    return;
+  }
+  if(password.length < 12){
+    if(recoveryError){
+      recoveryError.textContent = 'La nueva contraseña debe tener al menos 12 caracteres.';
+      recoveryError.style.display = 'block';
+    }
+    recoveryPasswordInput?.focus();
+    return;
+  }
+
+  setRecoveryLoading(true);
+  try {
+    const res = await api(ENDPOINTS.setPassword, { method:'POST', body:{ email, code, password } });
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch(_err){
+      payload = null;
+    }
+    if(res.ok){
+      if(recoverySuccess){
+        recoverySuccess.textContent = 'Contraseña actualizada. Inicia sesión con tu nueva clave.';
+        recoverySuccess.style.display = 'block';
+      }
+      rememberEmail(email);
+      if(emailInput) emailInput.value = email;
+      if(recoveryForm) recoveryForm.reset();
+      if(recoveryEmailInput) recoveryEmailInput.value = email;
+      setTimeout(()=>{
+        goToLoginView();
+        focusLoginEmail();
+      }, 1500);
+    } else {
+      const message = payload?.message || payload?.error || 'No se pudo actualizar la contraseña.';
+      if(recoveryError){
+        recoveryError.textContent = message;
+        recoveryError.style.display = 'block';
+      }
+    }
+  } catch(err){
+    console.error('Fallo en recuperación de contraseña', err);
+    if(recoveryError){
+      recoveryError.textContent = 'Ocurrió un error inesperado. Intenta nuevamente.';
+      recoveryError.style.display = 'block';
+    }
+  } finally {
+    setRecoveryLoading(false);
+  }
 }
 
 function setFilterMode(mode){
@@ -2449,10 +2785,31 @@ document.addEventListener('click', async (e)=>{
   const act = btn.dataset.act; if(!act) return;
 
   if(act==='recovery'){
-    const email = btn.dataset.email; if(!email){ toast('Ese usuario no tiene email','warn'); return; }
-    btn.disabled = true;
-    await api(ENDPOINTS.recovery, { method:'POST', body:{ email } }).catch(()=>{});
-    btn.disabled = false; toast('Link de recuperación enviado');
+    const email = btn.dataset.email;
+    if(!email){ toast('Ese usuario no tiene email','warn'); return; }
+    setButtonBusy(btn, true, 'Generando…');
+    try {
+      const res = await api(ENDPOINTS.recovery, { method:'POST', body:{ email } });
+      let payload = null;
+      try {
+        payload = await res.json();
+      } catch(_err){
+        payload = null;
+      }
+      if(res.ok && payload?.data){
+        openRecoveryModal({ ...payload.data, email });
+        toast('Recuperación generada');
+      } else {
+        const message = payload?.message || payload?.error || 'No se pudo generar el enlace de recuperación.';
+        toast(message, 'err');
+      }
+    } catch(err){
+      console.error('Error generando recuperación', err);
+      toast('No se pudo generar el enlace de recuperación', 'err');
+    } finally {
+      setButtonBusy(btn, false);
+    }
+    return;
   }
 
   if(act==='password'){
@@ -2626,11 +2983,33 @@ qs('#btnSave')?.addEventListener('click', async()=>{
 });
 
 qs('#btnRecovery')?.addEventListener('click', async()=>{
-  if(!currentEdit?.email) return;
-  const btn = qs('#btnRecovery'); btn.disabled = true; btn.textContent = 'Enviando…';
-  await api(ENDPOINTS.recovery, { method:'POST', body:{ email: currentEdit.email } }).catch(()=>{});
-  btn.disabled = false; btn.textContent = 'Enviar link de recuperación';
-  toast('Link de recuperación enviado');
+  if(!currentEdit?.email){
+    toast('El usuario no tiene correo registrado','warn');
+    return;
+  }
+  const btn = qs('#btnRecovery');
+  setButtonBusy(btn, true, 'Generando…');
+  try {
+    const res = await api(ENDPOINTS.recovery, { method:'POST', body:{ email: currentEdit.email } });
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch(_err){
+      payload = null;
+    }
+    if(res.ok && payload?.data){
+      openRecoveryModal({ ...payload.data, email: currentEdit.email });
+      toast('Recuperación generada');
+    } else {
+      const message = payload?.message || payload?.error || 'No se pudo generar el enlace de recuperación.';
+      toast(message, 'err');
+    }
+  } catch(err){
+    console.error('Error generando recuperación desde modal', err);
+    toast('No se pudo generar el enlace de recuperación', 'err');
+  } finally {
+    setButtonBusy(btn, false);
+  }
 });
 
 // Cerrar modales con tecla Escape
@@ -2646,6 +3025,10 @@ window.addEventListener('keydown', (e)=>{
     }
     if(passwordModal && passwordModal.style.display === 'flex'){
       closePasswordModal();
+      return;
+    }
+    if(recoveryModal && recoveryModal.style.display === 'flex'){
+      closeRecoveryModal();
       return;
     }
     if(deleteModal && deleteModal.style.display === 'flex'){
