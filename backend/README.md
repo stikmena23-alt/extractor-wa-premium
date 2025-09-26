@@ -44,12 +44,10 @@ If `ADMIN_RECOVERY_BASE_URL` is not set the system falls back to
 ## Deployment checklist
 
 1. Apply the migrations to Supabase.
-2. Deploy the Edge Functions located in `supabase/functions/admin-recovery` and
-   `supabase/functions/admin-setpassword`.
+2. Deploy the Edge Function located in `supabase/functions/admin-setpassword`.
 3. Expose the functions via HTTPS (the Supabase CLI does this automatically).
 4. Wire the admin UI to the deployed URLs and ensure the environment variables above
    are configured in the Supabase dashboard for the functions.
 
-With the schema and environment configured, admins can request recovery codes from the
-panel, receive the generated link/QR/short-code, and complete the password reset flow
-through the supplied form.
+With the schema and environment configured, the admin panel verifies customer emails in
+`profiles` and resets passwords directly through the `admin-setpassword` function.

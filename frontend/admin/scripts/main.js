@@ -21,7 +21,6 @@ const CLIENT_APP_URL = '../client/index.html';
 const ENDPOINTS = {
   list: 'admin-list',
   update: 'admin-update',
-  recovery: 'admin-recovery',
   setPassword: 'admin-setpassword',
   block: 'admin-block',
   remove: 'admin-delete',
@@ -49,7 +48,7 @@ const DEFAULT_BLOCK_AMOUNT = 12;
 
 const qs = sel => document.querySelector(sel);
 const $rows = qs('#rows'), $cards = qs('#cards'), $empty = qs('#empty'), $skeleton = qs('#skeleton');
-const loginView = qs('#loginView'), recoveryView = qs('#recoveryView'), adminView = qs('#adminView'), loginError = qs('#loginError');
+const loginView = qs('#loginView'), adminView = qs('#adminView'), loginError = qs('#loginError');
 const btnLogin = qs('#btnLogin'), btnLoginText = btnLogin?.querySelector('.btn-text'), btnLoginSpinner = btnLogin?.querySelector('.btn-spinner');
 const emailInput = qs('#email');
 const passwordInput = qs('#password');
@@ -57,18 +56,6 @@ const rememberCheck = qs('#rememberUser');
 const togglePasswordBtn = qs('#togglePassword');
 const togglePasswordText = togglePasswordBtn?.querySelector('.toggle-text');
 const togglePasswordIcon = togglePasswordBtn?.querySelector('.icon');
-const btnShowRecovery = qs('#btnShowRecovery');
-const btnCancelRecovery = qs('#btnCancelRecovery');
-const recoveryForm = qs('#recoveryForm');
-const recoveryEmailInput = qs('#recoveryEmail');
-const recoveryCodeInput = qs('#recoveryCode');
-const recoveryPasswordInput = qs('#recoveryPassword');
-const recoveryPasswordConfirmInput = qs('#recoveryPasswordConfirm');
-const recoveryError = qs('#recoveryError');
-const recoverySuccess = qs('#recoverySuccess');
-const btnRecoverySubmit = qs('#btnRecoverySubmit');
-const recoverySubmitText = btnRecoverySubmit?.querySelector('.btn-text');
-const recoverySubmitSpinner = btnRecoverySubmit?.querySelector('.btn-spinner');
 const $overlay = qs('#overlay');
 const $creditSummary = qs('#creditSummary');
 const sessionOverlay = qs('#sessionOverlay');
@@ -133,18 +120,14 @@ const btnPasswordCancel = qs('#passwordModalCancel');
 const btnPasswordClose = qs('#passwordModalClose');
 const recoveryModal = qs('#recoveryModal');
 const recoveryModalSubtitle = qs('#recoveryModalSubtitle');
-const recoveryModalCode = qs('#recoveryModalCode');
-const recoveryModalLink = qs('#recoveryModalLink');
-const recoveryModalCopyCode = qs('#recoveryModalCopyCode');
-const recoveryModalCopyLink = qs('#recoveryModalCopyLink');
-const recoveryModalDownload = qs('#recoveryModalDownloadQr');
+const recoveryModalForm = qs('#recoveryModalForm');
+const recoveryModalEmail = qs('#recoveryModalEmail');
+const recoveryModalPassword = qs('#recoveryModalPassword');
+const recoveryModalConfirm = qs('#recoveryModalConfirm');
+const recoveryModalMessage = qs('#recoveryModalMessage');
 const recoveryModalClose = qs('#recoveryModalClose');
-const recoveryModalDone = qs('#recoveryModalDone');
-const recoveryModalQrCanvas = qs('#recoveryModalQr');
-const recoveryModalExpiration = qs('#recoveryModalExpiration');
-const recoveryModalError = qs('#recoveryModalError');
-const recoveryModalSendEmail = qs('#recoveryModalSendEmail');
-const recoveryModalSendWhatsapp = qs('#recoveryModalSendWhatsapp');
+const recoveryModalCancel = qs('#recoveryModalCancel');
+const recoveryModalSubmit = qs('#recoveryModalSubmit');
 const deleteModal = qs('#deleteModal');
 const deleteModalSubtitle = qs('#deleteModalSubtitle');
 const deleteModalMeta = qs('#deleteModalMeta');
@@ -206,33 +189,17 @@ function hide(v){
 }
 
 function goToLoginView(){
-  hide(recoveryView);
   hide(adminView);
   show(loginView);
-  resetRecoveryFeedback();
-  recoveryForm?.reset();
-}
-
-function goToRecoveryView(){
-  hide(loginView);
-  hide(adminView);
-  show(recoveryView);
-  resetRecoveryFeedback();
-}
-
-function goToAdminView(){
-  hide(loginView);
-  hide(recoveryView);
-  show(adminView);
 }
 
 function focusLoginEmail(){
   setTimeout(()=> emailInput?.focus(), 120);
 }
 
-function focusRecoveryStart(){
-  const target = recoveryCodeInput || recoveryEmailInput;
-  setTimeout(()=> target?.focus(), 140);
+function goToAdminView(){
+  hide(loginView);
+  show(adminView);
 }
 
 function overlay(on){ $overlay?.classList.toggle('show', !!on); }
@@ -301,30 +268,6 @@ function setButtonBusy(btn, busy, busyLabel='Procesando…'){
       delete btn.dataset.prevHtml;
     }
     btn.disabled = false;
-  }
-}
-
-function resetRecoveryFeedback(){
-  if(recoveryError){
-    recoveryError.textContent='';
-    recoveryError.style.display='none';
-  }
-  if(recoverySuccess){
-    recoverySuccess.textContent='';
-    recoverySuccess.style.display='none';
-  }
-}
-
-function setRecoveryLoading(on, label='Guardando…'){
-  if(!btnRecoverySubmit || !recoverySubmitText || !recoverySubmitSpinner) return;
-  btnRecoverySubmit.disabled = !!on;
-  if(on){
-    recoverySubmitText.style.display='none';
-    recoverySubmitSpinner.textContent = `⏳ ${label}`;
-    recoverySubmitSpinner.style.display='inline';
-  } else {
-    recoverySubmitText.style.display='inline';
-    recoverySubmitSpinner.style.display='none';
   }
 }
 
@@ -1269,6 +1212,164 @@ function allowBodyScrollIfNoModal(){
   }
 }
 
+function resetRecoveryModal(){
+  if(recoveryModalForm){
+    recoveryModalForm.reset();
+  }
+  if(recoveryModalMessage){
+    recoveryModalMessage.textContent = '';
+    recoveryModalMessage.style.display = 'none';
+    recoveryModalMessage.style.color = 'var(--danger)';
+  }
+}
+
+function setRecoveryModalMessage(text, tone='error'){
+  if(!recoveryModalMessage) return;
+  recoveryModalMessage.textContent = text || '';
+  recoveryModalMessage.style.display = text ? 'block' : 'none';
+  recoveryModalMessage.style.color = tone === 'success' ? 'var(--ok)' : 'var(--danger)';
+}
+
+function closeRecoveryModal(){
+  if(!recoveryModal) return;
+  recoveryModal.style.display = 'none';
+  recoveryModalState = null;
+  resetRecoveryModal();
+  allowBodyScrollIfNoModal();
+}
+
+function openRecoveryModal({ email } = {}){
+  if(!recoveryModal) return;
+  recoveryModalState = { email: email || '' };
+  if(recoveryModalSubtitle){
+    recoveryModalSubtitle.textContent = email ? `Cliente: ${email}` : 'Verificaremos el correo en Supabase.';
+  }
+  resetRecoveryModal();
+  if(recoveryModalEmail){
+    recoveryModalEmail.value = email || '';
+    setTimeout(()=>{
+      try {
+        recoveryModalEmail.focus({ preventScroll: true });
+      } catch(_err){
+        recoveryModalEmail.focus();
+      }
+    }, 120);
+  }
+  document.body.style.overflow = 'hidden';
+  recoveryModal.style.display = 'flex';
+}
+
+function ensureRecoveryModalFocus(){
+  if(recoveryModalEmail && document.activeElement !== recoveryModalEmail){
+    try {
+      recoveryModalEmail.focus({ preventScroll: true });
+    } catch(_err){
+      recoveryModalEmail.focus();
+    }
+  }
+}
+
+async function findProfileByEmail(email){
+  const normalized = (email || '').trim().toLowerCase();
+  if(!normalized) return { data: null };
+  const attempts = [normalized];
+  if(normalized !== email.trim()) attempts.push(email.trim());
+  const columns = ['email','auth_email','contact_email','user_email'];
+  for(const column of columns){
+    for(const value of attempts){
+      try {
+        const query = sb.from('profiles').select(`id, ${column}`).eq(column, value).limit(1);
+        const executor = typeof query.maybeSingle === 'function' ? query.maybeSingle : query.single;
+        const response = await executor.call(query);
+        if(response.error){
+          if(isMissingColumnError(response.error)){
+            break;
+          }
+          return { error: response.error };
+        }
+        if(response.data){
+          return { data: { id: response.data.id, column } };
+        }
+      } catch(error){
+        if(isMissingColumnError(error)){
+          break;
+        }
+        return { error };
+      }
+    }
+  }
+  return { data: null };
+}
+
+async function handleRecoveryModalSubmit(){
+  const email = (recoveryModalEmail?.value || '').trim();
+  const password = recoveryModalPassword?.value || '';
+  const confirm = recoveryModalConfirm?.value || '';
+
+  setRecoveryModalMessage('');
+
+  if(!email || !email.includes('@')){
+    setRecoveryModalMessage('Ingresa un correo válido.');
+    ensureRecoveryModalFocus();
+    return;
+  }
+  if(password.length < 12){
+    setRecoveryModalMessage('La contraseña debe tener mínimo 12 caracteres.');
+    recoveryModalPassword?.focus();
+    return;
+  }
+  if(password !== confirm){
+    setRecoveryModalMessage('Las contraseñas no coinciden.');
+    recoveryModalConfirm?.focus();
+    return;
+  }
+
+  setButtonBusy(recoveryModalSubmit, true, 'Actualizando…');
+  try {
+    const lookup = await findProfileByEmail(email);
+    if(lookup.error){
+      console.error('Error buscando perfil por correo', lookup.error);
+      setRecoveryModalMessage('No se pudo consultar el perfil en Supabase.');
+      return;
+    }
+    if(!lookup.data){
+      setRecoveryModalMessage('No encontramos un cliente con ese correo.');
+      ensureRecoveryModalFocus();
+      return;
+    }
+
+    const res = await api(ENDPOINTS.setPassword, {
+      method: 'POST',
+      body: { userId: lookup.data.id, password },
+    });
+
+    let payload = null;
+    try {
+      payload = await res.json();
+    } catch(_err){
+      payload = null;
+    }
+
+    if(!res.ok){
+      const message = payload?.message || payload?.error || 'No se pudo actualizar la contraseña.';
+      setRecoveryModalMessage(message);
+      return;
+    }
+
+    setRecoveryModalMessage('Contraseña actualizada correctamente.', 'success');
+    rememberEmail(email);
+    setTimeout(() => {
+      closeRecoveryModal();
+      toast('Contraseña restablecida');
+    }, 1200);
+  } catch(error){
+    console.error('Error restableciendo contraseña', error);
+    setRecoveryModalMessage('Ocurrió un error inesperado. Intenta nuevamente.');
+  } finally {
+    setButtonBusy(recoveryModalSubmit, false);
+  }
+}
+
 function updateBlockSummary(){
   if(!blockModalState) return;
   const since = blockModalState.since instanceof Date ? blockModalState.since : new Date();
@@ -1905,27 +2006,6 @@ qs('#btnLogin')?.addEventListener('click', async()=>{
   }
 });
 
-btnShowRecovery?.addEventListener('click', ()=>{
-  if(recoveryForm) recoveryForm.reset();
-  if(recoveryEmailInput){
-    const loginEmail = emailInput?.value?.trim();
-    if(loginEmail){
-      recoveryEmailInput.value = loginEmail;
-    }
-  }
-  resetRecoveryFeedback();
-  goToRecoveryView();
-  focusRecoveryStart();
-});
-
-btnCancelRecovery?.addEventListener('click', ()=>{
-  goToLoginView();
-  resetRecoveryFeedback();
-  focusLoginEmail();
-});
-
-recoveryForm?.addEventListener('submit', handleRecoveryFormSubmit);
-
 qs('#btnLogout')?.addEventListener('click', async()=>{
   sessionLoading(true, 'Cerrando sesión…');
   let closed = false;
@@ -2265,44 +2345,17 @@ passwordModalInput?.addEventListener('keydown', (event) => {
 });
 
 recoveryModalClose?.addEventListener('click', () => closeRecoveryModal());
-recoveryModalDone?.addEventListener('click', () => closeRecoveryModal());
+recoveryModalCancel?.addEventListener('click', () => closeRecoveryModal());
 recoveryModal?.addEventListener('click', (event) => {
   if(event.target === recoveryModal){
     closeRecoveryModal();
   }
 });
-recoveryModalCopyCode?.addEventListener('click', async () => {
-  const code = recoveryModalState?.shortCode || recoveryModalCode?.textContent || '';
-  if(!code){ toast('No hay código para copiar', 'warn'); return; }
-  const ok = await copyToClipboard(code);
-  toast(ok ? 'Código copiado' : 'No se pudo copiar el código', ok ? 'ok' : 'err');
+recoveryModalForm?.addEventListener('submit', (event) => {
+  event.preventDefault();
+  handleRecoveryModalSubmit();
 });
-recoveryModalCopyLink?.addEventListener('click', async () => {
-  const url = recoveryModalState?.resetUrl || recoveryModalLink?.value || '';
-  if(!url){ toast('No hay enlace para copiar', 'warn'); return; }
-  const ok = await copyToClipboard(url);
-  toast(ok ? 'Enlace copiado' : 'No se pudo copiar el enlace', ok ? 'ok' : 'err');
-});
-recoveryModalSendEmail?.addEventListener('click', () => shareRecoveryLink('email'));
-recoveryModalSendWhatsapp?.addEventListener('click', () => shareRecoveryLink('whatsapp'));
-recoveryModalDownload?.addEventListener('click', () => {
-  if(!recoveryModalQrCanvas){ toast('No hay QR para descargar', 'warn'); return; }
-  const url = recoveryModalQrCanvas.toDataURL('image/png');
-  if(!url){ toast('No se pudo generar la imagen del QR', 'err'); return; }
-  const link = document.createElement('a');
-  const code = (recoveryModalState?.shortCode || 'recuperacion').toLowerCase();
-  link.href = url;
-  link.download = `wf-tools-recovery-${code}.png`;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  toast('QR descargado');
-});
-recoveryModalLink?.addEventListener('focus', (event) => {
-  if(event.target instanceof HTMLInputElement){
-    event.target.select();
-  }
-});
+recoveryModalSubmit?.addEventListener('click', () => handleRecoveryModalSubmit());
 
 btnDeleteCancel?.addEventListener('click', () => closeDeleteModal());
 btnDeleteClose?.addEventListener('click', () => closeDeleteModal());
@@ -2373,220 +2426,6 @@ function updateFilterButtons(){
     btn.classList.toggle('is-active', active);
     btn.setAttribute('aria-selected', active ? 'true' : 'false');
   });
-}
-
-function resetRecoveryModal(){
-  if(recoveryModalSubtitle) recoveryModalSubtitle.textContent = '—';
-  if(recoveryModalCode) recoveryModalCode.textContent = '—';
-  if(recoveryModalLink){
-    recoveryModalLink.value = '';
-    recoveryModalLink.dataset.url = '';
-    recoveryModalLink.removeAttribute('aria-label');
-  }
-  if(recoveryModalExpiration) recoveryModalExpiration.textContent = '';
-  if(recoveryModalError){
-    recoveryModalError.textContent = '';
-    recoveryModalError.style.display = 'none';
-  }
-  if(recoveryModalSendEmail) recoveryModalSendEmail.disabled = true;
-  if(recoveryModalSendWhatsapp) recoveryModalSendWhatsapp.disabled = true;
-  if(recoveryModalQrCanvas){
-    const ctx = recoveryModalQrCanvas.getContext('2d');
-    if(ctx){
-      ctx.clearRect(0, 0, recoveryModalQrCanvas.width, recoveryModalQrCanvas.height);
-    }
-  }
-  recoveryModalState = null;
-}
-
-function closeRecoveryModal(){
-  if(!recoveryModal) return;
-  recoveryModal.style.display = 'none';
-  resetRecoveryModal();
-  allowBodyScrollIfNoModal();
-}
-
-async function renderRecoveryQr(url){
-  if(!recoveryModalQrCanvas) return;
-  if(!url){
-    const ctx = recoveryModalQrCanvas.getContext('2d');
-    if(ctx){
-      ctx.clearRect(0, 0, recoveryModalQrCanvas.width, recoveryModalQrCanvas.height);
-    }
-    return;
-  }
-  try {
-    if(window.QRCode && typeof window.QRCode.toCanvas === 'function'){
-      await window.QRCode.toCanvas(recoveryModalQrCanvas, url, { width: 220, margin: 1 });
-    } else {
-      throw new Error('QRCode no disponible');
-    }
-  } catch(error){
-    console.warn('No se pudo generar el código QR', error);
-    if(recoveryModalError){
-      recoveryModalError.textContent = 'No se pudo generar el código QR. Usa el enlace directo.';
-      recoveryModalError.style.display = 'block';
-    }
-  }
-}
-
-async function openRecoveryModal(data){
-  if(!recoveryModal) return;
-  const { email, shortCode, resetUrl, expiresAt, qrData } = data || {};
-  resetRecoveryModal();
-  recoveryModalState = { email, shortCode, resetUrl, expiresAt, qrData };
-  const subtitlePieces = [];
-  if(email) subtitlePieces.push(email);
-  if(shortCode) subtitlePieces.push(`Código ${String(shortCode).toUpperCase()}`);
-  if(expiresAt){
-    const expiryDate = parseDate(expiresAt);
-    if(expiryDate && recoveryModalExpiration){
-      recoveryModalExpiration.textContent = `Expira el ${formatDateTime(expiryDate)}`;
-    }
-  }
-  if(recoveryModalSubtitle) recoveryModalSubtitle.textContent = subtitlePieces.length ? subtitlePieces.join(' • ') : '—';
-  if(recoveryModalCode) recoveryModalCode.textContent = shortCode ? String(shortCode).toUpperCase() : '—';
-  if(recoveryModalLink){
-    recoveryModalLink.value = resetUrl || '';
-    if(resetUrl){
-      recoveryModalLink.dataset.url = resetUrl;
-      recoveryModalLink.setAttribute('aria-label', `Enlace de recuperación para ${email || 'usuario'}`);
-    } else {
-      delete recoveryModalLink.dataset.url;
-      recoveryModalLink.removeAttribute('aria-label');
-    }
-  }
-  if(recoveryModalError){
-    recoveryModalError.textContent = '';
-    recoveryModalError.style.display = 'none';
-  }
-  if(recoveryModalSendEmail) recoveryModalSendEmail.disabled = false;
-  if(recoveryModalSendWhatsapp) recoveryModalSendWhatsapp.disabled = false;
-  const qrSource = qrData || resetUrl || '';
-  await renderRecoveryQr(qrSource);
-  document.body.style.overflow = 'hidden';
-  recoveryModal.style.display = 'flex';
-}
-
-function buildRecoveryShareMessage(state){
-  if(!state) return '';
-  const { shortCode, resetUrl, expiresAt } = state;
-  const lines = [
-    'Hola,',
-    'Usa estos datos para restablecer tu contraseña de WF-TOOLS:',
-  ];
-  if(shortCode){
-    lines.push(`Código: ${String(shortCode).toUpperCase()}`);
-  }
-  if(resetUrl){
-    lines.push(`Enlace directo: ${resetUrl}`);
-  }
-  if(expiresAt){
-    const expiry = parseDate(expiresAt);
-    if(expiry){
-      lines.push(`Disponible hasta: ${formatDateTime(expiry)}`);
-    }
-  }
-  lines.push('Si no solicitaste el cambio, ignora este mensaje.');
-  return lines.filter(Boolean).join('\n');
-}
-
-function shareRecoveryLink(channel){
-  if(!recoveryModalState){
-    toast('Genera un enlace de recuperación antes de compartirlo', 'warn');
-    return;
-  }
-  const message = buildRecoveryShareMessage(recoveryModalState);
-  if(!message){
-    toast('No hay información para compartir', 'warn');
-    return;
-  }
-  if(channel === 'email'){
-    const target = recoveryModalState.email ? encodeURIComponent(recoveryModalState.email) : '';
-    const subject = encodeURIComponent('WF-TOOLS · Restablecer contraseña');
-    const body = encodeURIComponent(message);
-    const mailtoUrl = `mailto:${target}?subject=${subject}&body=${body}`;
-    window.open(mailtoUrl, '_blank', 'noopener');
-    return;
-  }
-  if(channel === 'whatsapp'){
-    const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(whatsappUrl, '_blank', 'noopener');
-    return;
-  }
-}
-
-async function handleRecoveryFormSubmit(event){
-  if(event && typeof event.preventDefault === 'function'){ event.preventDefault(); }
-  if(!recoveryForm) return;
-  resetRecoveryFeedback();
-  const email = recoveryEmailInput?.value?.trim().toLowerCase() || '';
-  const code = (recoveryCodeInput?.value || '').trim().toUpperCase();
-  const password = recoveryPasswordInput?.value || '';
-  const confirm = recoveryPasswordConfirmInput?.value || '';
-
-  if(!email || !code || !password || !confirm){
-    if(recoveryError){
-      recoveryError.textContent = 'Completa correo, código y nueva contraseña.';
-      recoveryError.style.display = 'block';
-    }
-    return;
-  }
-  if(password !== confirm){
-    if(recoveryError){
-      recoveryError.textContent = 'Las contraseñas no coinciden.';
-      recoveryError.style.display = 'block';
-    }
-    recoveryPasswordConfirmInput?.focus();
-    return;
-  }
-  if(password.length < 12){
-    if(recoveryError){
-      recoveryError.textContent = 'La nueva contraseña debe tener al menos 12 caracteres.';
-      recoveryError.style.display = 'block';
-    }
-    recoveryPasswordInput?.focus();
-    return;
-  }
-
-  setRecoveryLoading(true);
-  try {
-    const res = await api(ENDPOINTS.setPassword, { method:'POST', body:{ email, code, password } });
-    let payload = null;
-    try {
-      payload = await res.json();
-    } catch(_err){
-      payload = null;
-    }
-    if(res.ok){
-      if(recoverySuccess){
-        recoverySuccess.textContent = 'Contraseña actualizada. Inicia sesión con tu nueva clave.';
-        recoverySuccess.style.display = 'block';
-      }
-      rememberEmail(email);
-      if(emailInput) emailInput.value = email;
-      if(recoveryForm) recoveryForm.reset();
-      if(recoveryEmailInput) recoveryEmailInput.value = email;
-      setTimeout(()=>{
-        goToLoginView();
-        focusLoginEmail();
-      }, 1500);
-    } else {
-      const message = payload?.message || payload?.error || 'No se pudo actualizar la contraseña.';
-      if(recoveryError){
-        recoveryError.textContent = message;
-        recoveryError.style.display = 'block';
-      }
-    }
-  } catch(err){
-    console.error('Fallo en recuperación de contraseña', err);
-    if(recoveryError){
-      recoveryError.textContent = 'Ocurrió un error inesperado. Intenta nuevamente.';
-      recoveryError.style.display = 'block';
-    }
-  } finally {
-    setRecoveryLoading(false);
-  }
 }
 
 function setFilterMode(mode){
@@ -2673,7 +2512,7 @@ function renderRows(){
         <td>
           <div class="actions">
             <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
-            <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Link recuperación</button>
+            <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Restablecer contraseña</button>
             <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Cambiar contraseña</button>
             <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" ${blockBtnExtraData} title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
             <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
@@ -2705,7 +2544,7 @@ function renderRows(){
         ${creditWarningHtml}
         <div class="row-actions">
           <button class="btn btn-ghost btn-sm" data-act="edit" data-id="${safeId}">Editar</button>
-          <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Recuperación</button>
+          <button class="btn btn-ghost btn-sm" data-act="recovery" data-email="${safeEmail}">Restablecer contraseña</button>
           <button class="btn btn-primary btn-sm" data-act="password" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Contraseña</button>
           <button class="${blockBtnClass}" data-act="block" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}" ${blockBtnExtraData} title="${escapeHTML(blockBtnTitle)}">${blockBtnLabel}</button>
           <button class="btn btn-danger btn-sm" data-act="delete" data-id="${safeId}" data-email="${safeEmail}" data-name="${safeDisplayName}">Eliminar</button>
@@ -2847,30 +2686,9 @@ document.addEventListener('click', async (e)=>{
   const act = btn.dataset.act; if(!act) return;
 
   if(act==='recovery'){
-    const email = btn.dataset.email;
-    if(!email){ toast('Ese usuario no tiene email','warn'); return; }
-    setButtonBusy(btn, true, 'Generando…');
-    try {
-      const res = await api(ENDPOINTS.recovery, { method:'POST', body:{ email } });
-      let payload = null;
-      try {
-        payload = await res.json();
-      } catch(_err){
-        payload = null;
-      }
-      if(res.ok && payload?.data){
-        openRecoveryModal({ ...payload.data, email });
-        toast('Recuperación generada');
-      } else {
-        const message = payload?.message || payload?.error || 'No se pudo generar el enlace de recuperación.';
-        toast(message, 'err');
-      }
-    } catch(err){
-      console.error('Error generando recuperación', err);
-      toast('No se pudo generar el enlace de recuperación', 'err');
-    } finally {
-      setButtonBusy(btn, false);
-    }
+    const email = btn.dataset.email || '';
+    if(!email){ toast('Ese usuario no tiene un correo registrado','warn'); return; }
+    openRecoveryModal({ email });
     return;
   }
 
@@ -3044,34 +2862,12 @@ qs('#btnSave')?.addEventListener('click', async()=>{
   loadUsers();
 });
 
-qs('#btnRecovery')?.addEventListener('click', async()=>{
+qs('#btnRecovery')?.addEventListener('click', ()=>{
   if(!currentEdit?.email){
     toast('El usuario no tiene correo registrado','warn');
     return;
   }
-  const btn = qs('#btnRecovery');
-  setButtonBusy(btn, true, 'Generando…');
-  try {
-    const res = await api(ENDPOINTS.recovery, { method:'POST', body:{ email: currentEdit.email } });
-    let payload = null;
-    try {
-      payload = await res.json();
-    } catch(_err){
-      payload = null;
-    }
-    if(res.ok && payload?.data){
-      openRecoveryModal({ ...payload.data, email: currentEdit.email });
-      toast('Recuperación generada');
-    } else {
-      const message = payload?.message || payload?.error || 'No se pudo generar el enlace de recuperación.';
-      toast(message, 'err');
-    }
-  } catch(err){
-    console.error('Error generando recuperación desde modal', err);
-    toast('No se pudo generar el enlace de recuperación', 'err');
-  } finally {
-    setButtonBusy(btn, false);
-  }
+  openRecoveryModal({ email: currentEdit.email });
 });
 
 // Cerrar modales con tecla Escape

@@ -1,82 +1,124 @@
-import { identifyActor } from "../../../backend/src/modules/auth/identifyActor.ts";
-import {
-  buildCorsHeaders,
-  getRequestOrigin,
-  handleHttpError,
-  jsonResponse,
-  methodNotAllowed,
-  noContent,
-} from "../../../backend/src/lib/http.ts";
-import { completeAdminRecovery } from "../../../backend/src/modules/admin/recovery/index.ts";
-import { updateAdminPassword } from "../../../backend/src/modules/admin/accounts.ts";
-import { createServiceClient } from "../../../backend/src/lib/supabaseClient.ts";
-import { ValidationError } from "../../../backend/src/lib/errors.ts";
+// @ts-nocheck
+import { createClient } from "npm:@supabase/supabase-js@2";
 
-const allowedMethods = "POST, OPTIONS";
+const REV = "admin-setpassword@rev-multi-admin-v2";
+const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+const ANON = Deno.env.get("SUPABASE_ANON_KEY");
+const SRV = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-Deno.serve(async (request) => {
-  const origin = getRequestOrigin(request);
-  const corsHeaders = buildCorsHeaders(origin, allowedMethods);
+const HARDCODED_ADMIN_EMAILS = new Set([
+  "stikmena6@gmail.com",
+  "admin.kevinqt@wftools.com",
+  "admin.devinsonmq@wftools.com",
+  "admin.franciscojm@wftools.com",
+]);
 
-  if (request.method === "OPTIONS") {
-    return noContent(corsHeaders);
-  }
+function withCORS(handler) {
+  const baseHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers": "authorization, apikey, x-client-info, content-type",
+    "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+    "Cache-Control": "no-store",
+  };
 
-  if (request.method !== "POST") {
-    return methodNotAllowed(origin, allowedMethods);
-  }
-
-  let payload: Record<string, unknown>;
-  try {
-    payload = await request.json();
-  } catch (_err) {
-    return jsonResponse({ error: "invalid-json", message: "No se pudo leer el cuerpo de la solicitud" }, { status: 400, headers: corsHeaders });
-  }
-
-  const password = typeof payload.password === "string" ? payload.password : "";
-  if (!password || password.length < 12) {
-    return jsonResponse({ error: "weak-password", message: "La contraseña debe tener al menos 12 caracteres" }, { status: 400, headers: corsHeaders });
-  }
-
-  const client = createServiceClient();
-  const actor = await identifyActor(client, request);
-
-  const userId = typeof payload.userId === "string" ? payload.userId.trim() : "";
-  if (userId) {
-    if (!actor.id) {
-      return jsonResponse({ error: "unauthorized", message: "No autorizado" }, { status: 401, headers: corsHeaders });
-    }
-    try {
-      await updateAdminPassword(client, userId, password);
-      return jsonResponse({ ok: true }, { status: 200, headers: corsHeaders });
-    } catch (error) {
-      return handleHttpError(error, origin, allowedMethods);
-    }
-  }
-
-  const token = typeof payload.token === "string" ? payload.token.trim() : "";
-  const code = typeof payload.code === "string" ? payload.code.trim() : "";
-  const email = typeof payload.email === "string" ? payload.email.trim() : null;
-
-  if (!token && !code) {
-    return jsonResponse({ error: "missing-token", message: "Debes proporcionar el enlace o el código de recuperación" }, { status: 400, headers: corsHeaders });
-  }
-
-  try {
-    const result = await completeAdminRecovery(client, {
-      token: token || null,
-      code: code || null,
-      email,
-      password,
-      actorEmail: actor.email,
-      ip: request.headers.get("x-forwarded-for") ?? request.headers.get("cf-connecting-ip") ?? null,
-      userAgent: request.headers.get("user-agent") ?? null,
+  const wrap = (res) => {
+    const h = new Headers(res.headers);
+    for (const [k, v] of Object.entries(baseHeaders)) h.set(k, v);
+    h.set("X-Function-Rev", REV);
+    return new Response(res.body, {
+      status: res.status,
+      headers: h,
     });
-    return jsonResponse({ data: { email: result.email } }, { status: 200, headers: corsHeaders });
-  } catch (error) {
-    if (error instanceof ValidationError) {
-      return jsonResponse({ error: error.code, message: error.message }, { status: error.status, headers: corsHeaders });
+  };
+
+  return async (req) => {
+    if (req.method === "OPTIONS") return new Response(null, { headers: baseHeaders });
+    try {
+      return wrap(await handler(req));
+    } catch (e) {
+      return wrap(
+        new Response(String(e?.message ?? e), {
+          status: 500,
+        }),
+      );
     }
-    return handleHttpError(error, origin, allowedMethods);
+  };
+}
+
+async function isAdmin(user, srv) {
+  if (!user) return false;
+  const email = (user.email || "").toLowerCase();
+  if (email && HARDCODED_ADMIN_EMAILS.has(email)) return true;
+
+  {
+    const { data } = await srv.from("admins").select("id").eq("id", user.id).limit(1);
+    if (data && data.length) return true;
   }
-});
+
+  {
+    const { data } = await srv.from("profiles").select("role").eq("id", user.id).maybeSingle();
+    if (data?.role && String(data.role).toLowerCase() === "admin") return true;
+  }
+
+  const role = String(user.app_metadata?.role ?? user.user_metadata?.role ?? "")
+    .toLowerCase()
+    .trim();
+  if (role === "admin") return true;
+  if (user.user_metadata?.isAdmin === true) return true;
+  return false;
+}
+
+Deno.serve(withCORS(async (req) => {
+  const url = new URL(req.url);
+  if (url.searchParams.get("ping") === "1") {
+    return new Response(
+      JSON.stringify({
+        ok: true,
+        rev: REV,
+      }),
+      {
+        headers: {
+          "Content-Type": "application/json",
+        },
+      },
+    );
+  }
+
+  if (req.method !== "POST") return new Response("Method Not Allowed", { status: 405 });
+
+  const { userId, password } = await req.json();
+  if (typeof password !== "string" || password.length < 12) {
+    return new Response("Password demasiado corta (mínimo 12)", { status: 400 });
+  }
+
+  const authSb = createClient(SUPABASE_URL, ANON, {
+    global: {
+      headers: {
+        Authorization: req.headers.get("Authorization") ?? "",
+      },
+    },
+  });
+  const {
+    data: { user },
+  } = await authSb.auth.getUser();
+
+  const srv = createClient(SUPABASE_URL, SRV);
+  if (!(await isAdmin(user, srv))) return new Response("Forbidden", { status: 403 });
+
+  const { error } = await srv.auth.admin.updateUserById(userId, {
+    password,
+  });
+  if (error) return new Response(error.message, { status: 400 });
+
+  return new Response(
+    JSON.stringify({
+      ok: true,
+      rev: REV,
+    }),
+    {
+      headers: {
+        "Content-Type": "application/json",
+      },
+    },
+  );
+}));

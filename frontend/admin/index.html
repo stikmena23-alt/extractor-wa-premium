@@ -21,7 +21,6 @@
 
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
   <script src="./scripts/session-utils.js"></script>
   <script src="./scripts/main.js" defer></script>
 </head>
@@ -81,58 +80,6 @@
         <span id="loginHint" class="hint">Zona de administradores WF-TOOLS</span>
       </div>
       <div id="loginError" class="error" style="display:none"></div>
-    </section>
-
-    <!-- RECOVERY VIEW -->
-    <section id="recoveryView" class="card view" data-display="flex" style="display:none">
-      <div class="brand">
-        <div class="logo">
-          <img src="./assets/logo.png" alt="WF TOOLS logo" />
-        </div>
-        <h1>Restablecer contraseña</h1>
-        <p class="muted">Usa el código enviado por el administrador para definir una nueva contraseña segura.</p>
-      </div>
-      <form id="recoveryForm" class="recovery-form" novalidate>
-        <div class="field">
-          <label for="recoveryEmail">Correo</label>
-          <input id="recoveryEmail" class="input" type="email" autocomplete="email" placeholder="admin@tudominio.com" required />
-        </div>
-        <div class="field">
-          <label for="recoveryCode">Código de recuperación</label>
-          <input
-            id="recoveryCode"
-            class="input"
-            type="text"
-            inputmode="text"
-            autocomplete="one-time-code"
-            placeholder="ABC123"
-            required
-          />
-          <div class="hint">Puedes escribir el código corto o escanear el QR del enlace.</div>
-        </div>
-        <div class="field">
-          <label for="recoveryPassword">Nueva contraseña</label>
-          <input id="recoveryPassword" class="input" type="password" autocomplete="new-password" placeholder="••••••••••••" required />
-        </div>
-        <div class="field">
-          <label for="recoveryPasswordConfirm">Confirmar contraseña</label>
-          <input
-            id="recoveryPasswordConfirm"
-            class="input"
-            type="password"
-            autocomplete="new-password"
-            placeholder="Repite la contraseña"
-            required
-          />
-        </div>
-        <div id="recoveryError" class="error" style="display:none"></div>
-        <div id="recoverySuccess" class="success" style="display:none"></div>
-        <button id="btnRecoverySubmit" class="btn btn-primary" type="submit">
-          <span class="btn-text">Actualizar contraseña</span>
-          <span class="btn-spinner" style="display:none">⏳ Guardando…</span>
-        </button>
-        <button id="btnCancelRecovery" class="btn btn-ghost" type="button">Volver al inicio de sesión</button>
-      </form>
     </section>
 
     <!-- ADMIN VIEW -->
@@ -336,10 +283,10 @@
             <input id="m_password" class="input" type="password" placeholder="Dejar vacío para no cambiar" />
             <div id="m_pwd_err" class="msg-inline" style="display:none; color:var(--danger)">La contraseña debe tener al menos 12 caracteres.</div>
           </div>
-          <div class="hint">También puedes enviar un link de recuperación (no ve la contraseña).</div>
+          <div class="hint">Si el cliente no recuerda su clave, restablécela desde aquí sin ver la anterior.</div>
         </div>
         <div class="foot">
-          <button id="btnRecovery" class="btn btn-ghost">Enviar link de recuperación</button>
+          <button id="btnRecovery" class="btn btn-ghost">Restablecer contraseña</button>
           <button id="btnSave" class="btn btn-primary">Guardar cambios</button>
         </div>
       </div>
@@ -510,7 +457,7 @@
       </div>
     </div>
 
-    <!-- MODAL RECOVERY SUMMARY -->
+    <!-- MODAL RECOVERY -->
     <div
       id="recoveryModal"
       class="modal"
@@ -521,51 +468,47 @@
       <div class="content recovery-modal">
         <div class="head">
           <div>
-            <strong id="recoveryModalTitle">Recuperación generada</strong>
-            <div id="recoveryModalSubtitle" class="recovery-modal__subtitle">—</div>
+            <strong id="recoveryModalTitle">Restablecer contraseña</strong>
+            <div id="recoveryModalSubtitle" class="recovery-modal__subtitle">Verificaremos el correo en Supabase.</div>
           </div>
           <button id="recoveryModalClose" class="btn btn-ghost btn-sm" type="button">✕</button>
         </div>
         <div class="body">
-          <div class="recovery-modal__section">
-            <span class="label">Código corto</span>
-            <div id="recoveryModalCode" class="recovery-modal__code">—</div>
-            <button id="recoveryModalCopyCode" class="btn btn-ghost btn-sm" type="button">
-              <span class="icon" aria-hidden="true">📋</span>
-              <span>Copiar código</span>
-            </button>
-          </div>
-          <div class="recovery-modal__section">
-            <span class="label">Enlace directo</span>
-            <div class="recovery-modal__link-row">
-              <input id="recoveryModalLink" class="input" type="text" readonly />
-              <button id="recoveryModalCopyLink" class="btn btn-ghost btn-sm" type="button" aria-label="Copiar enlace">
-                <span class="icon" aria-hidden="true">🔗</span>
-              </button>
+          <form id="recoveryModalForm" class="recovery-modal__form" novalidate>
+            <div class="field">
+              <label for="recoveryModalEmail">Correo del cliente</label>
+              <input id="recoveryModalEmail" class="input" type="email" autocomplete="email" required />
             </div>
-          </div>
-          <div class="recovery-modal__qr">
-            <canvas id="recoveryModalQr" aria-label="Código QR de recuperación"></canvas>
-            <button id="recoveryModalDownloadQr" class="btn btn-ghost btn-sm" type="button">
-              <span class="icon" aria-hidden="true">⬇️</span>
-              <span>Descargar QR</span>
-            </button>
-          </div>
-          <div id="recoveryModalExpiration" class="hint"></div>
-          <div id="recoveryModalError" class="msg-inline" style="display:none; color:var(--danger)"></div>
+            <div class="field">
+              <label for="recoveryModalPassword">Nueva contraseña</label>
+              <input
+                id="recoveryModalPassword"
+                class="input"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Mínimo 12 caracteres"
+                required
+              />
+            </div>
+            <div class="field">
+              <label for="recoveryModalConfirm">Confirmar contraseña</label>
+              <input
+                id="recoveryModalConfirm"
+                class="input"
+                type="password"
+                autocomplete="new-password"
+                placeholder="Repite la contraseña"
+                required
+              />
+            </div>
+            <p id="recoveryModalMessage" class="msg-inline" role="alert" style="display:none"></p>
+          </form>
         </div>
-        <div class="foot recovery-modal__footer">
-          <div class="recovery-modal__share">
-            <button id="recoveryModalSendEmail" class="btn btn-ghost btn-sm" type="button" disabled>
-              <span class="icon" aria-hidden="true">✉️</span>
-              <span>Enviar por correo</span>
-            </button>
-            <button id="recoveryModalSendWhatsapp" class="btn btn-ghost btn-sm" type="button" disabled>
-              <span class="icon" aria-hidden="true">💬</span>
-              <span>Enviar por WhatsApp</span>
-            </button>
-          </div>
-          <button id="recoveryModalDone" class="btn btn-primary" type="button">Entendido</button>
+        <div class="foot">
+          <button id="recoveryModalCancel" class="btn btn-ghost btn-sm" type="button">Cancelar</button>
+          <button id="recoveryModalSubmit" class="btn btn-primary btn-sm" type="button">
+            Restablecer contraseña
+          </button>
         </div>
       </div>
     </div>
