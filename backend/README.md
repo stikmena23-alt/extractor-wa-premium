@@ -1,11 +1,16 @@
 # Backend
 
-This directory centralises the Supabase-facing logic that powers the admin portal.
-It is split into two parts:
+This backend folder groups all the shared JavaScript/TypeScript code that powers the
+WF-TOOLS admin features. The structure mirrors a small service with clear layers:
 
-- `src/`: shared helpers imported by the Supabase Edge Functions in `supabase/functions/`.
-- `migrations/`: SQL scripts that need to exist in your Supabase project before the
-  recovery flow can work.
+- `src/config/`: helpers that read and normalise environment variables.
+- `src/lib/`: framework-agnostic utilities such as error helpers, HTTP responses,
+  crypto helpers, and the Supabase service client factory.
+- `src/modules/`: domain logic broken down by feature. For instance,
+  `modules/admin` contains the administrator account/recovery services and
+  `modules/auth` exposes the token-based actor identification helper.
+- `migrations/`: SQL scripts that must exist in your Supabase project before the
+  recovery flow can operate.
 
 ## Database schema
 
@@ -39,8 +44,8 @@ If `ADMIN_RECOVERY_BASE_URL` is not set the system falls back to
 ## Deployment checklist
 
 1. Apply the migrations to Supabase.
-2. Deploy the Edge Functions located in `supabase/functions/admin-issue-password-reset` and
-   `supabase/functions/admin-complete-password-reset`.
+2. Deploy the Edge Functions located in `supabase/functions/admin-recovery` and
+   `supabase/functions/admin-setpassword`.
 3. Expose the functions via HTTPS (the Supabase CLI does this automatically).
 4. Wire the admin UI to the deployed URLs and ensure the environment variables above
    are configured in the Supabase dashboard for the functions.

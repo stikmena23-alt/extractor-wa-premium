@@ -1,7 +1,14 @@
-import { identifyActor } from "../../../backend/src/auth.ts";
-import { buildCorsHeaders, getRequestOrigin, handleHttpError, jsonResponse, methodNotAllowed, noContent } from "../../../backend/src/http.ts";
-import { issueAdminRecovery } from "../../../backend/src/passwordRecovery.ts";
-import { createServiceClient } from "../../../backend/src/supabase.ts";
+import { identifyActor } from "../../../backend/src/modules/auth/identifyActor.ts";
+import {
+  buildCorsHeaders,
+  getRequestOrigin,
+  handleHttpError,
+  jsonResponse,
+  methodNotAllowed,
+  noContent,
+} from "../../../backend/src/lib/http.ts";
+import { issueAdminRecovery } from "../../../backend/src/modules/admin/recovery/index.ts";
+import { createServiceClient } from "../../../backend/src/lib/supabaseClient.ts";
 
 const allowedMethods = "POST, OPTIONS";
 

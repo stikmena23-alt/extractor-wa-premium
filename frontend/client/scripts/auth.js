@@ -1125,7 +1125,7 @@
 
     setRecoveryLoading(true);
     try {
-      const response = await fetch(`${FUNCTIONS_BASE}/admin-complete-password-reset`, {
+      const response = await fetch(`${FUNCTIONS_BASE}/admin-setpassword`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

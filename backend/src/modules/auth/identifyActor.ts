@@ -1,4 +1,4 @@
-import type { SupabaseServiceClient } from "./supabase.ts";
+import type { SupabaseServiceClient } from "../../lib/supabaseClient.ts";
 
 export function getBearerToken(request: Request): string | null {
   const header = request.headers.get("authorization") ?? request.headers.get("Authorization");

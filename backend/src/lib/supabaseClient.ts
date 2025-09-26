@@ -13,5 +13,10 @@ export function createServiceClient(): SupabaseServiceClient {
       persistSession: false,
       autoRefreshToken: false,
     },
+    global: {
+      headers: {
+        "X-Client-Info": "wf-tools-backend",
+      },
+    },
   });
 }

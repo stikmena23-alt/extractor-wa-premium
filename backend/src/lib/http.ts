@@ -7,13 +7,12 @@ export function getRequestOrigin(request: Request): string | null {
 }
 
 export function buildCorsHeaders(origin: string | null, allowedMethods = DEFAULT_ALLOWED_METHODS): Record<string, string> {
-  const headers: Record<string, string> = {
+  return {
     "Access-Control-Allow-Origin": origin ?? "*",
     "Access-Control-Allow-Headers": "authorization, apikey, content-type",
     "Access-Control-Allow-Methods": allowedMethods,
     Vary: "Origin",
   };
-  return headers;
 }
 
 export function jsonResponse(body: unknown, init: ResponseInit = {}): Response {

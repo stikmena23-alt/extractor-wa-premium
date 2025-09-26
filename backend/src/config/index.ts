@@ -23,3 +23,11 @@ export function getRecoveryBaseUrl(): string {
   }
   return `${getAdminAppUrl()}/reset-password`;
 }
+
+export const config = {
+  getAdminAppUrl,
+  getRecoveryBaseUrl,
+  getRecoveryExpirationMinutes,
+};
+
+export type Config = typeof config;

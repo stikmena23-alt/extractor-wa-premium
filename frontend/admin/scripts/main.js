@@ -21,8 +21,8 @@ const CLIENT_APP_URL = '../client/index.html';
 const ENDPOINTS = {
   list: 'admin-list',
   update: 'admin-update',
-  recovery: 'admin-issue-password-reset',
-  setPassword: 'admin-complete-password-reset',
+  recovery: 'admin-recovery',
+  setPassword: 'admin-setpassword',
   block: 'admin-block',
   remove: 'admin-delete',
   blockedList: 'admin-blocked',

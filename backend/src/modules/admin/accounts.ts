@@ -1,7 +1,7 @@
-import { NotFoundError, ValidationError } from "./errors.ts";
-import type { SupabaseServiceClient } from "./supabase.ts";
+import { NotFoundError, ValidationError } from "../../lib/errors.ts";
+import type { SupabaseServiceClient } from "../../lib/supabaseClient.ts";
 
-type AdminAccount = {
+export type AdminAccount = {
   id: string;
   email: string | null;
 };

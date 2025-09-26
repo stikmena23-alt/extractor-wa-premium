@@ -1,8 +1,8 @@
-import { getRecoveryBaseUrl, getRecoveryExpirationMinutes } from "./config.ts";
-import { AppError, NotFoundError, ValidationError } from "./errors.ts";
-import { fetchAdminByEmail, normalizeEmail, updateAdminPassword } from "./adminAccounts.ts";
-import type { SupabaseServiceClient } from "./supabase.ts";
-import { generateRecoveryCode, generateRecoveryToken, sha256 } from "./utils/crypto.ts";
+import { config } from "../../../config/index.ts";
+import { AppError, NotFoundError, ValidationError } from "../../../lib/errors.ts";
+import type { SupabaseServiceClient } from "../../../lib/supabaseClient.ts";
+import { generateRecoveryCode, generateRecoveryToken, sha256 } from "../../../lib/crypto.ts";
+import { fetchAdminByEmail, normalizeEmail, updateAdminPassword } from "../accounts.ts";
 
 const SHORT_CODE_LENGTH = 6;
 const MAX_SHORT_CODE_ATTEMPTS = 8;
@@ -36,7 +36,7 @@ export async function issueAdminRecovery(
   const user = await fetchAdminByEmail(client, email);
   const now = new Date();
   const nowIso = now.toISOString();
-  const expires = new Date(now.getTime() + getRecoveryExpirationMinutes() * 60_000);
+  const expires = new Date(now.getTime() + config.getRecoveryExpirationMinutes() * 60_000);
   const expiresIso = expires.toISOString();
   const token = generateRecoveryToken();
   const tokenHash = await sha256(token);
@@ -63,7 +63,7 @@ export async function issueAdminRecovery(
   });
 
   const { short_code: shortCode, expires_at: insertedExpiresAt } = insertResult;
-  const resetUrl = `${getRecoveryBaseUrl()}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
+  const resetUrl = `${config.getRecoveryBaseUrl()}?token=${encodeURIComponent(token)}&email=${encodeURIComponent(email)}`;
 
   return {
     userId: user.id,
