@@ -33,8 +33,12 @@ export async function fetchAdminByEmail(
     return { id: directUser.id, email: directUser.email ?? null };
   }
 
-  const { data, error } = await client
-    .from("users", { schema: "auth" })
+  const authSchema = typeof client.schema === "function" ? client.schema("auth") : null;
+  const queryBuilder = authSchema
+    ? authSchema.from("users")
+    : client.from("auth.users");
+
+  const { data, error } = await queryBuilder
     .select("id, email")
     .eq("email", normalizedEmail)
     .limit(1)
