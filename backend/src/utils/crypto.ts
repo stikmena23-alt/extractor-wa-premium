@@ -1,11 +1,14 @@
-const HEX_TABLE = Array.from({ length: 256 }, (_, i) => i.toString(16).padStart(2, "0"));
 const encoder = new TextEncoder();
 
 export async function sha256(input: string): Promise<string> {
   const data = encoder.encode(input);
   const hashBuffer = await crypto.subtle.digest("SHA-256", data);
-  const view = new Uint8Array(hashBuffer);
-  return view.reduce((acc, byte) => acc + HEX_TABLE[byte], "");
+  const bytes = new Uint8Array(hashBuffer);
+  let binary = "";
+  for (let i = 0; i < bytes.length; i++) {
+    binary += String.fromCharCode(bytes[i]);
+  }
+  return btoa(binary);
 }
 
 export function generateRecoveryToken(): string {
