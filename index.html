@@ -1,0 +1,59 @@
+﻿<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WF TOOLS | Mantenimiento</title>
+  <meta name="color-scheme" content="dark light" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <canvas id="bg" aria-hidden="true"></canvas>
+  <main class="wrap">
+    <section class="card" role="status" aria-live="polite">
+      <header class="brand" aria-label="Identidad de marca">
+        <div class="logo" aria-hidden="true"></div>
+        <div>
+          <h1 class="title" title="WF TOOLS">WF TOOLS</h1>
+          <p class="subtitle">Plataforma en mantenimiento - D TECH SOLUTIONS</p>
+        </div>
+      </header>
+
+      <div class="status">
+        <span class="chip"><span class="pulse" aria-hidden="true"></span>Estado:<span class="chip-value">Mantenimiento programado</span></span>
+        <span class="chip">&Uacute;ltima verificaci&oacute;n:<span id="check" class="chip-value">--</span></span>
+        <span class="chip">Progreso estimado:<span id="prog" class="chip-value">0%</span></span>
+      </div>
+
+      <div class="grid">
+        <div class="big">
+          <h2>Mensaje</h2>
+          <p class="type" id="type"></p>
+          <div class="controls">
+            <button class="btn" id="refresh" title="Reintentar ver si ya regresamos">Actualizar estado</button>
+            <label class="tog" title="Activa o desactiva los efectos visuales">
+              <input id="fx" type="checkbox" checked aria-label="Efectos visuales" /> Efectos
+            </label>
+            <label class="tog" title="Activa alto contraste para mejor legibilidad">
+              <input id="contrast" type="checkbox" aria-label="Alto contraste" checked /> Alto contraste
+            </label>
+          </div>
+        </div>
+        <div class="big" aria-hidden="false">
+          <div class="loader" aria-hidden="true"></div>
+          <p class="status-note">Optimizamos m&oacute;dulos, limpiamos cach&eacute;s y ajustamos engranajes cu&aacute;nticos.</p>
+        </div>
+      </div>
+
+      <footer>
+        <div>
+          Tip: pulsa <span class="kbd">B</span> para alternar fondo, <span class="kbd">M</span> para pausar part&iacute;culas, <span class="kbd">H</span> para alto contraste.
+        </div>
+        <div id="uptime">Tiempo en p&aacute;gina: 0s</div>
+      </footer>
+    </section>
+  </main>
+
+  <script src="main.js"></script>
+</body>
+</html>
