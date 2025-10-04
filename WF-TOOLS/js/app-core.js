@@ -1060,6 +1060,36 @@ copyResTableBtn?.addEventListener("click", async () => {
   }
 });
 
+function collectTransferFiles(dataTransfer){
+  if (!dataTransfer) return [];
+
+  const directFiles = dataTransfer.files && dataTransfer.files.length
+    ? Array.from(dataTransfer.files)
+    : [];
+  if (directFiles.length) {
+    return directFiles;
+  }
+
+  if (dataTransfer.items && dataTransfer.items.length) {
+    const files = [];
+    Array.from(dataTransfer.items).forEach((item) => {
+      try {
+        if (item && item.kind === 'file') {
+          const file = typeof item.getAsFile === 'function' ? item.getAsFile() : null;
+          if (file) files.push(file);
+        }
+      } catch (err) {
+        console.warn('No se pudo leer un archivo desde el elemento arrastrado', err);
+      }
+    });
+    if (files.length) {
+      return files;
+    }
+  }
+
+  return [];
+}
+
 // =================== DRAG & DROP ===================
 if (dropZone){
   let dragCounter = 0;
@@ -1069,10 +1099,13 @@ if (dropZone){
   dropZone.addEventListener('drop', async (e) => {
     e.preventDefault(); e.stopPropagation();
     dropZone.classList.remove('dragging'); dragCounter = 0;
-    const dt = e.dataTransfer; if (!dt) return;
-    if (dt.files && dt.files.length){
-      await handleDroppedFiles(dt.files);
-    } else alert("Suelta archivos válidos (.zip con records.html, o .txt/.csv/.html).");
+    const dt = e.dataTransfer;
+    const files = collectTransferFiles(dt);
+    if (files.length){
+      await handleDroppedFiles(files);
+    } else {
+      alert("Suelta archivos válidos (.zip con records.html, o .txt/.csv/.html).");
+    }
   });
 }
 
