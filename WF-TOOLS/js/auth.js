@@ -14,6 +14,7 @@
 
   const supabaseManager = global.WFSupabase || null;
   const SUPABASE_SESSION_THRESHOLD_MS = 90_000;
+  const SPEND_CREDIT_TIMEOUT_MS = 15_000;
 
   let supabase = null;
   if (supabaseManager && typeof supabaseManager.init === "function") {
@@ -284,6 +285,39 @@
         console.warn("No se pudo ejecutar el latido de sesión", err);
       }
     }, SESSION_HEARTBEAT_MS);
+  }
+
+  function isBrowserOnline() {
+    if (typeof navigator === "undefined") return true;
+    if (!Object.prototype.hasOwnProperty.call(navigator, "onLine")) return true;
+    return navigator.onLine !== false;
+  }
+
+  async function withTimeout(promise, timeoutMs, onTimeout) {
+    let timer = null;
+    const timeoutPromise = new Promise((_, reject) => {
+      timer = setTimeout(() => {
+        const error = new Error("timeout");
+        error.code = "timeout";
+        error.name = "TimeoutError";
+        if (typeof onTimeout === "function") {
+          try {
+            onTimeout(error);
+          } catch (_err) {
+            /* noop */
+          }
+        }
+        reject(error);
+      }, Math.max(1, timeoutMs || SPEND_CREDIT_TIMEOUT_MS));
+    });
+
+    try {
+      return await Promise.race([promise, timeoutPromise]);
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
+    }
   }
 
   function hideSessionToast() {
@@ -1181,6 +1215,11 @@
 
   async function performSpendCredit() {
     try {
+      if (!isBrowserOnline()) {
+        showSessionToast("Sin conexión a internet. Verifica tu red e inténtalo nuevamente.", "danger");
+        return false;
+      }
+
       const session = await ensureActiveSession();
 
       if (!session) {
@@ -1189,7 +1228,25 @@
         return false;
       }
 
-      const { error } = await supabase.rpc("spend_credit");
+      let rpcResponse;
+      try {
+        rpcResponse = await withTimeout(
+          supabase.rpc("spend_credit"),
+          SPEND_CREDIT_TIMEOUT_MS
+        );
+      } catch (rpcError) {
+        if (rpcError?.name === "TimeoutError" || rpcError?.code === "timeout") {
+          showSessionToast(
+            "La solicitud para descontar créditos está tardando demasiado. Verifica tu conexión e inténtalo nuevamente.",
+            "warning"
+          );
+          await updateCredits();
+          return false;
+        }
+        throw rpcError;
+      }
+
+      const { error } = rpcResponse || {};
       if (error) {
         if ((error.message || "").includes("NO_CREDITS")) {
           showSessionToast("Sin créditos disponibles. Pulsa el botón en la esquina inferior izquierda para recargar.", "danger");
