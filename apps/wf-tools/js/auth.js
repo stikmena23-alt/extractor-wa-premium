@@ -1179,7 +1179,26 @@
     }
   }
 
-  async function performSpendCredit() {
+  async function performSequentialSpend(amount) {
+    for (let i = 0; i < amount; i += 1) {
+      const { error } = await supabase.rpc("spend_credit");
+      if (error) {
+        return { ok: false, error };
+      }
+    }
+    return { ok: true };
+  }
+
+  function shouldFallbackToLegacy(error) {
+    const message = (error?.message || "").toLowerCase();
+    return message.includes("spend_credits") && message.includes("function");
+  }
+
+  async function performSpendCredits(rawAmount = 1) {
+    const amount = Number.parseInt(rawAmount, 10);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      return true;
+    }
     try {
       const session = await ensureActiveSession();
 
@@ -1189,26 +1208,44 @@
         return false;
       }
 
-      const { error } = await supabase.rpc("spend_credit");
-      if (error) {
-        if ((error.message || "").includes("NO_CREDITS")) {
+      let rpcError = null;
+      try {
+        const { error } = await supabase.rpc("spend_credits", { amount });
+        if (error) {
+          if (shouldFallbackToLegacy(error)) {
+            const fallback = await performSequentialSpend(amount);
+            if (!fallback.ok) {
+              rpcError = fallback.error || error;
+            }
+          } else {
+            rpcError = error;
+          }
+        }
+      } catch (err) {
+        rpcError = err;
+      }
+
+      if (rpcError) {
+        const message = rpcError?.message || "";
+        if (message.includes("NO_CREDITS")) {
           showSessionToast("Sin créditos disponibles. Pulsa el botón en la esquina inferior izquierda para recargar.", "danger");
           global.AppCore?.setCreditDependentActionsEnabled(false);
         } else {
-          showSessionToast(error.message || "No se pudo consumir un crédito.", "danger");
+          const displayMessage = message || "No se pudo consumir créditos.";
+          showSessionToast(displayMessage, "danger");
         }
         await updateCredits();
         return false;
       }
 
       const currentUi = getCreditsFromUi();
-      const next = Math.max(0, currentUi - 1);
+      const next = Math.max(0, currentUi - amount);
       renderCreditState(next);
       global.AppCore?.setCreditDependentActionsEnabled(next > 0);
       return true;
     } catch (err) {
       console.error("Error inesperado al consumir créditos", err);
-      showSessionToast("No se pudo consumir un crédito. Intenta nuevamente.", "danger");
+      showSessionToast("No se pudo consumir créditos. Intenta nuevamente.", "danger");
       await updateCredits();
       return false;
     }
@@ -1216,13 +1253,17 @@
 
   let spendCreditChain = Promise.resolve();
 
-  function spendCredit() {
-    const next = spendCreditChain.then(() => performSpendCredit());
+  function spendCredits(amount) {
+    const next = spendCreditChain.then(() => performSpendCredits(amount));
     spendCreditChain = next.then(
       () => undefined,
       () => undefined,
     );
     return next;
+  }
+
+  function spendCredit() {
+    return spendCredits(1);
   }
 
   async function init() {
@@ -1341,6 +1382,7 @@
   global.Auth = {
     init,
     spendCredit,
+    spendCredits,
     ensureActiveSession,
     revalidateSessionState,
     forceLoginView: (message) => {
@@ -1377,23 +1419,27 @@
         return;
       }
       (async () => {
-        if (!global.Auth || typeof global.Auth.spendCredit !== 'function') {
+        if (!global.Auth || (typeof global.Auth.spendCredits !== 'function' && typeof global.Auth.spendCredit !== 'function')) {
           sendBridgeResponse('wftools-internal-spend-result', requestId, { ok:false, reason:'unavailable' });
           return;
         }
-        let ok = true;
-        for (let i = 0; i < amount; i += 1) {
-          try {
-            const result = await global.Auth.spendCredit();
-            if (!result) {
-              ok = false;
-              break;
+        let ok = false;
+        try {
+          if (typeof global.Auth.spendCredits === 'function') {
+            ok = await global.Auth.spendCredits(amount);
+          } else {
+            ok = true;
+            for (let i = 0; i < amount; i += 1) {
+              const result = await global.Auth.spendCredit();
+              if (!result) {
+                ok = false;
+                break;
+              }
             }
-          } catch (err) {
-            console.error('Error al consumir créditos desde el puente', err);
-            ok = false;
-            break;
           }
+        } catch (err) {
+          console.error('Error al consumir créditos desde el puente', err);
+          ok = false;
         }
         const refresh = typeof global.Auth.revalidateSessionState === 'function'
           ? global.Auth.revalidateSessionState()
@@ -1408,6 +1454,7 @@
         sendBridgeResponse('wftools-internal-spend-result', requestId, {
           ok,
           reason: ok ? null : 'denied',
+          amount: ok ? amount : 0,
         });
       })();
     } else if (type === 'wftools-internal-logout-request') {

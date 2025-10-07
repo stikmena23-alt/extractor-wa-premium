@@ -2699,20 +2699,21 @@ if (typeof window !== 'undefined'){
 setGraphControlsEnabled(false);
 
 async function requestCredit(){
-  if (window.Auth && typeof window.Auth.spendCredit === 'function'){
+  const auth = window.Auth;
+  if (auth && (typeof auth.spendCredits === 'function' || typeof auth.spendCredit === 'function')){
     try {
       let sessionOk = true;
-      if (typeof window.Auth.revalidateSessionState === 'function'){
-        const session = await window.Auth.revalidateSessionState();
+      if (typeof auth.revalidateSessionState === 'function'){
+        const session = await auth.revalidateSessionState();
         sessionOk = !!session;
-      } else if (typeof window.Auth.ensureActiveSession === 'function'){
-        const session = await window.Auth.ensureActiveSession();
+      } else if (typeof auth.ensureActiveSession === 'function'){
+        const session = await auth.ensureActiveSession();
         sessionOk = !!session;
       }
       if (!sessionOk){
         console.warn('No hay sesión activa para consumir créditos.');
-        if (typeof window.Auth.forceLoginView === 'function'){
-          window.Auth.forceLoginView('Tu sesión expiró. Inicia sesión para continuar.');
+        if (typeof auth.forceLoginView === 'function'){
+          auth.forceLoginView('Tu sesión expiró. Inicia sesión para continuar.');
         } else {
           try {
             window.parent?.postMessage?.({ type: 'wftools-open-login' }, '*');
@@ -2720,7 +2721,10 @@ async function requestCredit(){
         }
         return false;
       }
-      return await window.Auth.spendCredit();
+      if (typeof auth.spendCredits === 'function'){
+        return await auth.spendCredits(1);
+      }
+      return await auth.spendCredit();
     } catch (error) {
       console.error('No se pudo consumir crédito', error);
       return false;

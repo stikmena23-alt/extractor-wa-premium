@@ -15,7 +15,7 @@
     />
 
     <!-- Favicon principal -->
-    <link rel="icon" type="image/png" sizes="32x32" href="WF-TOOLS/WF%20TOOLS%202.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="apps/wf-tools/WF%20TOOLS%202.png" />
 
     <!-- ====================================================================== -->
     <!--  ESTILOS: BASE / LAYOUT / OVERLAY                                     -->
@@ -603,12 +603,12 @@
     <!-- ========================================================= -->
     <div class="frame-container">
       <!-- Evita caché en main.js con ?v=2 -->
-      <iframe id="wfFrame"      src="WF-TOOLS/index.html?v=2"  class="active" title="WF Tools"></iframe>
-      <iframe id="adminFrame"   src="Panel%20Admin/index.html" title="Panel de Administración"></iframe>
-      <iframe id="landingFrame" src="Landing%20page/index.html" title="Landing CrediBoost"></iframe>
+      <iframe id="wfFrame"      src="apps/wf-tools/index.html?v=2"  class="active" title="WF Tools"></iframe>
+      <iframe id="adminFrame"   src="apps/admin/index.html" title="Panel de Administración"></iframe>
+      <iframe id="landingFrame" src="apps/landing/index.html" title="Landing CrediBoost"></iframe>
       <!-- Nuevas apps: IP Analyzer e Identificación de Números -->
-      <iframe id="ipFrame"    src="IP%20WF-TOOLS/index.html" title="IP Analyzer Pro"></iframe>
-      <iframe id="numFrame"   src="N%23U00fameros%20ID/index.html" title="Open Phone OSINT"></iframe>
+      <iframe id="ipFrame"    src="apps/ip-analyzer/index.html" title="IP Analyzer Pro"></iframe>
+      <iframe id="numFrame"   src="apps/phone-osint/index.html" title="Open Phone OSINT"></iframe>
     </div>
 
     <!-- Overlay de carga (spinner para cambios de vista) -->
@@ -1190,11 +1190,13 @@
             const requestId = event.data.requestId;
             const ok = event.data.ok === true;
             const reason = event.data.reason || null;
+            const amount = Number.isFinite(Number(event.data.amount)) ? Number(event.data.amount) : 0;
             resolvePendingRequest(pendingCreditRequests, requestId, {
               type: 'wftools-spend-credits-result',
               requestId,
               ok,
               reason,
+              amount: ok ? amount : 0,
             });
           } else if (type === 'wftools-internal-logout-result') {
             const requestId = event.data.requestId;
@@ -1223,7 +1225,7 @@
             const source = event.source;
             const respond = (payload)=> respondToChild(source, Object.assign({ requestId }, payload));
             if (!Number.isFinite(amount) || amount <= 0) {
-              respond({ type:'wftools-spend-credits-result', ok:false, reason:'invalid-amount' });
+              respond({ type:'wftools-spend-credits-result', ok:false, reason:'invalid-amount', amount:0 });
               return;
             }
             const registered = registerPendingRequest(pendingCreditRequests, requestId, (payload)=>{
@@ -1232,7 +1234,7 @@
             if (!forwardToWfFrame({ type: 'wftools-internal-spend-credits', requestId, amount })) {
               if (registered) clearTimeout(registered);
               pendingCreditRequests.delete(requestId);
-              respond({ type:'wftools-spend-credits-result', ok:false, reason:'wf-unavailable' });
+              respond({ type:'wftools-spend-credits-result', ok:false, reason:'wf-unavailable', amount:0 });
             }
           } else if (type === 'wftools-request-logout') {
             const requestId = event.data.requestId || `logout-${Date.now()}-${Math.random().toString(36).slice(2)}`;

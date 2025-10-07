@@ -17,8 +17,8 @@ const ADMIN_EMAILS = new Set([
 const FUNCTIONS_BASE = SUPABASE_URL.replace('.supabase.co', '.functions.supabase.co');
 
 // ✅ Ruta del LOGO (PNG) para el UI
-const LOGO_URL = './WF TOOLS.png';
-const CLIENT_APP_URL = '../WF-TOOLS/index.html';
+const LOGO_URL = '../../shared/assets/wf-tools.png';
+const CLIENT_APP_URL = '../wf-tools/index.html';
 
 const ENDPOINTS = {
   list: 'admin-list',
