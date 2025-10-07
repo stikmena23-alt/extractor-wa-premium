@@ -169,6 +169,143 @@
   const ADMIN_PREFIXES = ["admin.", "sup."];
   const creditFormatter = new Intl.NumberFormat("es-CO");
 
+  function makeSpendResult(overrides = {}) {
+    return Object.assign(
+      {
+        ok: false,
+        amount: 0,
+        reason: null,
+        message: null,
+        error: null,
+      },
+      overrides || {},
+    );
+  }
+
+  let lastSpendResult = makeSpendResult({ ok: true });
+
+  function rememberSpendResult(overrides) {
+    lastSpendResult = makeSpendResult(overrides);
+    return lastSpendResult;
+  }
+
+  function cloneSpendResult(result) {
+    if (!result || typeof result !== "object") {
+      return makeSpendResult({ ok: true });
+    }
+    return makeSpendResult(result);
+  }
+
+  function getLastSpendResult() {
+    return cloneSpendResult(lastSpendResult);
+  }
+
+  function extractErrorMessage(error) {
+    if (!error) return "";
+    if (typeof error === "string") return error;
+    if (typeof error.message === "string" && error.message) return error.message;
+    if (typeof error.error_description === "string" && error.error_description) {
+      return error.error_description;
+    }
+    if (typeof error.msg === "string" && error.msg) return error.msg;
+    try {
+      return JSON.stringify(error);
+    } catch (_err) {
+      return "";
+    }
+  }
+
+  function classifySupabaseError(error) {
+    const status = Number.isFinite(error?.status) ? Number(error.status) : null;
+    const code = typeof error?.code === "string" ? error.code : null;
+    const message = extractErrorMessage(error);
+    const hint = typeof error?.hint === "string" ? error.hint : "";
+    const details = typeof error?.details === "string" ? error.details : "";
+    const combined = `${message} ${hint} ${details}`.toLowerCase();
+    if (
+      status === 401 ||
+      status === 403 ||
+      (code && ["401", "403"].includes(code)) ||
+      combined.includes("jwt") ||
+      combined.includes("token") ||
+      combined.includes("session")
+    ) {
+      return {
+        reason: "session-expired",
+        status,
+        message,
+        code,
+      };
+    }
+    if (
+      status === 404 ||
+      combined.includes("not found") ||
+      combined.includes("404") ||
+      combined.includes("could not find") ||
+      combined.includes("rpc/spend_credits") ||
+      combined.includes("function spend_credits") ||
+      combined.includes("spend_credits function")
+    ) {
+      return {
+        reason: "endpoint-missing",
+        status,
+        message,
+        code,
+      };
+    }
+    if (
+      combined.includes("no_credits") ||
+      combined.includes("no credits") ||
+      combined.includes("sin creditos") ||
+      combined.includes("sin créditos")
+    ) {
+      return {
+        reason: "no-credits",
+        status,
+        message,
+        code,
+      };
+    }
+    if (
+      combined.includes("timeout") ||
+      combined.includes("network") ||
+      combined.includes("fetch failed") ||
+      combined.includes("connection")
+    ) {
+      return {
+        reason: "network",
+        status,
+        message,
+        code,
+      };
+    }
+    return {
+      reason: "rpc-error",
+      status,
+      message,
+      code,
+    };
+  }
+
+  function buildSpendErrorMessage(classification, fallbackMessage) {
+    if (!classification) {
+      return fallbackMessage || "No se pudo consumir créditos. Intenta nuevamente.";
+    }
+    if (classification.reason === "session-expired") {
+      return "Tu sesión expiró. Inicia sesión para continuar.";
+    }
+    if (classification.reason === "no-credits") {
+      return "Sin créditos disponibles. Pulsa el botón en la esquina inferior izquierda para recargar.";
+    }
+    if (classification.reason === "network") {
+      return "No se pudo conectar con Supabase. Verifica tu conexión e inténtalo nuevamente.";
+    }
+    if (classification.reason === "endpoint-missing") {
+      return "No se encontró el servicio de consumo de créditos. Inténtalo nuevamente en unos segundos.";
+    }
+    return classification.message || fallbackMessage || "No se pudo consumir créditos. Intenta nuevamente.";
+  }
+
   updateAdminAccessUI(getRememberedEmail());
 
   function toggleLogoutButton(disabled) {
@@ -634,11 +771,17 @@
     }
   }
 
-  async function ensureActiveSession() {
+  async function ensureActiveSession(options = {}) {
+    const desiredValidity = Number.isFinite(options?.minimumValidityMs)
+      ? Math.max(0, Number(options.minimumValidityMs))
+      : SUPABASE_SESSION_THRESHOLD_MS;
+    const forceRefresh = !!options?.forceRefresh;
+
     if (supabaseManager && typeof supabaseManager.ensureSession === "function") {
       try {
         const activeSession = await supabaseManager.ensureSession({
-          minimumValidityMs: SUPABASE_SESSION_THRESHOLD_MS,
+          minimumValidityMs: forceRefresh ? 0 : desiredValidity,
+          forceRefresh,
         });
         if (activeSession) {
           return activeSession;
@@ -658,7 +801,7 @@
         const expiresAt = cachedSession.expires_at
           ? cachedSession.expires_at * 1000
           : 0;
-        if (!expiresAt || expiresAt - Date.now() > SUPABASE_SESSION_THRESHOLD_MS) {
+        if (!forceRefresh && (!expiresAt || expiresAt - Date.now() > desiredValidity)) {
           return cachedSession;
         }
       }
@@ -668,7 +811,7 @@
 
     const refreshToken = cachedSession?.refresh_token || null;
     if (!refreshToken) {
-      return null;
+      return forceRefresh ? null : cachedSession;
     }
 
     try {
@@ -686,6 +829,10 @@
       console.error("No se pudo refrescar la sesión", err);
       return null;
     }
+  }
+
+  function forceSessionRefresh() {
+    return ensureActiveSession({ forceRefresh: true, minimumValidityMs: 0 });
   }
 
   async function revalidateSessionState() {
@@ -1190,27 +1337,28 @@
   }
 
   function shouldFallbackToLegacy(error) {
-    const message = (error?.message || "").toLowerCase();
-    return message.includes("spend_credits") && message.includes("function");
+    return classifySupabaseError(error).reason === "endpoint-missing";
   }
 
-  async function performSpendCredits(rawAmount = 1) {
+  async function performSpendCredits(rawAmount = 1, attempt = 0) {
     const amount = Number.parseInt(rawAmount, 10);
     if (!Number.isFinite(amount) || amount <= 0) {
-      return true;
+      return rememberSpendResult({ ok: true, amount: 0, reason: null });
     }
     try {
       const session = await ensureActiveSession();
 
       if (!session) {
-        showSessionToast("Tu sesión expiró. Inicia sesión para continuar.", "danger");
-        showLoginUI("Tu sesión expiró. Inicia sesión para continuar.", "closed");
-        return false;
+        const message = "Tu sesión expiró. Inicia sesión para continuar.";
+        showSessionToast(message, "danger");
+        showLoginUI(message, "closed");
+        return rememberSpendResult({ ok: false, amount: 0, reason: "session-expired", message });
       }
 
       let rpcError = null;
+      let rpcData = null;
       try {
-        const { error } = await supabase.rpc("spend_credits", { amount });
+        const { data, error } = await supabase.rpc("spend_credits", { amount });
         if (error) {
           if (shouldFallbackToLegacy(error)) {
             const fallback = await performSequentialSpend(amount);
@@ -1220,34 +1368,79 @@
           } else {
             rpcError = error;
           }
+        } else {
+          rpcData = data || null;
         }
       } catch (err) {
         rpcError = err;
       }
 
       if (rpcError) {
-        const message = rpcError?.message || "";
-        if (message.includes("NO_CREDITS")) {
-          showSessionToast("Sin créditos disponibles. Pulsa el botón en la esquina inferior izquierda para recargar.", "danger");
-          global.AppCore?.setCreditDependentActionsEnabled(false);
-        } else {
-          const displayMessage = message || "No se pudo consumir créditos.";
-          showSessionToast(displayMessage, "danger");
+        let classification = classifySupabaseError(rpcError);
+        if (classification.reason === "session-expired" && attempt < 1) {
+          const refreshed = await forceSessionRefresh();
+          if (refreshed) {
+            return performSpendCredits(amount, attempt + 1);
+          }
         }
+
+        if (classification.reason === "endpoint-missing") {
+          // If we already attempted fallback and still failed, keep the same error.
+          const fallback = await performSequentialSpend(amount);
+          if (fallback.ok) {
+            const currentUi = getCreditsFromUi();
+            const next = Math.max(0, currentUi - amount);
+            renderCreditState(next);
+            global.AppCore?.setCreditDependentActionsEnabled(next > 0);
+            return rememberSpendResult({ ok: true, amount, reason: null });
+          }
+          rpcError = fallback.error || rpcError;
+          classification = classifySupabaseError(rpcError);
+        }
+
+        const message = buildSpendErrorMessage(classification, extractErrorMessage(rpcError));
+
+        if (classification.reason === "session-expired") {
+          showSessionToast(message, "danger");
+          showLoginUI(message, "closed");
+        } else if (classification.reason === "no-credits") {
+          showSessionToast(message, "danger");
+          global.AppCore?.setCreditDependentActionsEnabled(false);
+        } else if (classification.reason === "network") {
+          showSessionToast(message, "danger");
+        } else {
+          showSessionToast(message, "danger");
+        }
+
         await updateCredits();
-        return false;
+        return rememberSpendResult({
+          ok: false,
+          amount: 0,
+          reason: classification.reason || "rpc-error",
+          message,
+          error: rpcError,
+        });
+      }
+
+      let consumed = amount;
+      if (rpcData && typeof rpcData === "object") {
+        const maybe = Number.parseInt(rpcData.consumed, 10);
+        if (Number.isFinite(maybe) && maybe > 0) {
+          consumed = maybe;
+        }
       }
 
       const currentUi = getCreditsFromUi();
-      const next = Math.max(0, currentUi - amount);
+      const next = Math.max(0, currentUi - consumed);
       renderCreditState(next);
       global.AppCore?.setCreditDependentActionsEnabled(next > 0);
-      return true;
+      return rememberSpendResult({ ok: true, amount: consumed, reason: null });
     } catch (err) {
       console.error("Error inesperado al consumir créditos", err);
-      showSessionToast("No se pudo consumir créditos. Intenta nuevamente.", "danger");
+      const message = "No se pudo consumir créditos. Intenta nuevamente.";
+      showSessionToast(message, "danger");
       await updateCredits();
-      return false;
+      return rememberSpendResult({ ok: false, amount: 0, reason: "unexpected", message, error: err });
     }
   }
 
@@ -1259,7 +1452,7 @@
       () => undefined,
       () => undefined,
     );
-    return next;
+    return next.then((result) => result?.ok === true);
   }
 
   function spendCredit() {
@@ -1384,6 +1577,7 @@
     spendCredit,
     spendCredits,
     ensureActiveSession,
+    forceSessionRefresh,
     revalidateSessionState,
     forceLoginView: (message) => {
       const text = message || "Tu sesión expiró. Inicia sesión para continuar.";
@@ -1397,6 +1591,7 @@
       }
     },
     getCurrentUserEmail: () => currentSessionEmail,
+    getLastSpendResult,
   };
 
   function sendBridgeResponse(type, requestId, payload){
@@ -1424,6 +1619,7 @@
           return;
         }
         let ok = false;
+        let spendResult = null;
         try {
           if (typeof global.Auth.spendCredits === 'function') {
             ok = await global.Auth.spendCredits(amount);
@@ -1437,9 +1633,13 @@
               }
             }
           }
+          if (typeof global.Auth.getLastSpendResult === 'function') {
+            spendResult = global.Auth.getLastSpendResult();
+          }
         } catch (err) {
           console.error('Error al consumir créditos desde el puente', err);
           ok = false;
+          spendResult = spendResult || makeSpendResult({ ok: false, reason: 'unexpected', message: extractErrorMessage(err), error: err });
         }
         const refresh = typeof global.Auth.revalidateSessionState === 'function'
           ? global.Auth.revalidateSessionState()
@@ -1451,11 +1651,19 @@
             console.warn('No se pudo revalidar la sesión tras consumir créditos', err);
           }
         }
-        sendBridgeResponse('wftools-internal-spend-result', requestId, {
+        const responseAmount = ok
+          ? (Number.isFinite(spendResult?.amount) ? Number(spendResult.amount) : amount)
+          : 0;
+        const responseReason = spendResult?.reason || (ok ? null : 'denied');
+        const payload = {
           ok,
-          reason: ok ? null : 'denied',
-          amount: ok ? amount : 0,
-        });
+          reason: responseReason,
+          amount: responseAmount,
+        };
+        if (!ok && spendResult?.message) {
+          payload.message = spendResult.message;
+        }
+        sendBridgeResponse('wftools-internal-spend-result', requestId, payload);
       })();
     } else if (type === 'wftools-internal-logout-request') {
       const requestId = event.data.requestId;

@@ -1191,12 +1191,14 @@
             const ok = event.data.ok === true;
             const reason = event.data.reason || null;
             const amount = Number.isFinite(Number(event.data.amount)) ? Number(event.data.amount) : 0;
+            const message = event.data.message || null;
             resolvePendingRequest(pendingCreditRequests, requestId, {
               type: 'wftools-spend-credits-result',
               requestId,
               ok,
               reason,
               amount: ok ? amount : 0,
+              message,
             });
           } else if (type === 'wftools-internal-logout-result') {
             const requestId = event.data.requestId;

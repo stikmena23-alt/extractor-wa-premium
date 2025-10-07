@@ -28,6 +28,8 @@
     let authWaitPromise = null;
     let isSpending = false;
     let lastCreditsValue = null;
+    const defaultSpendResult = Object.freeze({ ok: true, amount: 0, reason: null, message: null });
+    let lastSpendResult = Object.assign({}, defaultSpendResult);
     const originalButtonText = new WeakMap();
 
     function sleep(ms) {
@@ -172,6 +174,12 @@
       applyCreditsState(next);
     }
 
+    function rememberSpendResult(result) {
+      const normalized = Object.assign({}, defaultSpendResult, result || {});
+      lastSpendResult = normalized;
+      return normalized;
+    }
+
     function requestUserInfo() {
       try {
         global.parent?.postMessage({ type: 'wftools-request-user-info' }, '*');
@@ -188,22 +196,46 @@
       try {
         const auth = (await waitForAuthMethod('spendCredits')) || (await waitForAuthMethod('spendCredit'));
         if (!auth) return null;
+        let ok = false;
+        let detail = null;
         if (typeof auth.spendCredits === 'function') {
-          const ok = await auth.spendCredits(amount);
-          if (ok) requestUserInfo();
-          return ok;
-        }
-        if (typeof auth.spendCredit === 'function') {
-          for (let i = 0; i < amount; i += 1) {
-            const ok = await auth.spendCredit();
-            if (!ok) return false;
+          ok = await auth.spendCredits(amount);
+          if (typeof auth.getLastSpendResult === 'function') {
+            detail = auth.getLastSpendResult();
           }
-          requestUserInfo();
-          return true;
+        } else if (typeof auth.spendCredit === 'function') {
+          ok = true;
+          for (let i = 0; i < amount; i += 1) {
+            const stepOk = await auth.spendCredit();
+            if (!stepOk) {
+              ok = false;
+              break;
+            }
+          }
+          if (typeof auth.getLastSpendResult === 'function') {
+            detail = auth.getLastSpendResult();
+          }
+          if (ok && detail) {
+            detail = Object.assign({}, detail, { amount });
+          }
         }
-        return null;
+        const result = rememberSpendResult(
+          detail || {
+            ok,
+            amount: ok ? amount : 0,
+            reason: ok ? null : 'unknown',
+          },
+        );
+        if (!result.ok && result.reason === 'session-expired') {
+          redirectToLogin();
+        }
+        if (result.ok) {
+          requestUserInfo();
+        }
+        return result.ok;
       } catch (err) {
         console.error('Error al consumir créditos directamente:', err);
+        rememberSpendResult({ ok: false, reason: 'unexpected', message: err?.message || null });
         return false;
       }
     }
@@ -211,6 +243,7 @@
     function requestCreditsViaBridge(amount) {
       return new Promise((resolve) => {
         if (!global.parent || global.parent === global) {
+          rememberSpendResult({ ok: true, amount, reason: null });
           resolve(true);
           return;
         }
@@ -222,11 +255,19 @@
           global.removeEventListener('message', handler);
           clearTimeout(timer);
           const ok = event.data.ok === true;
+          const reason = event.data.reason || null;
+          const message = event.data.message || null;
+          const consumed = Number.isFinite(Number(event.data.amount)) ? Number(event.data.amount) : 0;
+          const result = rememberSpendResult({ ok, reason, message, amount: ok ? consumed || amount : 0 });
+          if (!result.ok && result.reason === 'session-expired') {
+            redirectToLogin();
+          }
           resolve(ok);
         };
         global.addEventListener('message', handler);
         const timer = setTimeout(() => {
           global.removeEventListener('message', handler);
+          rememberSpendResult({ ok: false, reason: 'timeout', message: 'No se recibió respuesta del verificador de créditos.' });
           resolve(false);
         }, creditTimeout);
         try {
@@ -235,6 +276,7 @@
           clearTimeout(timer);
           global.removeEventListener('message', handler);
           console.error('No se pudo solicitar consumo de créditos:', err);
+          rememberSpendResult({ ok: false, reason: 'bridge-error', message: err?.message || null });
           resolve(false);
         }
       }).then((ok) => {
@@ -247,7 +289,10 @@
 
     async function spendCredits(n) {
       const amount = Number.parseInt(n, 10);
-      if (!Number.isFinite(amount) || amount <= 0) return true;
+      if (!Number.isFinite(amount) || amount <= 0) {
+        rememberSpendResult({ ok: true, amount: 0, reason: null });
+        return true;
+      }
       const direct = await tryDirectSpend(amount);
       if (direct === true) return true;
       if (direct === false) return false;
@@ -397,6 +442,7 @@
       tryDirectLogout,
       setSpending,
       isSpending: () => isSpending,
+      getLastSpendResult: () => Object.assign({}, lastSpendResult),
     };
   }
 
