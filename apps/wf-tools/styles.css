@@ -674,15 +674,11 @@ body[data-theme="light"] .btn{ color:#0a223d }
    Dropzone
    ========================= */
 #dropZone{ position:relative }
-#dropZone.dragging{
-  outline:2px dashed rgba(14,165,233,.6); outline-offset:6px;
-}
 #dropZone::after{
-  content:"Suelta para cargar"; position:absolute; inset:0; display:none; place-items:center;
+  content:""; position:absolute; inset:0; display:none; place-items:center;
   color:#eaf6ff; font-weight:700; font-size:18px; background:rgba(10,30,60,.35); backdrop-filter:blur(2px);
   pointer-events:none;
 }
-#dropZone.dragging::after{ display:grid }
 #dropZone.processing::after{
   content:"Procesando archivos...";
   display:flex;

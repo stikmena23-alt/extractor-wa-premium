@@ -1060,19 +1060,15 @@ copyResTableBtn?.addEventListener("click", async () => {
   }
 });
 
-// =================== DRAG & DROP ===================
+// =================== DRAG & DROP (deshabilitado) ===================
 if (dropZone){
-  let dragCounter = 0;
-  dropZone.addEventListener('dragenter', (e) => { e.preventDefault(); e.stopPropagation(); dragCounter++; dropZone.classList.add('dragging'); });
-  dropZone.addEventListener('dragover', (e) => { e.preventDefault(); e.stopPropagation(); });
-  dropZone.addEventListener('dragleave', (e) => { e.preventDefault(); e.stopPropagation(); dragCounter--; if (dragCounter <= 0) dropZone.classList.remove('dragging'); });
-  dropZone.addEventListener('drop', async (e) => {
-    e.preventDefault(); e.stopPropagation();
-    dropZone.classList.remove('dragging'); dragCounter = 0;
-    const dt = e.dataTransfer; if (!dt) return;
-    if (dt.files && dt.files.length){
-      await handleDroppedFiles(dt.files);
-    } else alert("Suelta archivos válidos (.zip con records.html, o .txt/.csv/.html).");
+  const prevent = (e) => { e.preventDefault(); e.stopPropagation(); };
+  dropZone.addEventListener('dragenter', prevent);
+  dropZone.addEventListener('dragover', prevent);
+  dropZone.addEventListener('dragleave', prevent);
+  dropZone.addEventListener('drop', (e) => {
+    prevent(e);
+    alert('La opción de arrastrar archivos ya no está disponible. Usa el botón "Subir archivo(s)".');
   });
 }
 
