@@ -317,6 +317,16 @@
       <!-- Panel: Información del Dispositivo / Servicio -->
       <section class="card panel span-12" id="deviceInfoCard">
         <h2>Información del servicio, dispositivo e IP</h2>
+        <div
+          id="servicePanelLoader"
+          class="panel-loader"
+          aria-hidden="true"
+          hidden
+        >
+          <div class="panel-loader__spinner" aria-hidden="true"></div>
+          <p class="panel-loader__text">Consultando datos del servicio…</p>
+          <p class="panel-loader__hint">Esperando confirmación de IP y ubicación.</p>
+        </div>
         <div class="info-grid">
           <div class="kv">
             <div class="k">Inicio del servicio:</div>

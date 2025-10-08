@@ -35,6 +35,8 @@ const autosaveToggle = document.getElementById("autosaveToggle");
 
 const openGuide = document.getElementById("openGuide");
 const dropZone = document.getElementById("dropZone");
+const deviceInfoCard = document.getElementById("deviceInfoCard");
+const servicePanelLoader = document.getElementById("servicePanelLoader");
 
 // Panel Servicio / Dispositivo
 const serviceStartEl = document.getElementById("serviceStartVal");
@@ -107,6 +109,26 @@ let selectedGraphNode = null;
 let graphPendingSelection = null;
 const graphLabels = new Map();
 
+let servicePanelLoading = false;
+let creditActionsEnabled = true;
+
+function syncActionButtons(){
+  if (processBtn){
+    processBtn.disabled = !creditActionsEnabled || servicePanelLoading;
+  }
+  if (addToBatchBtn){
+    addToBatchBtn.disabled = servicePanelLoading || currentContacts.length === 0;
+  }
+  if (downloadBtn){
+    downloadBtn.disabled = servicePanelLoading || currentContacts.length === 0;
+  }
+  if (exportMergedBtn){
+    exportMergedBtn.disabled = servicePanelLoading || batch.length === 0;
+  }
+}
+
+updateServicePanelLoading(false);
+
 // Zona horaria de referencia (UTC−5 sin DST)
 const HLC_TZ = 'America/Bogota';
 
@@ -136,11 +158,31 @@ let currentServiceInfo = {
 // Promesa para coordinar la consulta asíncrona de IP (evita capturas "No encontrado")
 let pendingIPEnrichment = Promise.resolve();
 
+function updateServicePanelLoading(isLoading){
+  servicePanelLoading = !!isLoading;
+  if (deviceInfoCard){
+    deviceInfoCard.classList.toggle('is-loading', servicePanelLoading);
+    deviceInfoCard.setAttribute('aria-busy', servicePanelLoading ? 'true' : 'false');
+  }
+  if (servicePanelLoader){
+    servicePanelLoader.hidden = !servicePanelLoading;
+    servicePanelLoader.setAttribute('aria-hidden', servicePanelLoading ? 'false' : 'true');
+  }
+  syncActionButtons();
+}
+
 function setPendingIPEnrichment(promise){
   if (promise && typeof promise.then === 'function'){
-    pendingIPEnrichment = promise.catch(() => {});
+    updateServicePanelLoading(true);
+    const tracked = Promise.resolve(promise)
+      .catch(() => {})
+      .finally(() => {
+        updateServicePanelLoading(false);
+      });
+    pendingIPEnrichment = tracked;
   } else {
     pendingIPEnrichment = Promise.resolve();
+    updateServicePanelLoading(false);
   }
   return pendingIPEnrichment;
 }
@@ -798,7 +840,7 @@ function renderPreview(){
   });
   buildPrefixDash(showAllEl.checked ? filtered : baseList);
   updateRelBtn();
-  downloadBtn.disabled = currentContacts.length === 0;
+  syncActionButtons();
   renderRelations();
 }
 
@@ -821,10 +863,11 @@ function renderBatch(){
     btn.addEventListener("click", () => {
       const id = btn.getAttribute("data-id");
       batch = batch.filter(x => x.id !== id);
-      renderBatch(); exportMergedBtn.disabled = batch.length === 0; saveLocal();
+      renderBatch();
     });
   });
-  exportMergedBtn.disabled = batch.length === 0; saveLocal();
+  syncActionButtons();
+  saveLocal();
   updateRelBtn();
   renderColorControls();
   renderRelations();
@@ -929,13 +972,14 @@ processBtn.addEventListener("click", () => {
   extractServiceInfoFromSource(pasted);
 });
 
-addToBatchBtn.addEventListener("click", () => {
+addToBatchBtn.addEventListener("click", async () => {
   if (!currentContacts.length) {
     const source = sanitizeSource(inputText.value);
     currentContacts = textToContacts(source);
     currentCounts = countOccurrences(source);
     if (!currentContacts.length){ alert("No hay contactos."); return; }
   }
+  await waitForIPEnrichment();
   const objective = stripCountry57(normalizeNumber((accountIdEl.value || "").trim()));
   const caseId = (caseIdEl.value || '').trim();
 
@@ -979,10 +1023,11 @@ themeToggle.addEventListener("change", ()=>{
 anonToggle.addEventListener("change", ()=>{ settings.anonymize=anonToggle.checked; saveLocal(); renderPreview(); });
 autosaveToggle.addEventListener("change", ()=>{ settings.autosave=autosaveToggle.checked; saveLocal(); });
 
-downloadBtn.addEventListener("click", () => {
+downloadBtn.addEventListener("click", async () => {
   if (!currentContacts.length){ alert("No hay contactos."); return; }
 
   try {
+    await waitForIPEnrichment();
     const objective = stripCountry57(normalizeNumber((accountIdEl.value || "").trim())) || "objetivo";
     const caseId = (caseIdEl.value || '').trim();
     const ts = nowStamp();
@@ -1032,8 +1077,9 @@ downloadBtn.addEventListener("click", () => {
   }
 });
 
-exportMergedBtn.addEventListener("click", () => {
+exportMergedBtn.addEventListener("click", async () => {
   if (!batch.length){ alert("No hay reportes."); return; }
+  await waitForIPEnrichment();
   const ts=nowStamp();
   const pairs=new Set();
   const rows=[["Contactos","Objetivo","Caso"]];
@@ -1260,11 +1306,23 @@ function parseIPAndPortFromText(txt){
     const text = stripZeroWidth(segment).replace(/\s+/g, ' ').trim();
     if (!text) return null;
 
-    let m = text.match(/\b(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})\b/);
+    let portFromLabel = null;
+    const portLabelMatch = text.match(/\b(?:port|puerto)\s*[:=#-]?\s*(\d{1,5})\b/i);
+    if (portLabelMatch){
+      const parsedPort = parseInt(portLabelMatch[1], 10);
+      if (!Number.isNaN(parsedPort)){
+        portFromLabel = parsedPort;
+      }
+    }
+
+    let m = text.match(/\b(\d{1,3}(?:\.\d{1,3}){3})\s*[:]\s*(\d{1,5})\b/);
     if (m) return { ip: m[1], port: parseInt(m[2], 10), version: 4 };
 
     m = text.match(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/);
-    if (m) return { ip: m[1], port: null, version: 4 };
+    if (m) {
+      const ip4 = m[1];
+      return { ip: ip4, port: portFromLabel != null ? portFromLabel : null, version: 4 };
+    }
 
     m = text.match(/\[([0-9a-fA-F:%]+)\]:(\d{1,5})/);
     if (m) {
@@ -1287,7 +1345,7 @@ function parseIPAndPortFromText(txt){
       if (!cand.includes(':')) continue;
       const ip6 = normalizeIPv6(cand);
       if (ip6 && !isClockLike(ip6) && hasAtLeastTwoColons(ip6)) {
-        return { ip: ip6, port: null, version: 6 };
+        return { ip: ip6, port: portFromLabel != null ? portFromLabel : null, version: 6 };
       }
     }
     return null;
@@ -1732,7 +1790,8 @@ async function lookupIP(ip){
 }
 
 // ====== RESET PANEL (NUEVO) ======
-function resetServicePanel(){
+function resetServicePanel(options = {}){
+  const keepPending = !!options.keepPending;
   setServiceStart(null);
   setOSBuild("No encontrado");
   setConnState("No encontrado");
@@ -1768,7 +1827,9 @@ function resetServicePanel(){
     residentialRows: null
   };
 
-  setPendingIPEnrichment(Promise.resolve());
+  if (!keepPending){
+    setPendingIPEnrichment(null);
+  }
 }
 
 /* ====== extracción principal del panel ====== */
@@ -1779,7 +1840,8 @@ function extractServiceInfoFromSource(raw){
   }
 
   // Siempre reset al inicio para no arrastrar datos de un record previo
-  resetServicePanel();
+  updateServicePanelLoading(true);
+  resetServicePanel({ keepPending: true });
 
   let doc = null;
   try{ doc = new DOMParser().parseFromString(String(raw), 'text/html'); }catch{}
@@ -1796,7 +1858,7 @@ function extractServiceInfoFromSource(raw){
   // IPs con prioridad: Connected from (si está ONLINE) > Last IP
   const connectedFrom = doc ? findValueByStructuredLabels(doc, lbls.connectedFrom) : null;
   let lastIPParsed = null;
-  let lookupPromise = Promise.resolve();
+  let lookupPromise = null;
 
   const f = (val, pats) => val || extractByLabelsFallback(raw, pats);
   const ss = f(serviceStart, lbls.serviceStart);
@@ -1847,7 +1909,7 @@ function extractServiceInfoFromSource(raw){
     setLastIp("No encontrado");
     setIPVersion("No encontrado");
     setIPPort(null); // 🔹 limpia si no hay puerto detectado
-    lookupPromise = Promise.resolve();
+    lookupPromise = null;
   }
 
   setPendingIPEnrichment(lookupPromise);
@@ -2822,8 +2884,9 @@ function initCore(){
 }
 
 function setCreditDependentActionsEnabled(enabled){
+  creditActionsEnabled = !!enabled;
   if (uploadBtn) uploadBtn.disabled = !enabled;
-  if (processBtn) processBtn.disabled = !enabled;
+  syncActionButtons();
 }
 
 window.AppCore = {
