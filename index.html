@@ -1075,7 +1075,7 @@
             const frameId = btn.getAttribute('data-frame');
             if (frameId) {
               closeMenu();
-              showFrame(frameId);
+              showFrame(frameId, { reload: true });
             }
           });
         });

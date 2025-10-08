@@ -133,6 +133,26 @@ let currentServiceInfo = {
   residentialRows: null // tabla calculada (incluye encabezado)
 };
 
+// Promesa para coordinar la consulta asíncrona de IP (evita capturas "No encontrado")
+let pendingIPEnrichment = Promise.resolve();
+
+function setPendingIPEnrichment(promise){
+  if (promise && typeof promise.then === 'function'){
+    pendingIPEnrichment = promise.catch(() => {});
+  } else {
+    pendingIPEnrichment = Promise.resolve();
+  }
+  return pendingIPEnrichment;
+}
+
+async function waitForIPEnrichment(){
+  try {
+    await pendingIPEnrichment;
+  } catch (_) {
+    /* silenciado */
+  }
+}
+
 // =================== UTILIDADES ===================
 function normalizeNumber(n){ return String(n).replace(/\D+/g, ""); }
 function stripCountry57(d){
@@ -207,7 +227,8 @@ function logError(code){
   try { localStorage.setItem(ERROR_STATS_KEY, JSON.stringify(errorStats)); } catch {}
 }
 function learnedMinDigits(){
-  return (errorStats.shortNumbers && errorStats.shortNumbers > 5) ? 7 : 8;
+  // Evitamos bajar a 7 dígitos para que no se capturen extensiones o IDs cortos.
+  return 8;
 }
 
 function textToContacts(text){
@@ -574,7 +595,7 @@ function finalizeProcessedUpload(raw, accountId, name){
   };
 }
 
-function applyProcessedUpload(result){
+async function applyProcessedUpload(result){
   if (!result) return { serviceSnapshot: null };
   inputText.value = result.raw || '';
   if (result.accountId){
@@ -584,6 +605,7 @@ function applyProcessedUpload(result){
   currentCounts = result.counts || { read:0, duplicates:0, countsMap:{} };
   renderPreview();
   extractServiceInfoFromSource(result.raw);
+  await waitForIPEnrichment();
   return { serviceSnapshot: cloneServiceSnapshot(currentServiceInfo) };
 }
 
@@ -637,7 +659,8 @@ async function handleDroppedFiles(fileList){
           });
           continue;
         }
-        const { serviceSnapshot } = applyProcessedUpload(result) || {};
+        updateUploadStatusEntry(entry, { message: 'Analizando IP y extrayendo contactos…' });
+        const { serviceSnapshot } = await applyProcessedUpload(result) || {};
         const objectiveForBatch = result.accountId || accountIdEl?.value || '';
         const caseIdValue = caseIdEl?.value || '';
         const batchEntry = addContactsToBatchEntry({
@@ -1185,43 +1208,98 @@ function extractByLabelsFallback(raw, patterns){
 // --------- NUEVO: parser robusto de IP + puerto ---------
 function parseIPAndPortFromText(txt){
   if (!txt) return null;
-  const s = String(txt);
+  const raw = String(txt);
 
-  // Evitar líneas "Generated: HH:MM(:SS)" para IP parsing
-  const safe = s.split(/\r?\n/).filter(line => !/^\s*Generated\s*:/i.test(line)).join("\n");
+  const stripZeroWidth = (value) => value
+    .replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
+    .replace(/&#(?:8203|65279);/gi, '');
 
-  // IPv4 con puerto
-  let m = safe.match(/\b(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})\b/);
-  if (m) return { ip: m[1], port: parseInt(m[2],10), version: 4 };
+  const cleanedHtml = stripZeroWidth(raw)
+    .replace(/<\s*wbr\s*\/?>/gi, '')
+    .replace(/&nbsp;/gi, ' ')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<\/(?:p|div|li|tr|td|span)>/gi, '\n');
 
-  // IPv4 simple
-  m = safe.match(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/);
-  if (m) return { ip: m[1], port: null, version: 4 };
+  const withoutTags = cleanedHtml.replace(/<[^>]+>/g, ' ');
+  const safe = withoutTags
+    .split(/\r?\n/)
+    .map(line => stripZeroWidth(line).trim())
+    .filter(line => line && !/^\s*Generated\s*:/i.test(line))
+    .join('\n');
 
-  // IPv6 con corchetes + puerto
-  m = safe.match(/\[([0-9a-fA-F:]+)\]:(\d{1,5})/);
-  if (m) {
-    const ip6 = m[1];
-    if (!isClockLike(ip6) && hasAtLeastTwoColons(ip6)) {
-      return { ip: ip6, port: parseInt(m[2],10), version: 6 };
-    }
+  const segments = [];
+  const connectedBlockRx = /(connected\s*from|connect\s*the\s*front|conectad[oa]\s*desde)[\s:,-]*([\s\S]{0,200})/gi;
+  let blockMatch;
+  while ((blockMatch = connectedBlockRx.exec(safe))){
+    if (blockMatch[2]) segments.push(blockMatch[2]);
   }
-
-  // IPv6 sin corchetes pero con puerto (último bloque numérico 1–5 dígitos)
-  m = safe.match(/([0-9a-fA-F:]+):(\d{1,5})(?:\b|$)/);
-  if (m && m[1].includes(":")) {
-    const ip6 = m[1];
-    if (!isClockLike(ip6) && hasAtLeastTwoColons(ip6)) {
-      return { ip: ip6, port: parseInt(m[2],10), version: 6 };
+  if (!segments.length){
+    connectedBlockRx.lastIndex = 0;
+    let altMatch;
+    const altSafe = stripZeroWidth(raw.replace(/<\s*wbr\s*\/?>/gi, '').replace(/<[^>]+>/g, ' '));
+    while ((altMatch = connectedBlockRx.exec(altSafe))){
+      if (altMatch[2]) segments.push(altMatch[2]);
     }
+    connectedBlockRx.lastIndex = 0;
   }
+  segments.push(safe);
 
-  // IPv6 simple (evita capturar horas)
-  const mAll = safe.match(/\b([0-9a-fA-F:]{2,})\b/g) || [];
-  for (const cand of mAll){
-    if (cand.includes(":") && !isClockLike(cand) && hasAtLeastTwoColons(cand)) {
-      return { ip: cand, port: null, version: 6 };
+  const seen = new Set();
+
+  const normalizeIPv6 = (ip) => {
+    let trimmed = (ip || '').trim();
+    const percentIndex = trimmed.indexOf('%');
+    if (percentIndex >= 0) trimmed = trimmed.slice(0, percentIndex);
+    const slashIndex = trimmed.indexOf('/');
+    if (slashIndex >= 0) trimmed = trimmed.slice(0, slashIndex);
+    return trimmed;
+  };
+
+  const parseSegment = (segment) => {
+    if (!segment) return null;
+    const text = stripZeroWidth(segment).replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+
+    let m = text.match(/\b(\d{1,3}(?:\.\d{1,3}){3}):(\d{1,5})\b/);
+    if (m) return { ip: m[1], port: parseInt(m[2], 10), version: 4 };
+
+    m = text.match(/\b(\d{1,3}(?:\.\d{1,3}){3})\b/);
+    if (m) return { ip: m[1], port: null, version: 4 };
+
+    m = text.match(/\[([0-9a-fA-F:%]+)\]:(\d{1,5})/);
+    if (m) {
+      const ip6 = normalizeIPv6(m[1]);
+      if (ip6 && !isClockLike(ip6) && hasAtLeastTwoColons(ip6)) {
+        return { ip: ip6, port: parseInt(m[2], 10), version: 6 };
+      }
     }
+
+    m = text.match(/([0-9a-fA-F:%]+):(\d{1,5})(?:\b|$)/);
+    if (m && m[1].includes(':')) {
+      const ip6 = normalizeIPv6(m[1]);
+      if (ip6 && !isClockLike(ip6) && hasAtLeastTwoColons(ip6)) {
+        return { ip: ip6, port: parseInt(m[2], 10), version: 6 };
+      }
+    }
+
+    const candidates = text.match(/[0-9a-fA-F:%]{2,}/g) || [];
+    for (const cand of candidates){
+      if (!cand.includes(':')) continue;
+      const ip6 = normalizeIPv6(cand);
+      if (ip6 && !isClockLike(ip6) && hasAtLeastTwoColons(ip6)) {
+        return { ip: ip6, port: null, version: 6 };
+      }
+    }
+    return null;
+  };
+
+  for (const segment of segments){
+    if (!segment) continue;
+    const trimmed = segment.trim();
+    if (!trimmed || seen.has(trimmed)) continue;
+    seen.add(trimmed);
+    const parsed = parseSegment(trimmed);
+    if (parsed) return parsed;
   }
 
   return null;
@@ -1561,13 +1639,14 @@ const ipCache = new Map();
 async function lookupIP(ip){
   if (!ip || ip === "No encontrado" || ip === "-") return;
   // No pasar puerto aquí; ya recibimos sólo la IP "pura".
-  const ipOnly = String(ip);
+  const ipOnly = String(ip).trim();
+  const normalizedIp = ipOnly.includes('%') ? ipOnly.slice(0, ipOnly.indexOf('%')) : ipOnly;
 
   // caché
-  if (ipCache.has(ipOnly)){
-    const c = ipCache.get(ipOnly);
+  if (ipCache.has(normalizedIp)){
+    const c = ipCache.get(normalizedIp);
     setISP(c.isp || "No encontrado");
-    setIPVersion(c.version || (/:/.test(ipOnly) ? "IPv6":"IPv4"));
+    setIPVersion(c.version || (/:/.test(normalizedIp) ? "IPv6":"IPv4"));
     setIPType(classifyType(c.baseType || "", c.isp || "", c.hints || ""));
     setCity(c.city || "No encontrado");
     setCountry(c.countryCode || "", c.countryName || "", c.flag || "");
@@ -1578,9 +1657,9 @@ async function lookupIP(ip){
   try{
     // disparamos en paralelo con tolerancia a fallos
     const [r1, r2, r3] = await Promise.allSettled([
-      fetchJSONWithTimeout(`https://ipwho.is/${encodeURIComponent(ipOnly)}`, 6500),
-      fetchJSONWithTimeout(`https://ipwhois.app/json/${encodeURIComponent(ipOnly)}`, 6500),
-      fetchJSONWithTimeout(`https://ipapi.co/${encodeURIComponent(ipOnly)}/json/`, 6500)
+      fetchJSONWithTimeout(`https://ipwho.is/${encodeURIComponent(normalizedIp)}`, 6500),
+      fetchJSONWithTimeout(`https://ipwhois.app/json/${encodeURIComponent(normalizedIp)}`, 6500),
+      fetchJSONWithTimeout(`https://ipapi.co/${encodeURIComponent(normalizedIp)}/json/`, 6500)
     ]);
 
     const d1 = (r1.status==="fulfilled" && r1.value && r1.value.success!==false) ? r1.value : null; // ipwho.is
@@ -1632,14 +1711,14 @@ async function lookupIP(ip){
 
     // set en UI
     setISP(isp || "No encontrado");
-    setIPVersion(version || (/:/.test(ipOnly) ? "IPv6":"IPv4"));
+    setIPVersion(version || (/:/.test(normalizedIp) ? "IPv6":"IPv4"));
     setIPType(finalType);
     setCity(city || "No encontrado");
     setCountry(countryCode || "", countryName || "", flagEmoji || "");
     setSecurityFlags(proxy, vpn, tor);
 
     // guarda en caché
-    ipCache.set(ipOnly, {
+    ipCache.set(normalizedIp, {
       isp, version, baseType: providerTypeStr, hints,
       city, countryName, countryCode, flag: flagEmoji,
       proxy, vpn, tor
@@ -1648,7 +1727,7 @@ async function lookupIP(ip){
   }catch(err){
     console.error("Error consultando IP:", err);
     // Mínimo: mostrar versión y mantener resto con guiones
-    setIPVersion(/:/.test(ipOnly) ? "IPv6":"IPv4");
+    setIPVersion(/:/.test(normalizedIp) ? "IPv6":"IPv4");
   }
 }
 
@@ -1688,6 +1767,8 @@ function resetServicePanel(){
     tor: "No",
     residentialRows: null
   };
+
+  setPendingIPEnrichment(Promise.resolve());
 }
 
 /* ====== extracción principal del panel ====== */
@@ -1715,6 +1796,7 @@ function extractServiceInfoFromSource(raw){
   // IPs con prioridad: Connected from (si está ONLINE) > Last IP
   const connectedFrom = doc ? findValueByStructuredLabels(doc, lbls.connectedFrom) : null;
   let lastIPParsed = null;
+  let lookupPromise = Promise.resolve();
 
   const f = (val, pats) => val || extractByLabelsFallback(raw, pats);
   const ss = f(serviceStart, lbls.serviceStart);
@@ -1760,12 +1842,15 @@ function extractServiceInfoFromSource(raw){
     setIPVersion(currentServiceInfo.ipVersion);
     setIPPort(lastIPParsed.port); // 🔹 refleja puerto en el panel
     // Consulta a servicios de IP con la IP "pura"
-    lookupIP(lastIPParsed.ip);
+    lookupPromise = lookupIP(lastIPParsed.ip) || Promise.resolve();
   } else {
     setLastIp("No encontrado");
     setIPVersion("No encontrado");
     setIPPort(null); // 🔹 limpia si no hay puerto detectado
+    lookupPromise = Promise.resolve();
   }
+
+  setPendingIPEnrichment(lookupPromise);
 }
 
 /* ====== Tabla residencial (generación/visibilidad) ====== */
