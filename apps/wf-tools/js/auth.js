@@ -84,6 +84,56 @@
   const regPasswordInput = registerEls.passwordInput || document.getElementById("reg_password");
 
   const storageAvailable = loginModule?.isStorageAvailable?.() ?? false;
+  const BATCH_RPC_PREF_KEY = "wfTools.batchRpcPreference";
+  const BATCH_RPC_ENABLED_VALUE = "enabled";
+  const BATCH_RPC_DISABLED_VALUE = "disabled";
+  const defaultBatchRpcFlag = global.__WF_USE_BATCH_SPEND__ === true;
+  let batchSpendRpcEnabled = defaultBatchRpcFlag;
+
+  if (storageAvailable) {
+    try {
+      const storedPref = global.localStorage.getItem(BATCH_RPC_PREF_KEY);
+      if (storedPref === BATCH_RPC_ENABLED_VALUE) {
+        batchSpendRpcEnabled = true;
+      } else if (storedPref === BATCH_RPC_DISABLED_VALUE) {
+        batchSpendRpcEnabled = false;
+      } else if (!defaultBatchRpcFlag) {
+        batchSpendRpcEnabled = false;
+      }
+    } catch (err) {
+      if (!defaultBatchRpcFlag) {
+        batchSpendRpcEnabled = false;
+      }
+      console.warn("No se pudo leer la preferencia del RPC spend_credits", err);
+    }
+  } else if (!defaultBatchRpcFlag) {
+    batchSpendRpcEnabled = false;
+  }
+
+  function persistBatchRpcPreference(enabled) {
+    if (!storageAvailable) return;
+    try {
+      const value = enabled ? BATCH_RPC_ENABLED_VALUE : BATCH_RPC_DISABLED_VALUE;
+      global.localStorage.setItem(BATCH_RPC_PREF_KEY, value);
+    } catch (err) {
+      console.warn("No se pudo guardar la preferencia del RPC spend_credits", err);
+    }
+  }
+
+  function disableBatchRpcSupport(context) {
+    if (!batchSpendRpcEnabled) return;
+    batchSpendRpcEnabled = false;
+    persistBatchRpcPreference(false);
+    console.warn(
+      "Se deshabilitó el uso del RPC spend_credits; se usará el modo secuencial.",
+      context,
+    );
+  }
+
+  function markBatchRpcSuccessful() {
+    if (!batchSpendRpcEnabled) return;
+    persistBatchRpcPreference(true);
+  }
   const setRememberedEmail = loginModule?.setRememberedEmail?.bind(loginModule) || (() => {});
   const getRememberedEmail = loginModule?.getRememberedEmail?.bind(loginModule) || (() => "");
   const clearRememberedEmail = loginModule?.clearRememberedEmail?.bind(loginModule) || (() => {});
@@ -301,7 +351,7 @@
       return "No se pudo conectar con Supabase. Verifica tu conexión e inténtalo nuevamente.";
     }
     if (classification.reason === "endpoint-missing") {
-      return "No se encontró el servicio de consumo de créditos. Inténtalo nuevamente en unos segundos.";
+      return "No se encontró el servicio de consumo de créditos. Contacta al administrador para revisar la configuración.";
     }
     return classification.message || fallbackMessage || "No se pudo consumir créditos. Intenta nuevamente.";
   }
@@ -1326,14 +1376,56 @@
     }
   }
 
-  async function performSequentialSpend(amount) {
-    for (let i = 0; i < amount; i += 1) {
-      const { error } = await supabase.rpc("spend_credit");
-      if (error) {
-        return { ok: false, error };
+  function extractConsumedAmount(data, fallback = 1) {
+    if (data == null) {
+      return fallback;
+    }
+    if (typeof data === "number" && Number.isFinite(data)) {
+      return Math.max(fallback, Math.floor(Number(data)));
+    }
+    if (typeof data === "string" && data.trim() !== "") {
+      const parsed = Number.parseInt(data, 10);
+      if (Number.isFinite(parsed) && parsed > 0) {
+        return parsed;
       }
     }
-    return { ok: true };
+    if (typeof data === "object") {
+      const candidates = [
+        data.consumed,
+        data.spent,
+        data.used,
+        data.amount,
+        data.credits,
+        data.credits_spent,
+        data.credits_consumed,
+      ];
+      for (const candidate of candidates) {
+        const parsed = Number.parseInt(candidate, 10);
+        if (Number.isFinite(parsed) && parsed > 0) {
+          return parsed;
+        }
+      }
+    }
+    return fallback;
+  }
+
+  async function performSequentialSpend(amount) {
+    let consumed = 0;
+    for (let i = 0; i < amount; i += 1) {
+      try {
+        const { data, error } = await supabase.rpc("spend_credit");
+        if (error) {
+          return { ok: false, error, consumed };
+        }
+        consumed += extractConsumedAmount(data, 1);
+      } catch (error) {
+        return { ok: false, error, consumed };
+      }
+    }
+    if (!Number.isFinite(consumed) || consumed <= 0) {
+      consumed = amount;
+    }
+    return { ok: true, consumed };
   }
 
   function shouldFallbackToLegacy(error) {
@@ -1357,22 +1449,54 @@
 
       let rpcError = null;
       let rpcData = null;
-      try {
-        const { data, error } = await supabase.rpc("spend_credits", { amount });
-        if (error) {
-          if (shouldFallbackToLegacy(error)) {
-            const fallback = await performSequentialSpend(amount);
-            if (!fallback.ok) {
-              rpcError = fallback.error || error;
+      let useFallback = !batchSpendRpcEnabled;
+      let consumed = amount;
+
+      if (!useFallback) {
+        try {
+          const { data, error } = await supabase.rpc("spend_credits", { amount });
+          if (error) {
+            if (shouldFallbackToLegacy(error)) {
+              disableBatchRpcSupport(error);
+              useFallback = true;
+            } else {
+              rpcError = error;
             }
           } else {
-            rpcError = error;
+            rpcData = data || null;
+            markBatchRpcSuccessful();
           }
-        } else {
-          rpcData = data || null;
+        } catch (err) {
+          if (shouldFallbackToLegacy(err)) {
+            disableBatchRpcSupport(err);
+            useFallback = true;
+          } else {
+            rpcError = err;
+          }
         }
-      } catch (err) {
-        rpcError = err;
+      }
+
+      if (useFallback) {
+        const fallback = await performSequentialSpend(amount);
+        if (fallback.ok) {
+          const legacyConsumed = Number.parseInt(fallback.consumed, 10);
+          if (Number.isFinite(legacyConsumed) && legacyConsumed > 0) {
+            consumed = legacyConsumed;
+          }
+          rpcError = null;
+          rpcData = null;
+        } else {
+          rpcError = fallback.error || rpcError;
+          consumed = Number.parseInt(fallback.consumed, 10);
+          if (!Number.isFinite(consumed) || consumed < 0) {
+            consumed = 0;
+          }
+        }
+      } else if (rpcData && typeof rpcData === "object") {
+        const maybe = Number.parseInt(rpcData.consumed, 10);
+        if (Number.isFinite(maybe) && maybe > 0) {
+          consumed = maybe;
+        }
       }
 
       if (rpcError) {
@@ -1382,20 +1506,6 @@
           if (refreshed) {
             return performSpendCredits(amount, attempt + 1);
           }
-        }
-
-        if (classification.reason === "endpoint-missing") {
-          // If we already attempted fallback and still failed, keep the same error.
-          const fallback = await performSequentialSpend(amount);
-          if (fallback.ok) {
-            const currentUi = getCreditsFromUi();
-            const next = Math.max(0, currentUi - amount);
-            renderCreditState(next);
-            global.AppCore?.setCreditDependentActionsEnabled(next > 0);
-            return rememberSpendResult({ ok: true, amount, reason: null });
-          }
-          rpcError = fallback.error || rpcError;
-          classification = classifySupabaseError(rpcError);
         }
 
         const message = buildSpendErrorMessage(classification, extractErrorMessage(rpcError));
@@ -1420,14 +1530,6 @@
           message,
           error: rpcError,
         });
-      }
-
-      let consumed = amount;
-      if (rpcData && typeof rpcData === "object") {
-        const maybe = Number.parseInt(rpcData.consumed, 10);
-        if (Number.isFinite(maybe) && maybe > 0) {
-          consumed = maybe;
-        }
       }
 
       const currentUi = getCreditsFromUi();
