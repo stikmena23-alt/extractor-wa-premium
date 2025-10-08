@@ -231,7 +231,13 @@ function learnedMinDigits(){
   return 8;
 }
 
-function textToContacts(text){
+function resolveObjectiveOverride(objective){
+  if (!objective) return getNormalizedObjective();
+  const normalized = stripCountry57(normalizeNumber(objective));
+  return normalized || getNormalizedObjective();
+}
+
+function textToContacts(text, objectiveOverride = null){
   const matches = (text || "").match(/\d{7,}/g) || [];
   const clean = [];
   const minDigits = learnedMinDigits();
@@ -242,10 +248,10 @@ function textToContacts(text){
     if (n.length < minDigits){ logError('shortNumbers'); continue; }
     clean.push(n);
   }
-  const ai = getNormalizedObjective();
+  const ai = resolveObjectiveOverride(objectiveOverride);
   return removeNumberAndUniq(clean, ai);
 }
-function countOccurrences(text){
+function countOccurrences(text, objectiveOverride = null){
   const matches = (text || "").match(/\d{7,}/g) || [];
   const map = Object.create(null);
   let readCount = 0;
@@ -257,7 +263,7 @@ function countOccurrences(text){
     map[n] = (map[n] || 0) + 1;
     readCount++;
   }
-  const ai = getNormalizedObjective();
+  const ai = resolveObjectiveOverride(objectiveOverride);
   if (ai && map[ai]){
     readCount -= map[ai];
     delete map[ai];
@@ -579,8 +585,8 @@ async function processSingleUploadedFile(file){
 function finalizeProcessedUpload(raw, accountId, name){
   if (!raw) throw new Error('contenido_vacio');
   const sanitized = sanitizeSource(raw);
-  const contacts = textToContacts(sanitized);
-  const counts = countOccurrences(sanitized);
+  const contacts = textToContacts(sanitized, accountId);
+  const counts = countOccurrences(sanitized, accountId);
   const ipInfo = parseIPAndPortFromText(raw);
   const ipShown = ipInfo ? (ipInfo.port != null ? `${ipInfo.ip}:${ipInfo.port}` : ipInfo.ip) : null;
   return {
