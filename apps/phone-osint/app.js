@@ -72,7 +72,9 @@ const el = s => document.querySelector(s);
     // Construcción de dorks y enlaces (avanzado, sin APIs)
     function buildOSINTLinks(input){
       const box = el('#osintLinks');
+      const previewLabel = el('#osintPreview');
       box.innerHTML = '';
+      if(previewLabel){ previewLabel.textContent = '—'; }
       const link = (txt,url) => `<a href="${url}" target="_blank" rel="noopener">${txt}</a>`;
 
       // Normaliza: acepta filas completas o solo números
@@ -83,7 +85,7 @@ const el = s => document.querySelector(s);
 
       const defaultCountry = (el('#country')?.value || 'CO').toLowerCase();
       const groups = [];
-      rows.forEach(r => {
+      rows.forEach((r, idx) => {
         const base = r.e164 || r.input || '';
         const digits = (r.digits || String(base).replace(/\D/g,'')).slice(0,32);
         const plusDigits = digits ? `+${digits}` : '';
@@ -133,6 +135,11 @@ const el = s => document.querySelector(s);
         ];
 
         const copyBtn = `<button class="btn small" data-copy="${variants.join('\n').replace(/"/g,'&quot;')}">Copiar variantes</button>`;
+
+        if(previewLabel && idx === 0){
+          const previewValue = variants[0] || base || digits || '—';
+          previewLabel.textContent = previewValue || '—';
+        }
 
         groups.push(`
           <div class="cardline">
@@ -214,7 +221,10 @@ const el = s => document.querySelector(s);
     });
 
     el('#btnClear').addEventListener('click', ()=>{
-      el('#numbers').value=''; el('#results').innerHTML=''; el('#rawOut').textContent=''; el('#osintLinks').innerHTML=''; window.__rows=[];
+      el('#numbers').value=''; el('#results').innerHTML=''; el('#rawOut').textContent=''; el('#osintLinks').innerHTML='';
+      const previewLabel = el('#osintPreview');
+      if(previewLabel){ previewLabel.textContent='—'; }
+      window.__rows=[];
     });
 
     el('#btnExportCSV').addEventListener('click', ()=>{ exportCSV(window.__rows||[]); });

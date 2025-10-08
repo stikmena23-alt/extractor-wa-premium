@@ -9,7 +9,8 @@
   <!-- Fuentes -->
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet"/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Orbitron:wght@600;800&display=swap"
+ rel="stylesheet"/>
 
   <!-- jsPDF para exportación PDF -->
   <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
@@ -62,55 +63,121 @@
   </div>
 
   <main class="container">
-    <section class="card">
-      <h2>Ingreso de números</h2>
-      <div class="row">
+    <section class="card hero-card">
+      <header class="card-head">
+        <div class="card-icon neon">
+          <span aria-hidden="true">📡</span>
+        </div>
+        <div class="card-meta">
+          <p class="eyebrow">Paso 1 · Normaliza</p>
+          <h2>Ingresa los números objetivo</h2>
+          <p class="sub">Carga bloques completos y deja que el panel organice prefijos, formatos y tipos de línea.</p>
+        </div>
+      </header>
+      <div class="card-body form-grid">
         <label class="field full">
           <span>Números (uno por línea, admite prefijos +E.164 o locales)</span>
-          <textarea id="numbers" rows="5" placeholder="+573001112233&#10;3051234567&#10;+5215512345678"></textarea>
+          <textarea id="numbers" rows="6" placeholder="+573001112233&#10;3051234567&#10;+5215512345678"></textarea>
         </label>
-        <label class="field" style="min-width:140px">
+        <label class="field">
           <span>País por defecto</span>
-          <select id="country">
-            <option value="CO" selected>CO</option>
-            <option value="MX">MX</option>
-            <option value="US">US</option>
-            <option value="IN">IN</option>
-            <option value="AR">AR</option>
-            <option value="PE">PE</option>
-            <option value="CL">CL</option>
-          </select>
+          <div class="select-shell">
+            <select id="country">
+              <option value="CO" selected>CO</option>
+              <option value="MX">MX</option>
+              <option value="US">US</option>
+              <option value="IN">IN</option>
+              <option value="AR">AR</option>
+              <option value="PE">PE</option>
+              <option value="CL">CL</option>
+            </select>
+            <span class="select-caret" aria-hidden="true"></span>
+          </div>
         </label>
       </div>
-      <div class="actions">
+      <div class="card-footer actions primary-actions">
         <button class="btn brand" id="btnAnalyze">Analizar</button>
         <button class="btn muted" id="btnClear">Limpiar</button>
       </div>
       <p class="hint">El análisis valida y formatea con <strong>libphonenumber-js</strong> (sin consumir APIs). Se generan enlaces OSINT útiles automáticamente.</p>
     </section>
 
-    <section class="card">
-      <h2>Resultados</h2>
-      <div id="results" class="result"></div>
-      <div class="actions">
+    <section class="card results-card">
+      <header class="card-head">
+        <div class="card-icon neon green">
+          <span aria-hidden="true">🧭</span>
+        </div>
+        <div class="card-meta">
+          <p class="eyebrow">Paso 2 · Cruza hallazgos</p>
+          <h2>Resultados y perfiles enriquecidos</h2>
+          <p class="sub">Visualiza formatos E.164, nombres detectados y notas clave antes de exportar.</p>
+        </div>
+        <div class="card-meter">
+          <span class="meter-dot"></span>
+          <span class="meter-dot"></span>
+          <span class="meter-dot"></span>
+        </div>
+      </header>
+      <div class="result-wrapper">
+        <div id="results" class="result"></div>
+      </div>
+      <div class="card-footer actions">
         <button class="btn ok" id="btnExportCSV">Exportar CSV</button>
         <button class="btn danger" id="btnExportPDF">Exportar PDF</button>
       </div>
     </section>
 
-    <section class="card">
-      <h2>OSINT — Links rápidos</h2>
-      <div id="osintLinks" class="result"></div>
-      <details style="margin-top:12px">
+    <section class="card osint-card">
+      <header class="card-head">
+        <div class="card-icon neon blue">
+          <span aria-hidden="true">🌐</span>
+        </div>
+        <div class="card-meta">
+          <p class="eyebrow">Paso 3 · Explora</p>
+          <h2>Tablero OSINT interactivo</h2>
+          <p class="sub">Lanza búsquedas en tus dorks favoritos desde un panel que simula un navegador.</p>
+        </div>
+      </header>
+      <div class="osint-browser" role="region" aria-label="Panel OSINT">
+        <div class="osint-toolbar">
+          <div class="osint-dots" aria-hidden="true">
+            <span class="dot dot-red"></span>
+            <span class="dot dot-yellow"></span>
+            <span class="dot dot-green"></span>
+          </div>
+          <div class="osint-url">https://osint.wftools/search?q=<span id="osintPreview">—</span></div>
+          <div class="osint-actions" aria-hidden="true">
+            <span class="tab active"></span>
+            <span class="tab"></span>
+          </div>
+        </div>
+        <div class="osint-view">
+          <div class="osint-hero">
+            <div class="badge">Motor multi-dork</div>
+            <h3>Todo listo para abrir en un clic</h3>
+            <p>Selecciona cualquier enlace sugerido para abrirlo en una pestaña nueva. Copia y combina resultados para tu expediente.</p>
+          </div>
+          <div id="osintLinks" class="result osint-grid"></div>
+        </div>
+      </div>
+      <details class="raw-panel">
         <summary class="mono">Ver salida cruda</summary>
-        <pre id="rawOut" class="mono" style="background:#081018;border:1px solid var(--border);border-radius:12px;padding:12px;overflow:auto"></pre>
+        <pre id="rawOut" class="mono"></pre>
       </details>
     </section>
 
-    <section class="card">
-      <h2>Ayuda</h2>
-      <ul>
-        <li><strong>Offline:</strong> detección de país/validez, formateo E.164/internacional/nacional, tipo de línea cuando esté disponible.</li>
+    <section class="card info-card">
+      <header class="card-head">
+        <div class="card-icon">
+          <span aria-hidden="true">💡</span>
+        </div>
+        <div class="card-meta">
+          <h2>Tips rápidos</h2>
+          <p class="sub">Refuerza tu flujo sin salir del navegador.</p>
+        </div>
+      </header>
+      <ul class="info-list">
+        <li><strong>Offline:</strong> detección de país/validez, formateo E.164/internacional/nacional y tipo de línea cuando esté disponible.</li>
         <li><strong>OSINT:</strong> dorks instantáneos: Google, X/Twitter, Facebook, Instagram, TikTok, LinkedIn, Telegram, Skype, WhatsApp.</li>
         <li><strong>Exportación:</strong> CSV y PDF en cliente (no sale del navegador).</li>
       </ul>
