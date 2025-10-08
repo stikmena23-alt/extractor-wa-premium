@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Open Phone OSINT | WF TOOLS</title>
+  <meta name="theme-color" content="#0a0b0f"/>
+
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Orbitron:wght@600;800&display=swap" rel="stylesheet"/>
+
+  <!-- jsPDF para exportación PDF -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+  <!-- libphonenumber-js (parseo offline) -->
+  <script src="https://cdn.jsdelivr.net/npm/libphonenumber-js@1.10.25/bundle/libphonenumber-min.js"></script>
+
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="page-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="logo" aria-hidden="true"></div>
+        <div class="meta">
+          <h1>Open Phone OSINT — Búsqueda</h1>
+          <p>Solo HTML/CSS/JS — análisis offline + dorks OSINT</p>
+        </div>
+      </div>
+      <div class="header-actions"><span class="pill">Sin APIs</span></div>
+    </div>
+  </div>
+
+  <div id="userInfoBar" class="user-info-bar">
+    <div class="ui-main">
+      <!-- ACTIVAMOS el “battle mode” en el avatar -->
+      <div class="ui-avatar battle" aria-hidden="true">
+        <img src="../../shared/assets/wf-tools.png" alt="WF TOOLS" />
+      </div>
+      <div class="ui-meta">
+        <span class="ui-label">Usuario</span>
+        <span class="ui-value" id="uiUserName">—</span>
+
+        <span class="ui-label">Email</span>
+        <span class="ui-email" id="uiUserEmail">—</span>
+      </div>
+    </div>
+
+    <div class="ui-stats">
+      <div class="ui-stat">
+        <span class="ui-stat-label">Plan</span>
+        <span class="ui-stat-value" id="uiUserPlan">—</span>
+      </div>
+      <div class="ui-stat">
+        <span class="ui-stat-label">Creditos</span>
+        <span class="ui-stat-value" id="uiUserCredits">—</span>
+      </div>
+      <span id="uiNoCredits" class="ui-badge ui-badge-danger" style="display:none;">Recargar cuenta</span>
+    </div>
+
+    <button id="uiLogoutBtn" class="btn ui-logout" type="button">Cerrar sesión</button>
+  </div>
+
+  <main class="container">
+    <section class="card">
+      <h2>Ingreso de números</h2>
+      <div class="row">
+        <label class="field full">
+          <span>Números (uno por línea, admite prefijos +E.164 o locales)</span>
+          <textarea id="numbers" rows="5" placeholder="+573001112233&#10;3051234567&#10;+5215512345678"></textarea>
+        </label>
+        <label class="field" style="min-width:140px">
+          <span>País por defecto</span>
+          <select id="country">
+            <option value="CO" selected>CO</option>
+            <option value="MX">MX</option>
+            <option value="US">US</option>
+            <option value="IN">IN</option>
+            <option value="AR">AR</option>
+            <option value="PE">PE</option>
+            <option value="CL">CL</option>
+          </select>
+        </label>
+      </div>
+      <div class="actions">
+        <button class="btn brand" id="btnAnalyze">Analizar</button>
+        <button class="btn muted" id="btnClear">Limpiar</button>
+      </div>
+      <p class="hint">El análisis valida y formatea con <strong>libphonenumber-js</strong> (sin consumir APIs). Se generan enlaces OSINT útiles automáticamente.</p>
+    </section>
+
+    <section class="card">
+      <h2>Resultados</h2>
+      <div id="results" class="result"></div>
+      <div class="actions">
+        <button class="btn ok" id="btnExportCSV">Exportar CSV</button>
+        <button class="btn danger" id="btnExportPDF">Exportar PDF</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>OSINT — Links rápidos</h2>
+      <div id="osintLinks" class="result"></div>
+      <details style="margin-top:12px">
+        <summary class="mono">Ver salida cruda</summary>
+        <pre id="rawOut" class="mono" style="background:#081018;border:1px solid var(--border);border-radius:12px;padding:12px;overflow:auto"></pre>
+      </details>
+    </section>
+
+    <section class="card">
+      <h2>Ayuda</h2>
+      <ul>
+        <li><strong>Offline:</strong> detección de país/validez, formateo E.164/internacional/nacional, tipo de línea cuando esté disponible.</li>
+        <li><strong>OSINT:</strong> dorks instantáneos: Google, X/Twitter, Facebook, Instagram, TikTok, LinkedIn, Telegram, Skype, WhatsApp.</li>
+        <li><strong>Exportación:</strong> CSV y PDF en cliente (no sale del navegador).</li>
+      </ul>
+    </section>
+  </main>
+
+  <footer class="site-footer">© 2025 WF TOOLS — Open Phone OSINT</footer>
+
+  <script src="app.js" defer></script>
+  <script src="../../shared/js/frame-credit-bridge.js" defer></script>
+  <script src="bridge.js" defer></script>
+</body>
+</html>

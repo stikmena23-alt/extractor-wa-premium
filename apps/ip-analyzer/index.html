@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="es" data-theme="dark">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>IP Analyzer Pro de WF TOOL</title>
+  <meta name="theme-color" content="#0a0b0f"/>
+
+  <!-- Fuentes -->
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;600;700&family=Orbitron:wght@600;700&display=swap" rel="stylesheet"/>
+
+  <!-- Leaflet (sin SRI) -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- jsPDF -->
+  <script src="https://cdn.jsdelivr.net/npm/jspdf@2.5.1/dist/jspdf.umd.min.js"></script>
+
+  <link rel="stylesheet" href="styles.css"/>
+</head>
+<body>
+  <!-- Overlay -->
+  <div id="overlay" class="overlay" role="alert" aria-live="polite" aria-busy="true">
+    <div class="loaderBox" role="status">
+      <div class="loaderHead">
+        <div class="ring" aria-hidden="true"></div>
+        <div>
+          <div style="font-weight:800; letter-spacing:.3px">Ejecutando análisis multi-nodo…</div>
+          <div style="color:var(--muted); font-size:13px">Consultas paralelas a cuatro nodos anónimos</div>
+        </div>
+      </div>
+      <div class="progWrap"><div id="progBar" class="progBar"></div></div>
+      <div id="steps" class="steps"></div>
+    </div>
+  </div>
+
+  <header>
+    <div class="brand">
+      <div class="logo" title="IP Analyzer">
+        <svg viewBox="0 0 24 24" fill="none"><path d="M3 12h6l2-6 2 12 2-6h6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </div>
+      <div class="title">
+        <h1 style="font-family:'Orbitron'">IP Analyzer Pro de WF TOOL</h1>
+        <small>Tarjetas por nodo, consenso de ciudad, tipo de IP (residencial/móvil/hosting) y mapa avanzado</small>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="themeBtn" class="btn-outline" title="Cambiar tema">🌙 Tema</button>
+    </div>
+  </header>
+
+  <!-- Panel con datos del usuario -->
+  <div id="userInfoBar" class="user-info-bar">
+    <div class="ui-card">
+      <div class="ui-main">
+        <!-- ACTIVAMOS el “battle mode” en el avatar -->
+        <div class="ui-avatar battle" aria-hidden="true">
+          <img src="../../shared/assets/wf-tools.png" alt="WF TOOLS" />
+        </div>
+        <div class="ui-meta">
+          <span class="ui-label">Usuario</span>
+          <span class="ui-value" id="uiUserName">&mdash;</span>
+          <span class="ui-label">Email</span>
+          <span class="ui-email" id="uiUserEmail">&mdash;</span>
+        </div>
+      </div>
+      <div class="ui-stats">
+        <div class="ui-stat">
+          <span class="ui-stat-label">Plan</span>
+          <span class="ui-stat-value" id="uiUserPlan">&mdash;</span>
+        </div>
+        <div class="ui-stat">
+          <span class="ui-stat-label">Creditos</span>
+          <span class="ui-stat-value" id="uiUserCredits">&mdash;</span>
+        </div>
+        <span id="uiNoCredits" class="ui-badge ui-badge-danger" style="display:none;">Recargar cuenta</span>
+      </div>
+    </div>
+    <button id="uiLogoutBtn" class="btn ui-logout" type="button">Cerrar sesión</button>
+    <!-- ↑ Quité "btn-danger" porque el CSS ya define el estilo por ID/clase -->
+  </div>
+
+  <div class="main-grid">
+    <section class="card">
+      <div class="toolbar">
+        <input id="ipInput" class="mono" placeholder="Escribe una IP (p.ej. 8.8.8.8) — o deja vacío para usar tu IP"/>
+        <!-- Dejamos SOLO "btn" y el CSS por ID (#btnLookup) se encarga del color -->
+        <button id="btnLookup" class="btn">Analizar IP</button>
+        <!-- Igual aquí: SOLO "btn" y CSS por ID (#btnPDF) pinta el rojo -->
+        <button id="btnPDF" class="btn">Generar reporte (PDF)</button>
+      </div>
+
+      <div class="grid">
+        <div class="section" style="grid-column:1 / -1;">
+          <h3>Resumen</h3>
+          <div class="summaryCard" id="summary"></div>
+          <div class="badges" id="badges"></div>
+        </div>
+
+        <div class="section">
+          <h3>Zona de Análisis</h3>
+          <div id="analysis" class="analysis">Ingresa una IP para clasificación (Residencial / Móvil / Hosting-CDN / Empresa) con explicación. Se añadirán PTR, RDAP y un índice de confianza.</div>
+        </div>
+
+        <div class="section">
+          <h3>Proveedor detectado</h3>
+          <div class="metric">
+            <b>ISP / Organización</b>
+            <div class="val" id="ispVal">—</div>
+            <div style="margin-top:6px"><a id="ispLink" class="link" href="#" target="_blank" rel="noopener" style="display:none; color:var(--btn-primary); text-decoration:none">Sitio del proveedor →</a></div>
+          </div>
+        </div>
+
+        <div class="section" style="grid-column:1 / -1;">
+          <h3>Mapa</h3>
+          <div id="mapWrap">
+            <div class="mapBar">
+              <div class="muted" id="mapInfo">Se centrará cuando haya coordenadas.</div>
+              <div>
+                <button class="btn" id="btnOSM">Abrir en OpenStreetMap</button>
+                <button class="btn" id="btnCopy">Copiar coordenadas</button>
+              </div>
+            </div>
+            <div id="map"></div>
+          </div>
+        </div>
+
+        <div class="section" style="grid-column:1 / -1;">
+          <h3>Herramientas de verificación</h3>
+          <div class="tools">
+            <div class="toolRow">
+              <button class="btn" id="btnCheckRisk">Verificar Tor / VPN / VPS</button>
+              <span id="riskOut" class="toolOut">—</span>
+            </div>
+            <div class="toolRow">
+              <button class="btn" id="btnPing">Ping (best-effort)</button>
+              <span id="pingOut" class="toolOut">—</span>
+            </div>
+            <div class="toolRow">
+              <input id="portsInput" class="mono" value="22,80,443,8080,8443,3389,5432,6379,27017,25565,1194,500,4500"/>
+              <!-- Deja ID + .btn; el color/posición lo maneja CSS por #btnScan -->
+              <button class="btn" id="btnScan">Escanear puertos</button>
+            </div>
+            <div id="scanOut" class="toolOut">—</div>
+          </div>
+        </div>
+
+        <div class="section" style="grid-column:1 / -1;">
+          <h3>Buscador de puerto</h3>
+          <div class="tools">
+            <div class="toolRow">
+              <input id="portQuery" class="mono" placeholder="Ej: 22" style="max-width:160px"/>
+              <button class="btn" id="btnPortInfo">Consultar puerto</button>
+            </div>
+            <div id="portInfo" class="toolOut">—</div>
+            <div id="portLinks" class="links"></div>
+          </div>
+        </div>
+
+        <div class="section" style="grid-column:1 / -1;">
+          <h3>Nodos (detalles)</h3>
+          <div id="providers" class="providers"></div>
+        </div>
+      </div>
+    </section>
+
+    <aside class="card">
+      <div class="history">
+        <h3>Historial (esta sesión)</h3>
+        <div id="historyBox"></div>
+      </div>
+
+      <div class="history" style="padding-top:0;">
+        <h3>Respuestas crudas (JSON) por nodo</h3>
+        <div id="jsonGrid" class="jsonGrid"></div>
+      </div>
+    </aside>
+  </div>
+
+  <script src="app.js" defer></script>
+  <script src="../../shared/js/frame-credit-bridge.js" defer></script>
+  <script src="bridge.js" defer></script>
+</body>
+</html>
