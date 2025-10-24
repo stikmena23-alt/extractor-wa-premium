@@ -16,7 +16,9 @@
     const logoutButton = resolveElement(options.logoutButton || options.logoutButtonId);
     const creditLoaderId = options.creditLoaderId || 'uiCreditLoader';
     const creditLoaderClass = options.creditLoaderClass || 'credit-loader';
-    const creditTimeout = options.creditTimeout || 8000;
+    const creditTimeout = Number.isFinite(options.creditTimeout) && options.creditTimeout > 0
+      ? options.creditTimeout
+      : 15000;
     const parentFrameId = options.parentFrameId || 'wfFrame';
     const userFields = Object.assign({
       name: null,
@@ -198,6 +200,25 @@
         if (!auth) return null;
         let ok = false;
         let detail = null;
+        let sessionEnsured = true;
+        const sessionMessage = "Tu sesión expiró. Inicia sesión para continuar.";
+        try {
+          if (typeof auth.ensureActiveSession === 'function') {
+            sessionEnsured = !!(await auth.ensureActiveSession({ forceRefresh: true, minimumValidityMs: 0 }));
+          } else if (typeof auth.forceSessionRefresh === 'function') {
+            sessionEnsured = !!(await auth.forceSessionRefresh());
+          } else if (typeof auth.revalidateSessionState === 'function') {
+            sessionEnsured = !!(await auth.revalidateSessionState());
+          }
+        } catch (sessionErr) {
+          console.warn('No se pudo verificar la sesión antes de consumir créditos', sessionErr);
+          sessionEnsured = false;
+        }
+        if (!sessionEnsured) {
+          rememberSpendResult({ ok: false, reason: 'session-expired', message: sessionMessage, amount: 0 });
+          redirectToLogin();
+          return false;
+        }
         if (typeof auth.spendCredits === 'function') {
           ok = await auth.spendCredits(amount);
           if (typeof auth.getLastSpendResult === 'function') {
