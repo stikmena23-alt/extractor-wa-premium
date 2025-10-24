@@ -203,12 +203,12 @@
         let sessionEnsured = true;
         const sessionMessage = "Tu sesión expiró. Inicia sesión para continuar.";
         try {
-          if (typeof auth.ensureActiveSession === 'function') {
-            sessionEnsured = !!(await auth.ensureActiveSession({ forceRefresh: true, minimumValidityMs: 0 }));
+          if (typeof auth.revalidateSessionState === 'function') {
+            sessionEnsured = !!(await auth.revalidateSessionState());
+          } else if (typeof auth.ensureActiveSession === 'function') {
+            sessionEnsured = !!(await auth.ensureActiveSession({ minimumValidityMs: 0 }));
           } else if (typeof auth.forceSessionRefresh === 'function') {
             sessionEnsured = !!(await auth.forceSessionRefresh());
-          } else if (typeof auth.revalidateSessionState === 'function') {
-            sessionEnsured = !!(await auth.revalidateSessionState());
           }
         } catch (sessionErr) {
           console.warn('No se pudo verificar la sesión antes de consumir créditos', sessionErr);

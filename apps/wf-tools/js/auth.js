@@ -1494,14 +1494,27 @@
     return classifySupabaseError(error).reason === "endpoint-missing";
   }
 
+  function scheduleCreditsRefresh() {
+    try {
+      const refresh = updateCredits();
+      if (refresh && typeof refresh.catch === "function") {
+        refresh.catch((err) => {
+          console.warn("No se pudo refrescar los créditos tras el consumo", err);
+        });
+      }
+    } catch (err) {
+      console.warn("No se pudo programar la actualización de créditos", err);
+    }
+  }
+
   async function performSpendCredits(rawAmount = 1, attempt = 0) {
     const amount = Number.parseInt(rawAmount, 10);
     if (!Number.isFinite(amount) || amount <= 0) {
       return rememberSpendResult({ ok: true, amount: 0, reason: null });
     }
     try {
-      pingSessionWorker(true);
-      const session = await ensureActiveSession({ forceRefresh: true, minimumValidityMs: 0 });
+      pingSessionWorker();
+      const session = await ensureActiveSession({ minimumValidityMs: SUPABASE_SESSION_THRESHOLD_MS / 2 });
 
       if (!session) {
         const message = "Tu sesión expiró. Inicia sesión para continuar.";
@@ -1585,7 +1598,7 @@
           showSessionToast(message, "danger");
         }
 
-        await updateCredits();
+        scheduleCreditsRefresh();
         return rememberSpendResult({
           ok: false,
           amount: 0,
@@ -1600,13 +1613,13 @@
       renderCreditState(next);
       global.AppCore?.setCreditDependentActionsEnabled(next > 0);
       const successResult = rememberSpendResult({ ok: true, amount: consumed, reason: null });
-      await updateCredits();
+      scheduleCreditsRefresh();
       return successResult;
     } catch (err) {
       console.error("Error inesperado al consumir créditos", err);
       const message = "No se pudo consumir créditos. Intenta nuevamente.";
       showSessionToast(message, "danger");
-      await updateCredits();
+      scheduleCreditsRefresh();
       return rememberSpendResult({ ok: false, amount: 0, reason: "unexpected", message, error: err });
     }
   }
