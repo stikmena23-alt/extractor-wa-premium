@@ -2784,11 +2784,14 @@ async function requestCredit(){
   if (auth && (typeof auth.spendCredits === 'function' || typeof auth.spendCredit === 'function')){
     try {
       let sessionOk = true;
-      if (typeof auth.revalidateSessionState === 'function'){
-        const session = await auth.revalidateSessionState();
+      if (typeof auth.ensureActiveSession === 'function'){
+        const session = await auth.ensureActiveSession({ forceRefresh: true, minimumValidityMs: 0 });
         sessionOk = !!session;
-      } else if (typeof auth.ensureActiveSession === 'function'){
-        const session = await auth.ensureActiveSession();
+      } else if (typeof auth.forceSessionRefresh === 'function'){
+        const session = await auth.forceSessionRefresh();
+        sessionOk = !!session;
+      } else if (typeof auth.revalidateSessionState === 'function'){
+        const session = await auth.revalidateSessionState();
         sessionOk = !!session;
       }
       if (!sessionOk){

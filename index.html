@@ -1055,13 +1055,14 @@
             if (!payload || payload.ok !== true) {
               window.alert('No se pudo cerrar la sesión. Intenta nuevamente.');
             }
-          });
-          if (!forwardToWfFrame({ type: 'wftools-internal-logout-request', requestId })) {
+          }, 10000);
+          forwardToWfFrameWithRetry({ type: 'wftools-internal-logout-request', requestId }, { attempts: 3, delayMs: 250 }).then((forwarded) => {
+            if (forwarded) return;
             if (timer) clearTimeout(timer);
             pendingLogoutRequests.delete(requestId);
             resetState();
             window.alert('No se pudo cerrar la sesión. Intenta nuevamente.');
-          }
+          });
         }
 
         // Assign click to each entry
@@ -1094,6 +1095,28 @@
           }
         }
 
+        function forwardToWfFrameWithRetry(message, options){
+          const attempts = Number.isFinite(options?.attempts) && options.attempts > 0 ? Math.floor(options.attempts) : 2;
+          const delayMs = Number.isFinite(options?.delayMs) && options.delayMs >= 0 ? options.delayMs : 250;
+          const totalAttempts = Math.max(1, attempts);
+          let currentAttempt = 0;
+          return new Promise((resolve) => {
+            const trySend = () => {
+              currentAttempt += 1;
+              if (forwardToWfFrame(message)) {
+                resolve(true);
+                return;
+              }
+              if (currentAttempt >= totalAttempts) {
+                resolve(false);
+                return;
+              }
+              setTimeout(trySend, delayMs);
+            };
+            trySend();
+          });
+        }
+
         function respondToChild(source, payload){
           if (!source || typeof source.postMessage !== 'function') return;
           try {
@@ -1103,12 +1126,12 @@
           }
         }
 
-        function registerPendingRequest(store, requestId, response){
+        function registerPendingRequest(store, requestId, response, timeoutMs){
           if (!requestId || !response) return null;
           const timer = setTimeout(()=>{
             store.delete(requestId);
             try { response({ ok:false, reason:'timeout' }); } catch(_err){}
-          }, 8000);
+          }, Number.isFinite(timeoutMs) && timeoutMs > 0 ? timeoutMs : 8000);
           store.set(requestId, { respond: response, timer });
           return timer;
         }
@@ -1230,26 +1253,29 @@
               respond({ type:'wftools-spend-credits-result', ok:false, reason:'invalid-amount', amount:0 });
               return;
             }
+            const CREDIT_REQUEST_TIMEOUT_MS = 15000;
             const registered = registerPendingRequest(pendingCreditRequests, requestId, (payload)=>{
               respond(Object.assign({ type:'wftools-spend-credits-result' }, payload));
-            });
-            if (!forwardToWfFrame({ type: 'wftools-internal-spend-credits', requestId, amount })) {
+            }, CREDIT_REQUEST_TIMEOUT_MS);
+            forwardToWfFrameWithRetry({ type: 'wftools-internal-spend-credits', requestId, amount }, { attempts: 3, delayMs: 250 }).then((forwarded) => {
+              if (forwarded) return;
               if (registered) clearTimeout(registered);
               pendingCreditRequests.delete(requestId);
               respond({ type:'wftools-spend-credits-result', ok:false, reason:'wf-unavailable', amount:0 });
-            }
+            });
           } else if (type === 'wftools-request-logout') {
             const requestId = event.data.requestId || `logout-${Date.now()}-${Math.random().toString(36).slice(2)}`;
             const source = event.source;
             const respond = (payload)=> respondToChild(source, Object.assign({ requestId }, payload));
             const registered = registerPendingRequest(pendingLogoutRequests, requestId, (payload)=>{
               respond(Object.assign({ type:'wftools-logout-result' }, payload));
-            });
-            if (!forwardToWfFrame({ type: 'wftools-internal-logout-request', requestId })) {
+            }, 10000);
+            forwardToWfFrameWithRetry({ type: 'wftools-internal-logout-request', requestId }, { attempts: 3, delayMs: 250 }).then((forwarded) => {
+              if (forwarded) return;
               if (registered) clearTimeout(registered);
               pendingLogoutRequests.delete(requestId);
               respond({ type:'wftools-logout-result', ok:false, reason:'wf-unavailable' });
-            }
+            });
           }
         });
       })();

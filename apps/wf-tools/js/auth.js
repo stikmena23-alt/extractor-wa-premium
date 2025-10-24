@@ -14,6 +14,7 @@
 
   const supabaseManager = global.WFSupabase || null;
   const SUPABASE_SESSION_THRESHOLD_MS = 90_000;
+  const SESSION_WORKER_INTERVAL_MS = 60_000;
 
   let supabase = null;
   if (supabaseManager && typeof supabaseManager.init === "function") {
@@ -449,6 +450,8 @@
     }
   }
 
+  let sessionWorker = null;
+
   function stopSessionHeartbeat() {
     if (sessionHeartbeatTimer) {
       clearInterval(sessionHeartbeatTimer);
@@ -471,6 +474,63 @@
         console.warn("No se pudo ejecutar el latido de sesión", err);
       }
     }, SESSION_HEARTBEAT_MS);
+  }
+
+  function terminateSessionWorker() {
+    if (!sessionWorker) return;
+    try {
+      sessionWorker.postMessage({ type: "terminate" });
+    } catch (_err) {
+      /* noop */
+    }
+    sessionWorker = null;
+  }
+
+  function startSessionWorker() {
+    if (sessionWorker) return;
+    if (typeof Worker === "undefined") return;
+    if (!supabaseManager || typeof supabaseManager.ensureSession !== "function") return;
+    try {
+      const worker = new Worker("js/session-keepalive-worker.js");
+      worker.addEventListener("message", (event) => {
+        const payload = event?.data;
+        if (!payload || typeof payload !== "object") return;
+        if (payload.type === "ensure-session") {
+          const minimumValidity = Number.isFinite(payload.minimumValidityMs)
+            ? Math.max(0, Number(payload.minimumValidityMs))
+            : SUPABASE_SESSION_THRESHOLD_MS;
+          ensureActiveSession({
+            minimumValidityMs: minimumValidity,
+            forceRefresh: payload.forceRefresh === true,
+          }).catch((err) => {
+            console.warn("No se pudo asegurar la sesión desde el worker", err);
+          });
+        }
+      });
+      worker.postMessage({
+        type: "configure",
+        intervalMs: SESSION_WORKER_INTERVAL_MS,
+        minimumValidityMs: SUPABASE_SESSION_THRESHOLD_MS,
+        forceOnWake: true,
+      });
+      sessionWorker = worker;
+    } catch (err) {
+      console.warn("No se pudo iniciar el worker de sesión", err);
+      sessionWorker = null;
+    }
+  }
+
+  function stopSessionWorker() {
+    terminateSessionWorker();
+  }
+
+  function pingSessionWorker(forceRefresh = false) {
+    if (!sessionWorker) return;
+    try {
+      sessionWorker.postMessage({ type: "ping-now", forceRefresh: !!forceRefresh });
+    } catch (_err) {
+      /* noop */
+    }
   }
 
   function hideSessionToast() {
@@ -718,6 +778,7 @@
   }
 
   function showLoginUI(message, state) {
+    stopSessionWorker();
     stopSessionHeartbeat();
     setSessionLoadingState(false);
     sessionActive = false;
@@ -749,6 +810,7 @@
     setSessionLoadingState(false);
     sessionActive = true;
     startSessionHeartbeat();
+    startSessionWorker();
     if (loginScreen) loginScreen.style.display = "none";
     if (appWrap) appWrap.style.display = "block";
     resetLoginForm();
@@ -1438,7 +1500,8 @@
       return rememberSpendResult({ ok: true, amount: 0, reason: null });
     }
     try {
-      const session = await ensureActiveSession();
+      pingSessionWorker(true);
+      const session = await ensureActiveSession({ forceRefresh: true, minimumValidityMs: 0 });
 
       if (!session) {
         const message = "Tu sesión expiró. Inicia sesión para continuar.";
@@ -1536,7 +1599,9 @@
       const next = Math.max(0, currentUi - consumed);
       renderCreditState(next);
       global.AppCore?.setCreditDependentActionsEnabled(next > 0);
-      return rememberSpendResult({ ok: true, amount: consumed, reason: null });
+      const successResult = rememberSpendResult({ ok: true, amount: consumed, reason: null });
+      await updateCredits();
+      return successResult;
     } catch (err) {
       console.error("Error inesperado al consumir créditos", err);
       const message = "No se pudo consumir créditos. Intenta nuevamente.";
@@ -1593,11 +1658,25 @@
 
     const handleVisibility = () => {
       if (document.visibilityState === "visible") {
-        revalidateSessionState();
+        pingSessionWorker(true);
+        forceSessionRefresh()
+          .catch((err) => {
+            console.warn("No se pudo refrescar la sesión al volver a la pestaña", err);
+          })
+          .finally(() => {
+            revalidateSessionState();
+          });
       }
     };
     window.addEventListener("focus", () => {
-      revalidateSessionState();
+      pingSessionWorker(true);
+      forceSessionRefresh()
+        .catch((err) => {
+          console.warn("No se pudo refrescar la sesión al enfocar la ventana", err);
+        })
+        .finally(() => {
+          revalidateSessionState();
+        });
     });
     document.addEventListener("visibilitychange", handleVisibility);
     window.addEventListener("online", () => {
