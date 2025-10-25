@@ -2788,7 +2788,10 @@ async function requestCredit(){
         const session = await auth.revalidateSessionState();
         sessionOk = !!session;
       } else if (typeof auth.ensureActiveSession === 'function'){
-        const session = await auth.ensureActiveSession();
+        const session = await auth.ensureActiveSession({ minimumValidityMs: 0 });
+        sessionOk = !!session;
+      } else if (typeof auth.forceSessionRefresh === 'function'){
+        const session = await auth.forceSessionRefresh();
         sessionOk = !!session;
       }
       if (!sessionOk){
