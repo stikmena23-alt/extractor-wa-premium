@@ -340,7 +340,7 @@
 
   function buildSpendErrorMessage(classification, fallbackMessage) {
     if (!classification) {
-      return fallbackMessage || "No se pudo consumir créditos. Intenta nuevamente.";
+      return fallbackMessage || "No se pudo validar el acceso. Intenta nuevamente.";
     }
     if (classification.reason === "session-expired") {
       return "Tu sesión expiró. Inicia sesión para continuar.";
@@ -352,9 +352,9 @@
       return "No se pudo conectar con Supabase. Verifica tu conexión e inténtalo nuevamente.";
     }
     if (classification.reason === "endpoint-missing") {
-      return "No se encontró el servicio de consumo de créditos. Contacta al administrador para revisar la configuración.";
+      return "No se encontró el servicio de validación de acceso. Contacta al administrador para revisar la configuración.";
     }
-    return classification.message || fallbackMessage || "No se pudo consumir créditos. Intenta nuevamente.";
+    return classification.message || fallbackMessage || "No se pudo validar el acceso. Intenta nuevamente.";
   }
 
   updateAdminAccessUI(getRememberedEmail());
@@ -1684,7 +1684,7 @@
             spendResult = global.Auth.getLastSpendResult();
           }
         } catch (err) {
-          console.error('Error al consumir créditos desde el puente', err);
+          console.error('Error al validar el acceso desde el puente', err);
           ok = false;
           spendResult = spendResult || makeSpendResult({ ok: false, reason: 'unexpected', message: extractErrorMessage(err), error: err });
         }
@@ -1695,7 +1695,7 @@
           try {
             await refresh;
           } catch (err) {
-            console.warn('No se pudo revalidar la sesión tras consumir créditos', err);
+            console.warn('No se pudo revalidar la sesión tras validar el acceso', err);
           }
         }
         const responseAmount = ok

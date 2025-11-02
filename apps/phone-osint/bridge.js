@@ -50,8 +50,8 @@
       }
       spendInFlight = true;
       bridge.setSpending(true);
-      bridge.setButtonLoading('Descontando crédito…');
-      bridge.showCreditLoader('Descontando 1 crédito…');
+      bridge.setButtonLoading('Validando acceso…');
+      bridge.showCreditLoader('Preparando búsqueda…');
       const ok = await bridge.spendCredits(1);
       const spendResult = typeof bridge.getLastSpendResult === 'function' ? bridge.getLastSpendResult() : null;
       if (!ok) {
@@ -60,14 +60,12 @@
         if (reason === 'session-expired') {
           alert(message || 'Tu sesión expiró. Inicia sesión para continuar.');
           bridge.redirectToLogin();
-        } else if (reason === 'no-credits') {
-          alert(message || 'No tienes créditos suficientes para esta consulta.');
         } else if (reason === 'network') {
           alert(message || 'No se pudo conectar con el servidor. Verifica tu conexión e inténtalo nuevamente.');
         } else if (reason === 'timeout') {
           alert(message || 'La solicitud de créditos tardó demasiado. Inténtalo nuevamente.');
         } else {
-          alert(message || 'No se pudo consumir créditos. Intenta nuevamente.');
+          alert(message || 'No se pudo validar el acceso. Intenta nuevamente.');
         }
         bridge.hideCreditLoader(400);
         bridge.restoreButton();
@@ -76,17 +74,10 @@
         return;
       }
       const unlimited = spendResult?.reason === 'unlimited';
-      let consumed = 0;
-      if (!unlimited) {
-        consumed = Number.isFinite(Number(spendResult?.amount)) && Number(spendResult.amount) > 0
-          ? Number(spendResult.amount)
-          : 1;
-      }
-      if (consumed > 0) {
-        bridge.reflectLocalSpend(consumed);
-      }
       setAnalysisLoading();
-      const successMessage = unlimited ? 'Créditos ilimitados, analizando…' : 'Crédito descontado, analizando…';
+      const successMessage = unlimited
+        ? 'Acceso ilimitado confirmado. Analizando…'
+        : 'Acceso confirmado. Analizando…';
       bridge.showCreditLoader(successMessage);
       try {
         const raw = (document.querySelector('#numbers').value || '')

@@ -43,8 +43,8 @@
       }
       spendInFlight = true;
       bridge.setSpending(true);
-      bridge.setButtonLoading('Descontando créditos…');
-      bridge.showCreditLoader('Descontando 4 créditos…');
+      bridge.setButtonLoading('Validando acceso…');
+      bridge.showCreditLoader('Preparando análisis…');
       const ok = await bridge.spendCredits(4);
       const spendResult = typeof bridge.getLastSpendResult === 'function' ? bridge.getLastSpendResult() : null;
       if (!ok) {
@@ -53,14 +53,12 @@
         if (reason === 'session-expired') {
           alert(message || 'Tu sesión expiró. Inicia sesión para continuar.');
           bridge.redirectToLogin();
-        } else if (reason === 'no-credits') {
-          alert(message || 'No tienes créditos suficientes para esta consulta.');
         } else if (reason === 'network') {
           alert(message || 'No se pudo conectar con el servidor. Verifica tu conexión e inténtalo nuevamente.');
         } else if (reason === 'timeout') {
           alert(message || 'La solicitud de créditos tardó demasiado. Inténtalo nuevamente.');
         } else {
-          alert(message || 'No se pudo consumir créditos. Intenta nuevamente.');
+          alert(message || 'No se pudo validar el acceso. Intenta nuevamente.');
         }
         bridge.hideCreditLoader(400);
         bridge.restoreButton();
@@ -69,18 +67,9 @@
         return;
       }
       const unlimited = spendResult?.reason === 'unlimited';
-      let consumed = 0;
-      if (!unlimited) {
-        consumed = Number.isFinite(Number(spendResult?.amount)) && Number(spendResult.amount) > 0
-          ? Number(spendResult.amount)
-          : 4;
-      }
-      if (consumed > 0) {
-        bridge.reflectLocalSpend(consumed);
-      }
       const successMessage = unlimited
-        ? 'Créditos ilimitados, ejecutando análisis…'
-        : 'Créditos descontados, ejecutando análisis…';
+        ? 'Acceso ilimitado confirmado. Ejecutando análisis…'
+        : 'Acceso confirmado. Ejecutando análisis…';
       bridge.showCreditLoader(successMessage);
       try {
         return await originalLookup.apply(this, Array.prototype.slice.call(arguments, 1));

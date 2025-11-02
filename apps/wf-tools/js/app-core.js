@@ -650,12 +650,12 @@ async function handleDroppedFiles(fileList){
       updateUploadStatusEntry(entry, { status: 'processing', message: 'Leyendo archivo…' });
       try {
         const result = await processSingleUploadedFile(file);
-        updateUploadStatusEntry(entry, { message: 'Validando crédito…' });
+        updateUploadStatusEntry(entry, { message: 'Validando acceso…' });
         const ok = await requestCredit();
         if (!ok){
           updateUploadStatusEntry(entry, {
             status: 'error',
-            message: 'No se pudo consumir un crédito. Verifica tu sesión o tus créditos disponibles.'
+            message: 'No se pudo validar el acceso. Verifica tu sesión o tu conexión.'
           });
           continue;
         }
@@ -2792,7 +2792,7 @@ async function requestCredit(){
         sessionOk = !!session;
       }
       if (!sessionOk){
-        console.warn('No hay sesión activa para consumir créditos.');
+        console.warn('No hay sesión activa para validar el acceso.');
         if (typeof auth.forceLoginView === 'function'){
           auth.forceLoginView('Tu sesión expiró. Inicia sesión para continuar.');
         } else {
@@ -2807,7 +2807,7 @@ async function requestCredit(){
       }
       return await auth.spendCredit();
     } catch (error) {
-      console.error('No se pudo consumir crédito', error);
+      console.error('No se pudo validar el acceso', error);
       return false;
     }
   }
