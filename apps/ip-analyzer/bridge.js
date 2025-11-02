@@ -68,11 +68,20 @@
         spendInFlight = false;
         return;
       }
-      const consumed = Number.isFinite(Number(spendResult?.amount)) && Number(spendResult.amount) > 0
-        ? Number(spendResult.amount)
-        : 4;
-      bridge.reflectLocalSpend(consumed);
-      bridge.showCreditLoader('Créditos descontados, ejecutando análisis…');
+      const unlimited = spendResult?.reason === 'unlimited';
+      let consumed = 0;
+      if (!unlimited) {
+        consumed = Number.isFinite(Number(spendResult?.amount)) && Number(spendResult.amount) > 0
+          ? Number(spendResult.amount)
+          : 4;
+      }
+      if (consumed > 0) {
+        bridge.reflectLocalSpend(consumed);
+      }
+      const successMessage = unlimited
+        ? 'Créditos ilimitados, ejecutando análisis…'
+        : 'Créditos descontados, ejecutando análisis…';
+      bridge.showCreditLoader(successMessage);
       try {
         return await originalLookup.apply(this, Array.prototype.slice.call(arguments, 1));
       } finally {

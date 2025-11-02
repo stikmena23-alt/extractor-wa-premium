@@ -75,12 +75,19 @@
         spendInFlight = false;
         return;
       }
-      const consumed = Number.isFinite(Number(spendResult?.amount)) && Number(spendResult.amount) > 0
-        ? Number(spendResult.amount)
-        : 1;
-      bridge.reflectLocalSpend(consumed);
+      const unlimited = spendResult?.reason === 'unlimited';
+      let consumed = 0;
+      if (!unlimited) {
+        consumed = Number.isFinite(Number(spendResult?.amount)) && Number(spendResult.amount) > 0
+          ? Number(spendResult.amount)
+          : 1;
+      }
+      if (consumed > 0) {
+        bridge.reflectLocalSpend(consumed);
+      }
       setAnalysisLoading();
-      bridge.showCreditLoader('Crédito descontado, analizando…');
+      const successMessage = unlimited ? 'Créditos ilimitados, analizando…' : 'Crédito descontado, analizando…';
+      bridge.showCreditLoader(successMessage);
       try {
         const raw = (document.querySelector('#numbers').value || '')
           .split(/\n+/)

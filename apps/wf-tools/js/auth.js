@@ -212,6 +212,7 @@
   let currentAuthUser = null;
   let currentProfile = null;
   let sessionActive = false;
+  let unlimitedCredits = false;
   let revalidationPromise = null;
   let lastBroadcastedCredits = null;
   let sessionHeartbeatTimer = null;
@@ -421,6 +422,9 @@
   }
 
   function formatCreditsValue(value) {
+    if (unlimitedCredits) {
+      return "∞";
+    }
     const numeric = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
     return creditFormatter.format(numeric);
   }
@@ -602,9 +606,13 @@
         creditsValue = getCreditsFromUi();
       }
     }
+    const unlimited = creditsValue === "∞" || creditsValue === "unlimited" || unlimitedCredits;
     let numericCredits = Number(creditsValue);
     let creditsToSend = creditsValue;
-    if (Number.isFinite(numericCredits)) {
+    if (unlimited) {
+      numericCredits = null;
+      creditsToSend = "∞";
+    } else if (Number.isFinite(numericCredits)) {
       numericCredits = Math.max(0, Math.floor(numericCredits));
       creditsToSend = numericCredits;
     } else {
@@ -632,6 +640,24 @@
 
   function renderCreditState(rawCredits) {
     if (!creditStatusEl) return;
+    if (unlimitedCredits) {
+      if (userCreditsEl) userCreditsEl.textContent = "∞";
+      if (creditCountEl) creditCountEl.textContent = "∞";
+      creditStatusEl.dataset.state = "success";
+      if (creditBarEl) {
+        creditBarEl.setAttribute("aria-valuenow", "1");
+        creditBarEl.setAttribute("aria-valuemax", "1");
+      }
+      if (creditBarFillEl) creditBarFillEl.style.width = "100%";
+      if (creditAlertEl) {
+        creditAlertEl.textContent = "Créditos ilimitados disponibles.";
+        creditAlertEl.classList.remove("pulse");
+      }
+      lastCreditsValue = null;
+      maxCreditsSeen = 0;
+      broadcastUserInfo({ creditsOverride: "∞" });
+      return;
+    }
     const hasValue = typeof rawCredits === "number" && Number.isFinite(rawCredits);
     if (!hasValue) {
       const zeroFormatted = formatCreditsValue(0);
@@ -699,6 +725,7 @@
   }
 
   function clearCreditsUI() {
+    unlimitedCredits = false;
     if (planChip) {
       planChip.style.display = "none";
       planChip.className = "chip";
@@ -779,11 +806,17 @@
     if (creditsChip) creditsChip.style.display = "inline-block";
     if (logoutBtn) logoutBtn.style.display = "inline-block";
     const safeCredits = Number.isFinite(numericCredits) ? Math.max(0, Math.floor(numericCredits)) : null;
+    unlimitedCredits = true;
     renderCreditState(safeCredits);
-    global.AppCore?.setCreditDependentActionsEnabled((safeCredits || 0) > 0);
+    global.AppCore?.setCreditDependentActionsEnabled(true);
     applyProfileIdentity(profile);
     updateAdminAccessUI(currentSessionEmail);
-    broadcastUserInfo({ profileOverride: profile, creditsOverride: safeCredits, planOverride: planName, force: true });
+    broadcastUserInfo({
+      profileOverride: profile,
+      creditsOverride: "∞",
+      planOverride: planName,
+      force: true,
+    });
   }
 
   function applyProfileIdentity(profile) {
@@ -1432,10 +1465,10 @@
     return classifySupabaseError(error).reason === "endpoint-missing";
   }
 
-  async function performSpendCredits(rawAmount = 1, attempt = 0) {
+  async function performSpendCredits(rawAmount = 1) {
     const amount = Number.parseInt(rawAmount, 10);
     if (!Number.isFinite(amount) || amount <= 0) {
-      return rememberSpendResult({ ok: true, amount: 0, reason: null });
+      return rememberSpendResult({ ok: true, amount: 0, reason: "unlimited" });
     }
     try {
       const session = await ensureActiveSession();
@@ -1447,101 +1480,13 @@
         return rememberSpendResult({ ok: false, amount: 0, reason: "session-expired", message });
       }
 
-      let rpcError = null;
-      let rpcData = null;
-      let useFallback = !batchSpendRpcEnabled;
-      let consumed = amount;
-
-      if (!useFallback) {
-        try {
-          const { data, error } = await supabase.rpc("spend_credits", { amount });
-          if (error) {
-            if (shouldFallbackToLegacy(error)) {
-              disableBatchRpcSupport(error);
-              useFallback = true;
-            } else {
-              rpcError = error;
-            }
-          } else {
-            rpcData = data || null;
-            markBatchRpcSuccessful();
-          }
-        } catch (err) {
-          if (shouldFallbackToLegacy(err)) {
-            disableBatchRpcSupport(err);
-            useFallback = true;
-          } else {
-            rpcError = err;
-          }
-        }
-      }
-
-      if (useFallback) {
-        const fallback = await performSequentialSpend(amount);
-        if (fallback.ok) {
-          const legacyConsumed = Number.parseInt(fallback.consumed, 10);
-          if (Number.isFinite(legacyConsumed) && legacyConsumed > 0) {
-            consumed = legacyConsumed;
-          }
-          rpcError = null;
-          rpcData = null;
-        } else {
-          rpcError = fallback.error || rpcError;
-          consumed = Number.parseInt(fallback.consumed, 10);
-          if (!Number.isFinite(consumed) || consumed < 0) {
-            consumed = 0;
-          }
-        }
-      } else if (rpcData && typeof rpcData === "object") {
-        const maybe = Number.parseInt(rpcData.consumed, 10);
-        if (Number.isFinite(maybe) && maybe > 0) {
-          consumed = maybe;
-        }
-      }
-
-      if (rpcError) {
-        let classification = classifySupabaseError(rpcError);
-        if (classification.reason === "session-expired" && attempt < 1) {
-          const refreshed = await forceSessionRefresh();
-          if (refreshed) {
-            return performSpendCredits(amount, attempt + 1);
-          }
-        }
-
-        const message = buildSpendErrorMessage(classification, extractErrorMessage(rpcError));
-
-        if (classification.reason === "session-expired") {
-          showSessionToast(message, "danger");
-          showLoginUI(message, "closed");
-        } else if (classification.reason === "no-credits") {
-          showSessionToast(message, "danger");
-          global.AppCore?.setCreditDependentActionsEnabled(false);
-        } else if (classification.reason === "network") {
-          showSessionToast(message, "danger");
-        } else {
-          showSessionToast(message, "danger");
-        }
-
-        await updateCredits();
-        return rememberSpendResult({
-          ok: false,
-          amount: 0,
-          reason: classification.reason || "rpc-error",
-          message,
-          error: rpcError,
-        });
-      }
-
-      const currentUi = getCreditsFromUi();
-      const next = Math.max(0, currentUi - consumed);
-      renderCreditState(next);
-      global.AppCore?.setCreditDependentActionsEnabled(next > 0);
-      return rememberSpendResult({ ok: true, amount: consumed, reason: null });
+      global.AppCore?.setCreditDependentActionsEnabled(true);
+      renderCreditState(getCreditsFromUi());
+      return rememberSpendResult({ ok: true, amount: 0, reason: "unlimited" });
     } catch (err) {
-      console.error("Error inesperado al consumir créditos", err);
-      const message = "No se pudo consumir créditos. Intenta nuevamente.";
+      console.error("Error inesperado al confirmar la sesión", err);
+      const message = "No se pudo confirmar la sesión. Intenta nuevamente.";
       showSessionToast(message, "danger");
-      await updateCredits();
       return rememberSpendResult({ ok: false, amount: 0, reason: "unexpected", message, error: err });
     }
   }
