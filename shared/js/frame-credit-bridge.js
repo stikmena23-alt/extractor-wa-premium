@@ -145,19 +145,26 @@
 
     function applyCreditsState(rawCredits) {
       lastCreditsValue = rawCredits;
+      const unlimited = rawCredits === '∞' || rawCredits === 'unlimited';
       const num = Number(rawCredits);
       const isNum = Number.isFinite(num);
       if (creditsEl) {
-        if (isNum) {
+        if (unlimited) {
+          creditsEl.textContent = '∞';
+          creditsEl.dataset.unlimited = 'true';
+          delete creditsEl.dataset.rawCredits;
+        } else if (isNum) {
           const safeVal = Math.max(0, Math.floor(num));
           creditsEl.textContent = safeVal.toLocaleString('es-CO');
           creditsEl.dataset.rawCredits = String(safeVal);
+          delete creditsEl.dataset.unlimited;
         } else {
           creditsEl.textContent = '—';
           delete creditsEl.dataset.rawCredits;
+          delete creditsEl.dataset.unlimited;
         }
       }
-      const shouldDisable = !isNum || num <= 0;
+      const shouldDisable = unlimited ? false : !isNum || num <= 0;
       if (noCreditsEl) {
         noCreditsEl.style.display = shouldDisable ? 'inline' : 'none';
       }
@@ -168,6 +175,7 @@
 
     function reflectLocalSpend(amount) {
       if (!creditsEl) return;
+      if (creditsEl.dataset.unlimited === 'true') return;
       const current = Number(creditsEl.dataset.rawCredits);
       if (!Number.isFinite(current)) return;
       const next = Math.max(0, current - amount);
@@ -258,7 +266,9 @@
           const reason = event.data.reason || null;
           const message = event.data.message || null;
           const consumed = Number.isFinite(Number(event.data.amount)) ? Number(event.data.amount) : 0;
-          const result = rememberSpendResult({ ok, reason, message, amount: ok ? consumed || amount : 0 });
+          const unlimited = ok && reason === 'unlimited';
+          const finalAmount = unlimited ? 0 : (ok ? consumed || amount : 0);
+          const result = rememberSpendResult({ ok, reason, message, amount: finalAmount });
           if (!result.ok && result.reason === 'session-expired') {
             redirectToLogin();
           }
@@ -396,6 +406,7 @@
       if (creditsEl) {
         creditsEl.textContent = '—';
         delete creditsEl.dataset.rawCredits;
+        delete creditsEl.dataset.unlimited;
       }
       if (noCreditsEl) noCreditsEl.style.display = 'none';
     }
