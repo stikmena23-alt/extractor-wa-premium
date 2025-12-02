@@ -10,7 +10,6 @@ const ADMIN_EMAILS = new Set([
   'admin.kevinqt@wftools.com',
   'admin.devinsonmq@wftools.com',
   'admin.franciscojm@wftools.com',
-  'admin.jamergz@wftools.com',
   'admin.jhonatangt@wftools.com',
   // 'otro.admin@tu-dominio.com',
 ]);
@@ -2723,5 +2722,6 @@ window.addEventListener('keydown', (e)=>{
     }
   }
 });
+
 
 
