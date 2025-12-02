@@ -5,7 +5,7 @@
 // en este arreglo.
 const ADMIN_EMAILS = [
   'stikmena6@gmail.com',
-  'admin2@gmail.com', // correo adicional (puedes cambiarlo)
+  'admin.jhonatangt@wftools.com', // correo adicional (puedes cambiarlo)
   'admin3@example.com'  // correo adicional (puedes cambiarlo)
 ];
 const ADMIN_PREFIXES = ['admin.', 'sup.'];
