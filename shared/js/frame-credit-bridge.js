@@ -145,10 +145,14 @@
 
     function applyCreditsState(rawCredits) {
       lastCreditsValue = rawCredits;
+      const isInfinite = rawCredits === Infinity || rawCredits === 'Infinity' || rawCredits === '∞';
       const num = Number(rawCredits);
       const isNum = Number.isFinite(num);
       if (creditsEl) {
-        if (isNum) {
+        if (isInfinite) {
+          creditsEl.textContent = '∞';
+          delete creditsEl.dataset.rawCredits;
+        } else if (isNum) {
           const safeVal = Math.max(0, Math.floor(num));
           creditsEl.textContent = safeVal.toLocaleString('es-CO');
           creditsEl.dataset.rawCredits = String(safeVal);
@@ -157,7 +161,7 @@
           delete creditsEl.dataset.rawCredits;
         }
       }
-      const shouldDisable = !isNum || num <= 0;
+      const shouldDisable = !(isNum || isInfinite) || (!isInfinite && num <= 0);
       if (noCreditsEl) {
         noCreditsEl.style.display = shouldDisable ? 'inline' : 'none';
       }
@@ -168,7 +172,7 @@
 
     function reflectLocalSpend(amount) {
       if (!creditsEl) return;
-      const current = Number(creditsEl.dataset.rawCredits);
+      const current = creditsEl.dataset.rawCredits === undefined ? Infinity : Number(creditsEl.dataset.rawCredits);
       if (!Number.isFinite(current)) return;
       const next = Math.max(0, current - amount);
       applyCreditsState(next);
@@ -287,16 +291,10 @@
       });
     }
 
-    async function spendCredits(n) {
-      const amount = Number.parseInt(n, 10);
-      if (!Number.isFinite(amount) || amount <= 0) {
-        rememberSpendResult({ ok: true, amount: 0, reason: null });
-        return true;
-      }
-      const direct = await tryDirectSpend(amount);
-      if (direct === true) return true;
-      if (direct === false) return false;
-      return requestCreditsViaBridge(amount);
+    async function spendCredits() {
+      rememberSpendResult({ ok: true, amount: 0, reason: null, message: null });
+      applyCreditsState(Infinity);
+      return true;
     }
 
     async function waitForParentElement(id, timeout = 2500) {

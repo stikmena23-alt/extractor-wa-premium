@@ -14,6 +14,8 @@
 
   const supabaseManager = global.WFSupabase || null;
   const SUPABASE_SESSION_THRESHOLD_MS = 90_000;
+  const INFINITE_CREDITS = Number.POSITIVE_INFINITY;
+  const ALWAYS_FREE_CREDITS = true;
 
   let supabase = null;
   if (supabaseManager && typeof supabaseManager.init === "function") {
@@ -421,6 +423,7 @@
   }
 
   function formatCreditsValue(value) {
+    if (value === INFINITE_CREDITS) return "∞";
     const numeric = Number.isFinite(value) ? Math.max(0, Math.floor(value)) : 0;
     return creditFormatter.format(numeric);
   }
@@ -432,6 +435,7 @@
   }
 
   function getCreditsFromUi() {
+    if (lastCreditsValue === INFINITE_CREDITS) return INFINITE_CREDITS;
     if (Number.isFinite(lastCreditsValue)) return lastCreditsValue;
     if (creditCountEl) return readCreditsFromText(creditCountEl.textContent || "");
     if (userCreditsEl) return readCreditsFromText(userCreditsEl.textContent || "");
@@ -594,17 +598,21 @@
     const planName = (planOverride || profileOverride?.plan || currentProfile?.plan || planNameEl?.textContent || "-")
       .toString()
       .trim();
-    let creditsValue = creditsOverride;
+    let creditsValue = ALWAYS_FREE_CREDITS ? INFINITE_CREDITS : creditsOverride;
     if (creditsValue == null) {
-      if (Number.isFinite(lastCreditsValue)) {
+      if (lastCreditsValue === INFINITE_CREDITS) {
+        creditsValue = INFINITE_CREDITS;
+      } else if (Number.isFinite(lastCreditsValue)) {
         creditsValue = lastCreditsValue;
       } else {
         creditsValue = getCreditsFromUi();
       }
     }
-    let numericCredits = Number(creditsValue);
+    let numericCredits = creditsValue === INFINITE_CREDITS ? INFINITE_CREDITS : Number(creditsValue);
     let creditsToSend = creditsValue;
-    if (Number.isFinite(numericCredits)) {
+    if (numericCredits === INFINITE_CREDITS) {
+      creditsToSend = "∞";
+    } else if (Number.isFinite(numericCredits)) {
       numericCredits = Math.max(0, Math.floor(numericCredits));
       creditsToSend = numericCredits;
     } else {
@@ -632,7 +640,8 @@
 
   function renderCreditState(rawCredits) {
     if (!creditStatusEl) return;
-    const hasValue = typeof rawCredits === "number" && Number.isFinite(rawCredits);
+    const isInfinite = rawCredits === INFINITE_CREDITS;
+    const hasValue = isInfinite || (typeof rawCredits === "number" && Number.isFinite(rawCredits));
     if (!hasValue) {
       const zeroFormatted = formatCreditsValue(0);
       if (userCreditsEl) userCreditsEl.textContent = zeroFormatted;
@@ -653,22 +662,33 @@
       return;
     }
 
-    const credits = Math.max(0, Math.floor(rawCredits));
+    const credits = isInfinite ? INFINITE_CREDITS : Math.max(0, Math.floor(rawCredits));
     const formattedCredits = formatCreditsValue(credits);
     if (userCreditsEl) userCreditsEl.textContent = formattedCredits;
     if (creditCountEl) creditCountEl.textContent = formattedCredits;
 
-    maxCreditsSeen = Math.max(maxCreditsSeen, credits);
-    const maxForBar = maxCreditsSeen || credits || 1;
-    const percent = Math.max(0, Math.min(100, Math.round((credits / maxForBar) * 100)));
-    if (creditBarFillEl) creditBarFillEl.style.width = `${percent}%`;
-    if (creditBarEl) {
-      creditBarEl.setAttribute("aria-valuenow", String(credits));
-      creditBarEl.setAttribute("aria-valuemax", String(maxForBar));
+    if (isInfinite) {
+      maxCreditsSeen = INFINITE_CREDITS;
+      if (creditBarFillEl) creditBarFillEl.style.width = "100%";
+      if (creditBarEl) {
+        creditBarEl.setAttribute("aria-valuenow", "∞");
+        creditBarEl.setAttribute("aria-valuemax", "∞");
+      }
+    } else {
+      maxCreditsSeen = Math.max(maxCreditsSeen, credits);
+      const maxForBar = maxCreditsSeen || credits || 1;
+      const percent = Math.max(0, Math.min(100, Math.round((credits / maxForBar) * 100)));
+      if (creditBarFillEl) creditBarFillEl.style.width = `${percent}%`;
+      if (creditBarEl) {
+        creditBarEl.setAttribute("aria-valuenow", String(credits));
+        creditBarEl.setAttribute("aria-valuemax", String(maxForBar));
+      }
     }
 
     let state = "success";
-    let message = `Saldo disponible: ${formattedCredits} crédito${credits === 1 ? "" : "s"}.`;
+    let message = isInfinite
+      ? "Créditos ilimitados disponibles."
+      : `Saldo disponible: ${formattedCredits} crédito${credits === 1 ? "" : "s"}.`;
 
     if (credits === 0) {
       state = "danger";
@@ -775,10 +795,15 @@
       planChip.className = "chip" + (planClass ? " plan-" + planClass : "");
       planChip.style.display = "inline-block";
     }
-    const numericCredits = Number(profile.credits);
+    const numericCredits = ALWAYS_FREE_CREDITS ? INFINITE_CREDITS : Number(profile.credits);
     if (creditsChip) creditsChip.style.display = "inline-block";
     if (logoutBtn) logoutBtn.style.display = "inline-block";
-    const safeCredits = Number.isFinite(numericCredits) ? Math.max(0, Math.floor(numericCredits)) : null;
+    const safeCredits =
+      numericCredits === INFINITE_CREDITS
+        ? INFINITE_CREDITS
+        : Number.isFinite(numericCredits)
+          ? Math.max(0, Math.floor(numericCredits))
+          : null;
     renderCreditState(safeCredits);
     global.AppCore?.setCreditDependentActionsEnabled((safeCredits || 0) > 0);
     applyProfileIdentity(profile);
@@ -1205,6 +1230,15 @@
       return;
     }
 
+    if (ALWAYS_FREE_CREDITS) {
+      applyProfileIdentity(currentProfile);
+      updateAdminAccessUI(currentSessionEmail);
+      renderCreditState(INFINITE_CREDITS);
+      global.AppCore?.setCreditDependentActionsEnabled(true);
+      broadcastUserInfo({ creditsOverride: INFINITE_CREDITS, planOverride: currentProfile?.plan, force: true });
+      return;
+    }
+
     let response = await fetchProfile(userId, {
       requireMatch: true,
     });
@@ -1436,6 +1470,11 @@
     const amount = Number.parseInt(rawAmount, 10);
     if (!Number.isFinite(amount) || amount <= 0) {
       return rememberSpendResult({ ok: true, amount: 0, reason: null });
+    }
+    if (ALWAYS_FREE_CREDITS) {
+      renderCreditState(INFINITE_CREDITS);
+      global.AppCore?.setCreditDependentActionsEnabled(true);
+      return rememberSpendResult({ ok: true, amount: 0, reason: null, message: "Créditos ilimitados activos." });
     }
     try {
       const session = await ensureActiveSession();
