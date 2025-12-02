@@ -35,16 +35,32 @@ const supabaseManager = window.WFSupabase || null;
 const SUPABASE_SESSION_THRESHOLD_MS = 90_000;
 
 let sb = null;
+const AUTH_STORAGE_KEY = 'wf-tools-admin-auth';
+
 if (supabaseManager && typeof supabaseManager.init === "function") {
   sb = supabaseManager.init({
     url: SUPABASE_URL,
     anonKey: SUPABASE_ANON_KEY,
     refreshIntervalMs: 180000,
     refreshThresholdMs: SUPABASE_SESSION_THRESHOLD_MS,
+    clientOptions: {
+      auth: {
+        storageKey: AUTH_STORAGE_KEY,
+        autoRefreshToken: true,
+        persistSession: true,
+        storage: typeof window !== 'undefined' ? window.localStorage : undefined,
+      },
+    },
   });
 }
 if (!sb) {
-  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: {
+      storageKey: AUTH_STORAGE_KEY,
+      autoRefreshToken: true,
+      persistSession: true,
+    },
+  });
 }
 
 let page = 1; const perPage = 10; let currentRows = []; let currentEdit = null;
