@@ -487,6 +487,15 @@
       .app-entry.admin-entry {
         display: none;
       }
+      .app-entry.admin-entry,
+      .app-entry.logout-entry {
+        justify-self: center;
+        width: min(100%, 220px);
+      }
+      .app-entry.admin-entry,
+      .app-entry.logout-entry {
+        grid-column: 1 / -1;
+      }
       .app-menu-button {
         /* Botón flotante para abrir el menú de apps. Se coloca en la esquina superior
            izquierda para no estorbar otros elementos fijos de la interfaz. */
