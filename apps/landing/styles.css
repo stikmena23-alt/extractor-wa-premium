@@ -1,8 +1,8 @@
 /* Tipografías & base */
 :root{
-  --bg:#07090f; --bg-2:#0b1220; --card:#0e1627; --text:#d9e6ff; --muted:#9db0d3;
-  --pri:#21e4ff; --sec:#6b8cff; --ok:#10b981; --warn:#f59e0b; --err:#ef4444;
-  --ring:rgba(33,228,255,.35);
+  --bg:#060b18; --bg-2:#121a33; --card:#121d36; --text:#eaf0ff; --muted:#b2bfdd;
+  --pri:#22d3ee; --sec:#8b5cf6; --ok:#22c55e; --warn:#f59e0b; --err:#ef4444;
+  --ring:rgba(139,92,246,.35);
   --shadow:0 18px 50px rgba(14,22,39,.6), inset 0 0 0 1px rgba(255,255,255,.04);
   --radius:18px; --radius-sm:12px; --radius-xs:10px;
 }
@@ -11,8 +11,8 @@ html,body{height:100%}
 body{
   margin:0; font-family:'Space Grotesk', ui-sans-serif, system-ui; color:var(--text);
   background:
-    radial-gradient(1200px 1200px at 80% -10%, rgba(33,228,255,.12), transparent 40%),
-    radial-gradient(1400px 1000px at -10% 60%, rgba(107,140,255,.14), transparent 45%),
+    radial-gradient(1200px 1200px at 80% -10%, rgba(34,211,238,.2), transparent 40%),
+    radial-gradient(1400px 1000px at -10% 60%, rgba(139,92,246,.2), transparent 45%),
     var(--bg);
 }
 h1,h2,h3{font-family:'Orbitron', system-ui; letter-spacing:.4px}

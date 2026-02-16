@@ -36,22 +36,22 @@ body[data-theme="dark"]{
   --fs-chip: clamp(11px, 1vw, 12px);
 
   /* colores (oscuridad) */
-  --bg1: #000513;
-  --bg2: #001027;
-  --surface-0: #020818;  /* base sólida */
+  --bg1: #050816;
+  --bg2: #0a1631;
+  --surface-0: #0b1328;  /* base sólida */
   --surface-1: rgba(255,255,255,.04);
   --surface-2: rgba(255,255,255,.03);
   --glass: rgba(255,255,255,.04);
   --glass-2: rgba(255,255,255,.03);
   --border: rgba(255,255,255,.10);
 
-  --text-1: #d7e3ff;
-  --text-2: #91a7c7;
-  --muted: #8aa2c2;
+  --text-1: #e7eeff;
+  --text-2: #b5c2e2;
+  --muted: #a6b6d9;
 
-  --pri: #0ea5e9;
-  --pri-600: #0b8ec7;
-  --sec: #0369a1;
+  --pri: #22d3ee;
+  --pri-600: #06b6d4;
+  --sec: #8b5cf6;
 
   --success: #22c55e;
   --warning: #f59e0b;
@@ -60,7 +60,7 @@ body[data-theme="dark"]{
   --input-bg: rgba(6,15,30,.85);
   --input-bg-2: rgba(10,22,42,.85);
 
-  --ring: 0 0 0 3px rgba(14,165,233,.35);
+  --ring: 0 0 0 3px rgba(139,92,246,.35);
 
   /* sombras */
   --shadow: 0 10px 28px rgba(0,0,0,.15);
@@ -97,7 +97,7 @@ body[data-theme="light"]{
   --input-bg:#ffffff;
   --input-bg-2:#f7fafc;
 
-  --ring: 0 0 0 3px rgba(14,165,233,.35);
+  --ring: 0 0 0 3px rgba(139,92,246,.35);
 
   --shadow: 0 10px 28px rgba(0,0,0,.10);
   --shadow-2: 0 22px 60px rgba(0,0,0,.18);
@@ -139,7 +139,7 @@ body[data-theme="system"]{
     --input-bg:#ffffff;
     --input-bg-2:#f7fafc;
 
-    --ring: 0 0 0 3px rgba(14,165,233,.35);
+    --ring: 0 0 0 3px rgba(139,92,246,.35);
 
     --shadow: 0 10px 28px rgba(0,0,0,.10);
     --shadow-2: 0 22px 60px rgba(0,0,0,.18);
@@ -483,7 +483,7 @@ body[data-theme="light"] .btn{ color:#0a223d }
 /* Plan badges */
 .chip.plan-basic{ border-color: rgba(245,158,11,.35); background: rgba(245,158,11,.12); color: var(--warning); }
 .chip.plan-pro{ border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.12); color: var(--success); }
-.chip.plan-enterprise{ border-color: rgba(14,165,233,.35); background: rgba(14,165,233,.12); color: var(--pri); }
+.chip.plan-enterprise{ border-color: rgba(14,165,233,.35); background: rgba(34,211,238,.18); color: var(--pri); }
 
 /* =========================
    Preview — bloque sticky bonito
@@ -2531,7 +2531,7 @@ body[data-theme="light"] .session-modal-icon{
 
 .remember-option input:checked + .remember-option__decor{
   border-color:rgba(14,165,233,.65);
-  background:rgba(14,165,233,.12);
+  background:rgba(34,211,238,.18);
   transform:translateY(-1px);
 }
 

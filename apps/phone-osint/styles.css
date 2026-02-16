@@ -1,6 +1,6 @@
 :root{
-  --bg:#0a0b0f; --panel:#0f121a; --card:#0c1117; --text:#e6edf3; --muted:#9aa4b2; --border:#1b2330;
-  --brand:#0ea5e9; --brand-2:#38bdf8; --ok:#22c55e; --danger:#ef4444; --blue:#2563eb;
+  --bg:#060b18; --panel:#121a2f; --card:#0f172d; --text:#edf3ff; --muted:#b1bfd9; --border:#273657;
+  --brand:#22d3ee; --brand-2:#8b5cf6; --ok:#22c55e; --danger:#ef4444; --blue:#8b5cf6;
   --shadow:0 10px 30px rgba(0,0,0,.35); --radius:18px;
 }
 
@@ -8,7 +8,7 @@
 html,body{height:100%}
 body{
   margin:0;
-  background:linear-gradient(180deg,#07090f,#0b0e15 40%,#0a0b0f);
+  background:linear-gradient(180deg,#060b18,#0f1730 45%,#060b18);
   color:var(--text);
   font-family:"Space Grotesk",system-ui,-apple-system,Segoe UI,Roboto,Arial;
 }
@@ -18,7 +18,7 @@ body{
 .header-actions{display:flex;gap:10px;align-items:center;justify-content:center}
 .site-header{
   display:flex;flex-direction:column;justify-content:center;align-items:center;gap:16px;
-  padding:26px 0 24px;border-bottom:1px solid var(--border);background:#07090f;
+  padding:26px 0 24px;border-bottom:1px solid var(--border);background:#081127;
   position:sticky;top:0;z-index:10;text-align:center
 }
 .header-inner{width:100%;margin:0;padding:0 clamp(16px,4vw,40px);display:flex;flex-direction:column;gap:16px;align-items:stretch}

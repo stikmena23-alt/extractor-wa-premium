@@ -2,18 +2,18 @@
 /*    THEME & BASICS     */
 /* ===================== */
 :root{
-  --bg:#0a0b0f;
-  --panel:#0f121a;
-  --card:#0c1117;
-  --text:#e6edf3;
-  --muted:#9aa4b2;
-  --brand:#0ea5e9;
-  --brand-2:#38bdf8;
-  --accent:rgba(33,228,255,.12);
+  --bg:#060b18;
+  --panel:#121a2f;
+  --card:#0f172d;
+  --text:#edf3ff;
+  --muted:#b1bfd9;
+  --brand:#22d3ee;
+  --brand-2:#8b5cf6;
+  --accent:rgba(139,92,246,.18);
   --ok:#22c55e;
   --warn:#f59e0b;
   --danger:#ef4444;
-  --border:#1b2330;
+  --border:#273657;
   --radius:18px;
   --shadow:0 10px 30px rgba(0,0,0,.35), inset 0 0 0 1px rgba(255,255,255,.03);
 
@@ -27,9 +27,9 @@
   --card:#ffffff;
   --text:#0b1220;
   --muted:#4a5568;
-  --brand:#0284c7;
-  --brand-2:#38bdf8;
-  --accent:rgba(14,165,233,.18);
+  --brand:#06b6d4;
+  --brand-2:#8b5cf6;
+  --accent:rgba(139,92,246,.24);
   --ok:#16a34a;
   --warn:#d97706;
   --danger:#dc2626;

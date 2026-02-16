@@ -22,14 +22,14 @@
     <!-- ====================================================================== -->
         <style>
       :root{
-        --bg-deep:#00060f;
-        --bg-card:rgba(0,10,28,.35);
-        --stroke:rgba(120,200,255,.25);
-        --text:#dff7ff;
-        --muted:#bfe9ff;
-        --brand-a:#21e4ff;
-        --brand-b:#6b8cff;
-        --accent:rgba(33,228,255,.12);
+        --bg-deep:#050a17;
+        --bg-card:rgba(15,25,48,.58);
+        --stroke:rgba(139,92,246,.32);
+        --text:#eaf1ff;
+        --muted:#bfcbef;
+        --brand-a:#22d3ee;
+        --brand-b:#8b5cf6;
+        --accent:rgba(34,211,238,.14);
       }
       html, body {
         margin: 0;
@@ -38,8 +38,8 @@
         height: 100%;
         overflow: hidden;
         background:
-          radial-gradient(1200px 800px at 70% -10%, rgba(33,228,255,.18), transparent 55%),
-          radial-gradient(900px 600px at -10% 110%, rgba(107,140,255,.16), transparent 55%),
+          radial-gradient(1200px 800px at 70% -10%, rgba(34,211,238,.22), transparent 55%),
+          radial-gradient(900px 600px at -10% 110%, rgba(139,92,246,.2), transparent 55%),
           var(--bg-deep);
         color: var(--text);
         font-family: 'Space Grotesk', ui-sans-serif, system-ui;
@@ -124,9 +124,9 @@
         display: none; /* se muestra sólo en landing */
       }
       .cb-fab {
-        --cb-grad-a: #21e4ff;
-        --cb-grad-b: #6b8cff;
-        --cb-bg: rgb(0, 10, 28);
+        --cb-grad-a: #22d3ee;
+        --cb-grad-b: #8b5cf6;
+        --cb-bg: rgb(12, 22, 44);
         --cb-text: #eaf7ff;
 
         display: inline-flex;
@@ -147,14 +147,14 @@
         background: var(--bg-card);
         border: 2px solid var(--stroke);
 
-        box-shadow: 0 6px 16px rgba(0,0,0,.4), inset 0 0 8px rgba(33,228,255,.06);
+        box-shadow: 0 6px 16px rgba(0,0,0,.4), inset 0 0 8px rgba(139,92,246,.12);
         transition: width .32s cubic-bezier(.22,.61,.36,1), box-shadow .25s ease, transform .25s ease;
       }
       .cb-fab:hover,
       .cb-fab:focus-visible {
         width: 360px;
         transform: translateY(-1px);
-        box-shadow: 0 12px 28px rgba(0,0,0,.45), 0 0 0 3px rgba(33,228,255,.14);
+        box-shadow: 0 12px 28px rgba(0,0,0,.45), 0 0 0 3px rgba(139,92,246,.22);
         outline: none;
       }
       .cb-icon { width: 36px; height: 36px; flex: 0 0 36px; display: inline-block; margin-left: 8px; }
@@ -171,7 +171,7 @@
       .wa-support { position: fixed; bottom: 20px; right: 20px; z-index: 10000; display: none; }
       .wa-float {
         display:inline-flex; align-items:center; gap:10px; text-decoration:none; color:#eaf7ff;
-        background: rgb(0,10,28); border: 2px solid rgba(37,211,102,.65); border-radius:999px; padding:10px 14px;
+        background: rgb(12,22,44); border: 2px solid rgba(34,197,94,.7); border-radius:999px; padding:10px 14px;
         box-shadow: 0 8px 18px rgba(0,0,0,.35); transition: transform .2s ease, box-shadow .2s ease;
         letter-spacing:.2px; font-weight:700; font-size:13px;
       }
