@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Error 404 | Sitio en migración</title>
+  <title>Redirección | Sitio cambiado de dominio</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -248,19 +248,19 @@
     }
 
     .final .badge{
-      border-color: rgba(239,68,68,.40);
-      background: rgba(239,68,68,.10);
-      box-shadow:0 10px 25px rgba(239,68,68,.12);
+      border-color: rgba(34,197,94,.40);
+      background: rgba(34,197,94,.10);
+      box-shadow:0 10px 25px rgba(34,197,94,.12);
     }
     .final .dot{
-      background: linear-gradient(135deg, #ef4444, #f97316);
-      box-shadow:0 0 0 4px rgba(239,68,68,.12);
+      background: linear-gradient(135deg, #22c55e, #22d3ee);
+      box-shadow:0 0 0 4px rgba(34,197,94,.12);
       animation:none;
     }
     .final .hint{
-      border-color: rgba(239,68,68,.32);
-      background: rgba(239,68,68,.12);
-      color:#fecaca;
+      border-color: rgba(34,197,94,.32);
+      background: rgba(34,197,94,.12);
+      color:#bbf7d0;
     }
 
     .spark{
@@ -312,7 +312,7 @@
         <section class="panel" aria-live="polite">
           <div class="status-line">
             <span><strong>Estado:</strong> <span id="statusText">Aplicando cambios</span></span>
-            <span><strong>Tiempo restante:</strong> <span id="countdown">08s</span></span>
+            <span><strong>Redirección en:</strong> <span id="countdown">08s</span></span>
           </div>
 
           <div class="bar" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
@@ -321,7 +321,7 @@
 
           <div class="actions">
             <button class="btn btn-danger" id="btnCancel" type="button">Cancelar</button>
-            <button class="btn btn-primary" id="btnRetry" type="button">Reintentar</button>
+            <button class="btn btn-primary" id="btnRetry" type="button">Ir al nuevo sitio</button>
           </div>
         </section>
 
@@ -335,8 +335,12 @@
 
   <script>
     (function () {
-      const DURATION_MS = 8500;
-      const FINAL_TEXT_DELAY_MS = 0;
+      // ====== CONFIG ======
+      const NEW_SITE_URL = "https://wftools.pro/";
+      const DURATION_MS = 8500;              // tiempo antes de redirigir
+      const FINAL_TEXT_DELAY_MS = 0;         // delay para mostrar mensaje final
+      const AUTO_REDIRECT = true;            // true = redirige solo al terminar
+      const REDIRECT_DELAY_AFTER_FINAL = 650; // ms después de mostrar el mensaje final
 
       const card = document.getElementById('card');
       const headline = document.getElementById('headline');
@@ -356,14 +360,15 @@
       const statusSteps = [
         "Verificando recursos",
         "Sincronizando contenido",
-        "Actualizando DNS",
-        "Reiniciando servicios",
-        "Validando configuración"
+        "Actualizando registros",
+        "Preparando redirección",
+        "Validando ruta final"
       ];
 
       let start = null;
       let raf = null;
       let cancelled = false;
+      let redirectTimer = null;
 
       function setProgress(pct){
         const clamped = Math.max(0, Math.min(100, pct));
@@ -375,6 +380,11 @@
       function fmtSeconds(ms){
         const s = Math.max(0, Math.ceil(ms / 1000));
         return String(s).padStart(2, "0") + "s";
+      }
+
+      function goNewSite(){
+        // replace() evita que el usuario vuelva a esta página con "Atrás"
+        window.location.replace(NEW_SITE_URL);
       }
 
       function tick(ts){
@@ -397,15 +407,25 @@
       }
 
       function finalize(){
+        // Evita duplicar timers
+        if (redirectTimer) clearTimeout(redirectTimer);
+
         setTimeout(() => {
           card.classList.add("final");
-          badgeText.textContent = "NO DISPONIBLE";
-          headline.textContent = "Este sitio web ya no existe";
-          subtext.textContent = "El recurso solicitado fue retirado o la URL no está disponible. Verifica la dirección e intenta nuevamente.";
-          statusText.textContent = "Finalizado";
+          badgeText.textContent = "DOMINIO NUEVO";
+          headline.textContent = "Este sitio ha cambiado de dominio";
+          subtext.innerHTML =
+            'Ahora nos encuentras en <strong>' + NEW_SITE_URL + '</strong>. ' +
+            'Serás redireccionado automáticamente.';
+
+          statusText.textContent = "Listo para redirigir";
           countdown.textContent = "00s";
           setProgress(100);
-          hint.textContent = "Si necesitas ayuda, contacta al administrador";
+          hint.textContent = "Si no redirige, usa el botón “Ir al nuevo sitio”";
+
+          if (AUTO_REDIRECT && !cancelled) {
+            redirectTimer = setTimeout(goNewSite, REDIRECT_DELAY_AFTER_FINAL);
+          }
         }, FINAL_TEXT_DELAY_MS);
       }
 
@@ -420,23 +440,33 @@
         hint.textContent = "No cierres esta ventana";
         setProgress(0);
         countdown.textContent = fmtSeconds(DURATION_MS);
+
+        if (redirectTimer) clearTimeout(redirectTimer);
+        redirectTimer = null;
+
         if (raf) cancelAnimationFrame(raf);
         raf = requestAnimationFrame(tick);
       }
 
-      btnRetry.addEventListener("click", reset);
+      // Botón principal: ir ya al nuevo dominio
+      btnRetry.addEventListener("click", goNewSite);
 
+      // Cancelar: deja el mensaje fijo y NO redirige
       btnCancel.addEventListener("click", () => {
         cancelled = true;
         if (raf) cancelAnimationFrame(raf);
+        if (redirectTimer) clearTimeout(redirectTimer);
+
         card.classList.add("final");
         badgeText.textContent = "CANCELADO";
-        headline.textContent = "Proceso detenido";
-        subtext.textContent = "La migración fue cancelada. Este sitio web ya no existe o no está disponible en este momento.";
-        statusText.textContent = "Cancelado";
+        headline.textContent = "Redirección cancelada";
+        subtext.innerHTML =
+          'El sitio cambió de dominio. Visita manualmente: <strong>' + NEW_SITE_URL + '</strong>.';
+
+        statusText.textContent = "Cancelado por el usuario";
         countdown.textContent = "00s";
         setProgress(100);
-        hint.textContent = "Contacta al administrador";
+        hint.textContent = "Puedes abrir el nuevo dominio cuando quieras";
       });
 
       countdown.textContent = fmtSeconds(DURATION_MS);
